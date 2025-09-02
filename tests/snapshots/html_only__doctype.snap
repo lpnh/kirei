@@ -1,0 +1,6 @@
+---
+source: tests/html_only.rs
+expression: result
+---
+<!DOCTYPE html>
+<title>Page Title</title>

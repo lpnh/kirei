@@ -1,0 +1,8 @@
+---
+source: tests/html_only.rs
+expression: result
+---
+<ul>
+  <li>Item 1</li>
+  <li>Item 2</li>
+</ul>

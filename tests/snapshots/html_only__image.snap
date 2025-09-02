@@ -1,0 +1,5 @@
+---
+source: tests/html_only.rs
+expression: result
+---
+<img src="image.jpg" alt="A test image">

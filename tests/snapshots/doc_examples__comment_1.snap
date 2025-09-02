@@ -1,0 +1,5 @@
+---
+source: tests/doc_examples.rs
+expression: result
+---
+{# A Comment #}
