@@ -2,7 +2,7 @@
 source: tests/whitespace.rs
 expression: formatted_output
 ---
-{% if foo %}
+{% if foo ~%}
   {{- bar -}}
 {% else if another -%}
 nothing

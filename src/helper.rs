@@ -31,43 +31,38 @@ pub(crate) fn calculate_indent_adjustments(line: &str, placeholders: &[AskamaNod
         }
     }
 
-    // If we didn't find any placeholder metadata, parse the line content directly
     if pre_adjust == 0 && post_adjust == 0 {
-        let t = line.trim();
-
-        if t.starts_with(CTRL_OPEN) || t.starts_with(CTRL_OPEN_TRIM) {
-            let tag_type = get_tag_type(t);
-
-            match tag_type {
-                ControlTag::Open => post_adjust += 1,
-                ControlTag::Close => pre_adjust -= 1,
-                ControlTag::Middle => pre_adjust -= 1,
-                ControlTag::Other => {}
-            }
-        }
+        // NOTE: Text without html tags end up here
     }
 
     (pre_adjust, post_adjust)
 }
 
 // Returns the tag type
-pub(crate) fn get_tag_type(tag_content: &str) -> ControlTag {
-    let inner = extract_inner_content(tag_content, CTRL_OPEN, CTRL_CLOSE);
-    let first_word = inner.split_whitespace().next().unwrap_or("");
-
-    // Control tag type based on the first keyword
-    match first_word {
-        // Opening tags - start a new block
-        "if" | "for" | "block" | "filter" | "match" | "macro" | "call" => ControlTag::Open,
-        // Middle tags - continue within a block
-        "else" | "elif" | "else if" | "when" => ControlTag::Middle,
-        // Closing tags - end a block
-        "endif" | "endfor" | "endblock" | "endfilter" | "endmatch" | "endmacro" | "endcall" => {
-            ControlTag::Close
-        }
-        // Other tags like 'let', 'include', etc
-        _ => ControlTag::Other,
+pub(crate) fn get_tag_type(child: tree_sitter::Node) -> ControlTag {
+    if let Some(grand_child) = child.child(1) {
+        // Control tag type based on its node type
+        return match grand_child.kind() {
+            // Opening tags - start a new block
+            "if_statement" | "for_statement" | "block_statement" | "filter_statement"
+            | "match_statement" | "macro_statement" | "call_statement" => ControlTag::Open,
+            // Middle tags - continue within a block
+            "else_statement" | "else_if_statement" | "when_statement" => ControlTag::Middle,
+            // Closing tags - end a block
+            "endif_statement"
+            | "endfor_statement"
+            | "endblock_statement"
+            | "endfilter_statement"
+            | "endmatch_statement"
+            | "endmacro_statement"
+            | "endcall_statement" => ControlTag::Close,
+            // Other tags like 'let', 'include', etc
+            _ => ControlTag::Other,
+        };
     }
+
+    // unreachable?
+    ControlTag::Other
 }
 
 // Extract content between delimiters, handling trim markers

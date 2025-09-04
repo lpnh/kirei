@@ -95,10 +95,10 @@ impl AskamaFormatter {
             match child.kind() {
                 "control_tag" => {
                     let tag_text = child.utf8_text(source.as_bytes())?;
-                    let trim_left = tag_text.starts_with(CTRL_OPEN_TRIM);
-                    let trim_right = tag_text.ends_with(CTRL_CLOSE_TRIM);
+                    let open_delimiter = child.child(0).unwrap().kind().to_string();
+                    let close_delimiter = child.child(2).unwrap().kind().to_string();
                     let inner = helper::extract_inner_content(tag_text, CTRL_OPEN, CTRL_CLOSE);
-                    let tag_type = helper::get_tag_type(tag_text);
+                    let tag_type = helper::get_tag_type(child);
 
                     let placeholder = format!(
                         "{}{}{}",
@@ -109,18 +109,17 @@ impl AskamaFormatter {
 
                     placeholders.push(AskamaNode::Control {
                         inner,
-                        trim_left,
-                        trim_right,
+                        open_delimiter,
+                        close_delimiter,
                         tag_type,
                     });
                     result.push_str(&placeholder);
                 }
                 "render_expression" => {
                     let expr_text = child.utf8_text(source.as_bytes())?;
-                    // Check if this expression uses whitespace trimming
-                    let trim_left = expr_text.starts_with(EXPR_OPEN_TRIM);
-                    let trim_right = expr_text.ends_with(EXPR_CLOSE_TRIM);
                     let inner = helper::extract_inner_content(expr_text, EXPR_OPEN, EXPR_CLOSE);
+                    let open_delimiter = child.child(0).unwrap().kind().to_string();
+                    let close_delimiter = child.child(2).unwrap().kind().to_string();
                     let placeholder = format!(
                         "{}{}{}",
                         ASKAMA_EXPR_TOKEN,
@@ -129,13 +128,15 @@ impl AskamaFormatter {
                     );
                     placeholders.push(AskamaNode::Expression {
                         inner,
-                        trim_left,
-                        trim_right,
+                        open_delimiter,
+                        close_delimiter,
                     });
                     result.push_str(&placeholder);
                 }
                 "comment" => {
                     let comment_text = child.utf8_text(source.as_bytes())?;
+                    let open_delimiter = child.child(0).unwrap().kind().to_string();
+                    let close_delimiter = child.child(1).unwrap().kind().to_string();
                     let inner =
                         helper::extract_inner_content(comment_text, COMMENT_OPEN, COMMENT_CLOSE);
                     let placeholder = format!(
@@ -144,7 +145,11 @@ impl AskamaFormatter {
                         placeholders.len(),
                         ASKAMA_END_TOKEN
                     );
-                    placeholders.push(AskamaNode::Comment { inner });
+                    placeholders.push(AskamaNode::Comment {
+                        inner,
+                        open_delimiter,
+                        close_delimiter,
+                    });
                     result.push_str(&placeholder);
                 }
                 // Everything else gets added as-is
