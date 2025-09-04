@@ -15,6 +15,12 @@ pub struct AskamaFormatter {
     max_inline_length: usize,
 }
 
+impl Default for AskamaFormatter {
+    fn default() -> Self {
+        Self::new().expect("Failed to create formatter")
+    }
+}
+
 impl AskamaFormatter {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let mut askama_parser = Parser::new();
@@ -62,6 +68,9 @@ impl AskamaFormatter {
         // Replace Askama nodes with temporary placeholder tokens
         let (html_with_placeholders, placeholders) = self.extract_askama_nodes(source, &root)?;
 
+        // Validate placeholder indices for safety
+        helper::validate_placeholder_indices(&html_with_placeholders, &placeholders)?;
+
         // Format the HTML structure while preserving our placeholders
         let formatted_output = self.try_format(&html_with_placeholders, &placeholders)?;
 
@@ -98,7 +107,7 @@ impl AskamaFormatter {
                     let open_delimiter = child.child(0).unwrap().kind().to_string();
                     let close_delimiter = child.child(2).unwrap().kind().to_string();
                     let inner = helper::extract_inner_content(tag_text, CTRL_OPEN, CTRL_CLOSE);
-                    let tag_type = helper::get_tag_type(child);
+                    let style = Style::try_from_node(child).unwrap();
 
                     let placeholder = format!(
                         "{}{}{}",
@@ -111,7 +120,7 @@ impl AskamaFormatter {
                         inner,
                         open_delimiter,
                         close_delimiter,
-                        tag_type,
+                        style,
                     });
                     result.push_str(&placeholder);
                 }
@@ -130,6 +139,7 @@ impl AskamaFormatter {
                         inner,
                         open_delimiter,
                         close_delimiter,
+                        style: Style::Inline,
                     });
                     result.push_str(&placeholder);
                 }
@@ -149,6 +159,7 @@ impl AskamaFormatter {
                         inner,
                         open_delimiter,
                         close_delimiter,
+                        style: Style::Inline,
                     });
                     result.push_str(&placeholder);
                 }
@@ -547,12 +558,11 @@ impl AskamaFormatter {
             return Ok(false);
         }
 
-        // Check if any placeholders require block formatting
+        // Check if any placeholders require block formatting using improved helper
         for &idx in &placeholder_indices {
             if let Some(placeholder) = placeholders.get(idx) {
-                if let AskamaNode::Control { tag_type, .. } = placeholder
-                    && helper::is_block_control(tag_type)
-                {
+                // Use the helper function for cleaner code
+                if !helper::should_format_inline(placeholder) {
                     return Ok(false);
                 }
             } else {

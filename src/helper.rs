@@ -1,8 +1,8 @@
 use crate::types::*;
 
 pub(crate) fn is_askama_token(text: &str) -> bool {
-    text.starts_with(ASKAMA_EXPR_TOKEN)
-        || text.starts_with(ASKAMA_CTRL_TOKEN)
+    text.starts_with(ASKAMA_CTRL_TOKEN)
+        || text.starts_with(ASKAMA_EXPR_TOKEN)
         || text.starts_with(ASKAMA_COMMENT_TOKEN)
 }
 
@@ -11,66 +11,61 @@ pub(crate) fn collect_placeholder_indices(s: &str) -> Vec<usize> {
     let mut pos = 0;
     let text_len = s.len();
 
-    // Scan through the text and find all our placeholders
     while pos < text_len {
-        // Look ahead for any of our three token types and pick the closest
-        let expr_match = s[pos..]
-            .find(ASKAMA_EXPR_TOKEN)
-            .map(|p| (pos + p, ASKAMA_EXPR_TOKEN));
-        let ctrl_match = s[pos..]
-            .find(ASKAMA_CTRL_TOKEN)
-            .map(|p| (pos + p, ASKAMA_CTRL_TOKEN));
-        let comm_match = s[pos..]
-            .find(ASKAMA_COMMENT_TOKEN)
-            .map(|p| (pos + p, ASKAMA_COMMENT_TOKEN));
+        // Find the earliest token occurrence
+        let mut earliest_match: Option<(usize, &str)> = None;
 
-        // Gather all the candidates we found
-        let candidates: Vec<_> = [expr_match, ctrl_match, comm_match]
-            .into_iter()
-            .flatten()
-            .collect();
-
-        if candidates.is_empty() {
-            break;
+        for &token_prefix in TOKEN_PREFIXES {
+            if let Some(found_pos) = s[pos..].find(token_prefix) {
+                let absolute_pos = pos + found_pos;
+                if earliest_match.is_none_or(|(best_pos, _)| absolute_pos < best_pos) {
+                    earliest_match = Some((absolute_pos, token_prefix));
+                }
+            }
         }
 
-        // Pick the earliest one
-        let (start_pos, token_prefix) = candidates.into_iter().min_by_key(|(pos, _)| *pos).unwrap();
+        let Some((start_pos, token_prefix)) = earliest_match else {
+            break;
+        };
 
-        // Find where this placeholder ends
-        if let Some(relative_end) = s[start_pos..].find(ASKAMA_END_TOKEN) {
-            let end_pos = start_pos + relative_end + ASKAMA_END_TOKEN.len();
+        // Find the matching end token
+        let search_start = start_pos + token_prefix.len();
+        if let Some(relative_end) = s[search_start..].find(ASKAMA_END_TOKEN) {
+            let content_start = search_start;
+            let content_end = search_start + relative_end;
 
-            // Extract what's between the opening and closing markers
-            let content_start = start_pos + token_prefix.len();
-            let content_end = start_pos + relative_end;
-
+            // Parse the index from the content between markers
             if content_end > content_start {
                 let content = &s[content_start..content_end];
-
-                // Try to find a valid placeholder
                 if let Ok(index) = content.parse::<usize>() {
                     indices.push(index);
                 }
             }
 
-            // Move past this placeholder and keep looking
-            pos = end_pos;
+            pos = content_end + ASKAMA_END_TOKEN.len();
         } else {
-            break; // Probably an opening but no closing marker
+            // No matching end token found
+            pos = search_start;
         }
     }
 
+    // Remove duplicates and sort for consistent ordering
+    indices.sort_unstable();
+    indices.dedup();
     indices
 }
 
-pub(crate) fn is_block_control(tag: &crate::types::ControlTag) -> bool {
-    match tag {
-        // Control tags that define blocks, conditions, loops, etc.
-        ControlTag::Open | ControlTag::Middle | ControlTag::Close => true,
-
-        // 'let', 'include', etc. are more like inline statements
-        ControlTag::Other => false,
+// Calculate indentation adjustments based on block semantics
+pub(crate) fn block_indent_adjustments(token: &str, placeholders: &[AskamaNode]) -> (i32, i32) {
+    if let Some(placeholder) = get_placeholder_for_indent(token, placeholders) {
+        let indentation = match placeholder {
+            AskamaNode::Control { style, .. }
+            | AskamaNode::Expression { style, .. }
+            | AskamaNode::Comment { style, .. } => style.indentation(),
+        };
+        (indentation.0 as i32, indentation.1 as i32)
+    } else {
+        (0, 0) // No indentation change for non-placeholder tokens
     }
 }
 
@@ -112,21 +107,6 @@ pub(crate) fn format_template_block(
     *indent_level = (*indent_level + post_adjust).max(0);
 }
 
-// Indentation adjustments based on template control tag
-fn block_indent_adjustments(token: &str, placeholders: &[AskamaNode]) -> (i32, i32) {
-    let placeholder = get_placeholder_for_indent(token, placeholders);
-
-    match placeholder {
-        Some(AskamaNode::Control { tag_type, .. }) => match tag_type {
-            ControlTag::Open => (0, 1),    // indent after opening block
-            ControlTag::Middle => (-1, 0), // outdent before middle block
-            ControlTag::Close => (-1, 0),  // outdent before closing block
-            ControlTag::Other => (0, 0),   // no indentation change
-        },
-        _ => (0, 0), // expressions, comments, and plain text
-    }
-}
-
 // Extract placeholder metadata for indentation calculation
 fn get_placeholder_for_indent<'a>(
     token: &str,
@@ -135,7 +115,7 @@ fn get_placeholder_for_indent<'a>(
     let token = token.trim();
 
     // Check each token type prefix to find the placeholder index
-    for prefix in &[ASKAMA_EXPR_TOKEN, ASKAMA_CTRL_TOKEN, ASKAMA_COMMENT_TOKEN] {
+    for &prefix in &[ASKAMA_EXPR_TOKEN, ASKAMA_CTRL_TOKEN, ASKAMA_COMMENT_TOKEN] {
         if let Some(rest) = token.strip_prefix(prefix)
             && let Some(idx_str) = rest.strip_suffix(ASKAMA_END_TOKEN)
             && let Ok(idx) = idx_str.parse::<usize>()
@@ -146,61 +126,60 @@ fn get_placeholder_for_indent<'a>(
     None
 }
 
-// Return the tag type
-pub(crate) fn get_tag_type(child: tree_sitter::Node) -> ControlTag {
-    if let Some(grand_child) = child.child(1) {
-        // Control tag type based on its node type
-        return match grand_child.kind() {
-            // Opening tags - start a new block
-            "if_statement" | "for_statement" | "block_statement" | "filter_statement"
-            | "match_statement" | "macro_statement" | "call_statement" => ControlTag::Open,
-            // Middle tags - continue within a block
-            "else_statement" | "else_if_statement" | "when_statement" => ControlTag::Middle,
-            // Closing tags - end a block
-            "endif_statement"
-            | "endfor_statement"
-            | "endblock_statement"
-            | "endfilter_statement"
-            | "endmatch_statement"
-            | "endmacro_statement"
-            | "endcall_statement" => ControlTag::Close,
-            // Other tags like 'let', 'include', etc
-            _ => ControlTag::Other,
-        };
-    }
-
-    // unreachable?
-    ControlTag::Other
-}
-
 // Extract content between delimiters, handling trim markers
 pub(crate) fn extract_inner_content(content: &str, open_delim: &str, close_delim: &str) -> String {
-    // Clean up the content by removing the delimiters and any trim markers
     let mut inner = content.trim();
 
     // Strip the opening delimiter
-    if inner.starts_with(open_delim) {
-        inner = &inner[open_delim.len()..];
+    if let Some(after_open) = inner.strip_prefix(open_delim) {
+        inner = after_open;
         // Check for trim characters (-, +, ~) right after the opening delimiter
         if let Some(first_char) = inner.chars().next()
-            && (first_char == '-' || first_char == '+' || first_char == '~')
+            && matches!(first_char, '-' | '+' | '~')
         {
-            let ch_len = first_char.len_utf8();
-            inner = &inner[ch_len..];
+            inner = &inner[first_char.len_utf8()..];
         }
     }
 
     // Strip the closing delimiter
-    if inner.ends_with(close_delim) {
-        inner = &inner[..inner.len() - close_delim.len()];
+    if let Some(before_close) = inner.strip_suffix(close_delim) {
+        inner = before_close;
         // Check for trim characters right before the closing delimiter
         if let Some(last_char) = inner.chars().next_back()
-            && (last_char == '-' || last_char == '+' || last_char == '~')
+            && matches!(last_char, '-' | '+' | '~')
         {
-            let ch_len = last_char.len_utf8();
-            inner = &inner[..inner.len() - ch_len];
+            inner = &inner[..inner.len() - last_char.len_utf8()];
         }
     }
 
     inner.to_string()
+}
+
+// Helper to determine if a placeholder should be formatted inline
+pub(crate) fn should_format_inline(placeholder: &AskamaNode) -> bool {
+    match placeholder {
+        AskamaNode::Control { style, .. }
+        | AskamaNode::Expression { style, .. }
+        | AskamaNode::Comment { style, .. } => matches!(style, Style::Inline),
+    }
+}
+
+// Enhanced placeholder validation
+pub(crate) fn validate_placeholder_indices(
+    text: &str,
+    placeholders: &[AskamaNode],
+) -> Result<(), String> {
+    let indices = collect_placeholder_indices(text);
+
+    for &idx in &indices {
+        if idx >= placeholders.len() {
+            return Err(format!(
+                "Placeholder index {} out of bounds (max: {})",
+                idx,
+                placeholders.len().saturating_sub(1)
+            ));
+        }
+    }
+
+    Ok(())
 }
