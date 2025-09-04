@@ -200,9 +200,22 @@ impl AskamaFormatter {
             .ok_or("Failed to parse HTML")?;
         let root = html_tree.root_node();
 
+        // If HTML parsing fails, fall back to basic indentation
         if root.has_error() {
-            // If HTML parsing fails, fall back to basic indentation
-            return Ok(self.basic_indent(html));
+            let res = html
+                .lines()
+                .map(|line| {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() {
+                        String::new()
+                    } else {
+                        format!("{}{}", " ".repeat(self.indent_size), trimmed)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            return Ok(res);
         }
 
         // Format the HTML with proper structure
@@ -531,20 +544,6 @@ impl AskamaFormatter {
         }
 
         result
-    }
-
-    fn basic_indent(&self, html: &str) -> String {
-        html.lines()
-            .map(|line| {
-                let trimmed = line.trim();
-                if trimmed.is_empty() {
-                    String::new()
-                } else {
-                    format!("{}{}", " ".repeat(self.indent_size), trimmed)
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
     }
 
     // Returns formatted text and the net change in indentation level

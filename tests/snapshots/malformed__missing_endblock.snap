@@ -1,0 +1,5 @@
+---
+source: tests/malformed.rs
+expression: input
+---
+{% block paragraph %}<p>A cool paragraph</p>

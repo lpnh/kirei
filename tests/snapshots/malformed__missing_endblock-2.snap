@@ -1,0 +1,6 @@
+---
+source: tests/malformed.rs
+expression: formatted_output
+---
+{% block paragraph %}
+  <p>A cool paragraph</p>

@@ -1,0 +1,9 @@
+---
+source: tests/malformed.rs
+expression: formatted_output
+---
+<main>
+  <div>
+    <h2>Test</h2>
+    <p>Where did that div go</p>
+</main>

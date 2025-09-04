@@ -1,0 +1,5 @@
+---
+source: tests/malformed.rs
+expression: formatted_output
+---
+  <p>Hello!
