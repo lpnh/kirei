@@ -413,7 +413,7 @@ impl AskamaFormatter {
             .collect();
 
         // Decide between inline and block formatting
-        let should_inline = self.should_be_inline(&content_children, source)?;
+        let should_inline = self.should_be_inline(&content_children, source, placeholders)?;
 
         if let Some(start) = start_tag {
             if should_inline && content_children.len() == 1 {
@@ -494,26 +494,75 @@ impl AskamaFormatter {
         Ok(result)
     }
 
+    // Determines whether content should be formatted inline or as a block
     fn should_be_inline(
         &self,
         content: &[&Node],
         source: &[u8],
+        placeholders: &[AskamaNode],
     ) -> Result<bool, Box<dyn std::error::Error>> {
+        // Multiple content nodes require block formatting
         if content.len() != 1 {
             return Ok(false);
         }
 
+        // Only text nodes are candidates for inline formatting
         let node = content[0];
         if node.kind() != "text" {
             return Ok(false);
         }
 
         let text = node.utf8_text(source)?.trim();
-        // Placeholders can always be inline regardless of length
-        if helper::is_askama_token(text) {
-            return Ok(true);
+
+        // Handle simple text without placeholders using original logic
+        if !text.contains(ASKAMA_TOKEN) {
+            return Ok(!text.contains('\n') && text.len() <= self.max_inline_length);
         }
-        Ok(!text.contains('\n') && text.len() <= self.max_inline_length)
+
+        // Analyze placeholder content
+        let placeholder_indices = crate::helper::collect_placeholder_indices(text);
+
+        if placeholder_indices.is_empty() {
+            // Malformed placeholders - use conservative block formatting
+            return Ok(false);
+        }
+
+        // Check what remains after removing all placeholders
+        let mut text_without_placeholders = text.to_string();
+        for &idx in &placeholder_indices {
+            // Remove all possible placeholder formats
+            let patterns = [
+                format!("{}{}{}", ASKAMA_EXPR_TOKEN, idx, ASKAMA_END_TOKEN),
+                format!("{}{}{}", ASKAMA_CTRL_TOKEN, idx, ASKAMA_END_TOKEN),
+                format!("{}{}{}", ASKAMA_COMMENT_TOKEN, idx, ASKAMA_END_TOKEN),
+            ];
+
+            for pattern in &patterns {
+                text_without_placeholders = text_without_placeholders.replace(pattern, "");
+            }
+        }
+
+        // If there's substantial text beyond placeholders, prefer block formatting
+        if !text_without_placeholders.trim().is_empty() {
+            return Ok(false);
+        }
+
+        // Check if any placeholders require block formatting
+        for &idx in &placeholder_indices {
+            if let Some(placeholder) = placeholders.get(idx) {
+                if let AskamaNode::Control { tag_type, .. } = placeholder {
+                    if crate::helper::is_block_control(tag_type) {
+                        return Ok(false);
+                    }
+                }
+            } else {
+                // Unknown placeholder index - be conservative
+                return Ok(false);
+            }
+        }
+
+        // Final check for length and line breaks
+        Ok(text.len() <= self.max_inline_length && !text.contains('\n'))
     }
 
     fn restore_askama_nodes(&self, formatted_html: &str, placeholders: &[AskamaNode]) -> String {

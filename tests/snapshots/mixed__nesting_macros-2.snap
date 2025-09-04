@@ -8,5 +8,10 @@ expression: formatted_output
 {% macro outer_container() %}
   {# Create an alias to our `caller`, so we can access it within container: #}
   {% set outer_caller = caller %}
-  <div class="outer-container">{# nested macro invocation - will overwrite the `caller` variable: #}{% call container() %}{{ outer_caller() }}{% endcall %}</div>
+  <div class="outer-container">
+    {# nested macro invocation - will overwrite the `caller` variable: #}
+    {% call container() %}
+    {{ outer_caller() }}
+  {% endcall %}
+  </div>
 {% endmacro %}

@@ -6,6 +6,75 @@ pub(crate) fn is_askama_token(text: &str) -> bool {
         || text.starts_with(ASKAMA_COMMENT_TOKEN)
 }
 
+pub(crate) fn collect_placeholder_indices(s: &str) -> Vec<usize> {
+    let mut indices = Vec::new();
+    let mut pos = 0;
+    let text_len = s.len();
+
+    // Scan through the text and find all our placeholders
+    while pos < text_len {
+        // Look ahead for any of our three token types and pick the closest
+        let expr_match = s[pos..]
+            .find(ASKAMA_EXPR_TOKEN)
+            .map(|p| (pos + p, ASKAMA_EXPR_TOKEN));
+        let ctrl_match = s[pos..]
+            .find(ASKAMA_CTRL_TOKEN)
+            .map(|p| (pos + p, ASKAMA_CTRL_TOKEN));
+        let comm_match = s[pos..]
+            .find(ASKAMA_COMMENT_TOKEN)
+            .map(|p| (pos + p, ASKAMA_COMMENT_TOKEN));
+
+        // Gather all the candidates we found
+        let candidates: Vec<_> = [expr_match, ctrl_match, comm_match]
+            .into_iter()
+            .flatten()
+            .collect();
+
+        if candidates.is_empty() {
+            break;
+        }
+
+        // Pick the earliest one
+        let (start_pos, token_prefix) = candidates.into_iter().min_by_key(|(pos, _)| *pos).unwrap();
+
+        // Find where this placeholder ends
+        if let Some(relative_end) = s[start_pos..].find(ASKAMA_END_TOKEN) {
+            let end_pos = start_pos + relative_end + ASKAMA_END_TOKEN.len();
+
+            // Extract what's between the opening and closing markers
+            let content_start = start_pos + token_prefix.len();
+            let content_end = start_pos + relative_end;
+
+            if content_end > content_start {
+                let content = &s[content_start..content_end];
+
+                // Try to find a valid placeholder
+                if let Ok(index) = content.parse::<usize>() {
+                    indices.push(index);
+                }
+            }
+
+            // Move past this placeholder and keep looking
+            pos = end_pos;
+        } else {
+            break; // Probably an opening but no closing marker
+        }
+    }
+
+    indices
+}
+
+pub(crate) fn is_block_control(tag: &crate::types::ControlTag) -> bool {
+    use crate::types::ControlTag::*;
+    match tag {
+        // Control tags that define blocks, conditions, loops, etc.
+        Open | Middle | Close => true,
+
+        // 'let', 'include', etc. are more like inline statements
+        _ => false,
+    }
+}
+
 // Format template element with semantic indentation
 pub(crate) fn format_template_block(
     token: &str,
