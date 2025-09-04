@@ -65,13 +65,12 @@ pub(crate) fn collect_placeholder_indices(s: &str) -> Vec<usize> {
 }
 
 pub(crate) fn is_block_control(tag: &crate::types::ControlTag) -> bool {
-    use crate::types::ControlTag::*;
     match tag {
         // Control tags that define blocks, conditions, loops, etc.
-        Open | Middle | Close => true,
+        ControlTag::Open | ControlTag::Middle | ControlTag::Close => true,
 
         // 'let', 'include', etc. are more like inline statements
-        _ => false,
+        ControlTag::Other => false,
     }
 }
 

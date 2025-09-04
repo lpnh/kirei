@@ -520,7 +520,7 @@ impl AskamaFormatter {
         }
 
         // Analyze placeholder content
-        let placeholder_indices = crate::helper::collect_placeholder_indices(text);
+        let placeholder_indices = helper::collect_placeholder_indices(text);
 
         if placeholder_indices.is_empty() {
             // Malformed placeholders - use conservative block formatting
@@ -550,10 +550,10 @@ impl AskamaFormatter {
         // Check if any placeholders require block formatting
         for &idx in &placeholder_indices {
             if let Some(placeholder) = placeholders.get(idx) {
-                if let AskamaNode::Control { tag_type, .. } = placeholder {
-                    if crate::helper::is_block_control(tag_type) {
-                        return Ok(false);
-                    }
+                if let AskamaNode::Control { tag_type, .. } = placeholder
+                    && helper::is_block_control(tag_type)
+                {
+                    return Ok(false);
                 }
             } else {
                 // Unknown placeholder index - be conservative
