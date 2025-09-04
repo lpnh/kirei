@@ -1,8 +1,5 @@
 ---
 source: tests/html_only.rs
-expression: result
+expression: input
 ---
-<ul>
-  <li>Item 1</li>
-  <li>Item 2</li>
-</ul>
+<ul><li>Item 1</li><li>Item 2</li></ul>

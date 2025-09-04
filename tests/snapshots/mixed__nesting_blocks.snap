@@ -1,0 +1,5 @@
+---
+source: tests/mixed.rs
+expression: input
+---
+{% block first %}{% block inner %}<p>A cool paragraph</p>{% endblock %}{% endblock %}

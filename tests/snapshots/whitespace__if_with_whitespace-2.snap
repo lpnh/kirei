@@ -1,0 +1,6 @@
+---
+source: tests/whitespace.rs
+expression: formatted_output
+---
+{% if foo %}
+{% endif %}

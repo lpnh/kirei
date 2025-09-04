@@ -1,25 +1,15 @@
+#![allow(clippy::uninlined_format_args)]
+use std::fmt::Write as _;
 use tree_sitter::{Node, Parser};
 use tree_sitter_askama::LANGUAGE as ASKAMA_LANGUAGE;
 use tree_sitter_html::LANGUAGE as HTML_LANGUAGE;
 
-pub enum Placeholder {
-    Expression(String),
-    Control(String),
-    Comment(String),
-}
-
-impl Placeholder {
-    fn to_string(&self) -> String {
-        match self {
-            Placeholder::Expression(s) => s.clone(),
-            Placeholder::Control(s) => s.clone(),
-            Placeholder::Comment(s) => s.clone(),
-        }
-    }
-}
+mod helper;
+mod types;
+use types::*;
 
 pub struct AskamaFormatter {
-    pub askama_parser: Parser,
+    askama_parser: Parser,
     html_parser: Parser,
     indent_size: usize,
     max_inline_length: usize,
@@ -37,7 +27,7 @@ impl AskamaFormatter {
             askama_parser,
             html_parser,
             indent_size: 2,
-            max_inline_length: 50,
+            max_inline_length: 80,
         })
     }
 
@@ -58,7 +48,7 @@ impl AskamaFormatter {
             return Ok(String::new());
         }
 
-        // Step 1: Parse with Askama parser
+        // Parse the source with our Askama parser first
         let askama_tree = self
             .askama_parser
             .parse(source, None)
@@ -69,81 +59,136 @@ impl AskamaFormatter {
             return Err("Askama parse error: Invalid syntax found".into());
         }
 
-        // Step 2: Reconstruct HTML by replacing Askama expressions with placeholders
-        let (html_with_placeholders, placeholders) = self.extract_expressions(source, &root)?;
+        // Replace Askama nodes with temporary placeholder tokens
+        let (html_with_placeholders, placeholders) = self.extract_askama_nodes(source, &root)?;
 
-        // Step 3: Parse and format the HTML
-        let formatted_html = self.format_html(&html_with_placeholders)?;
+        // Format the HTML structure while preserving our placeholders
+        let formatted_output = self.try_format(&html_with_placeholders, &placeholders)?;
 
-        // Step 4: Restore Askama expressions
-        let final_result = self.restore_expressions(&formatted_html, &placeholders);
+        // Put the original Askama nodes back where they belong
+        let result = self.restore_askama_nodes(&formatted_output, &placeholders);
 
-        Ok(final_result)
+        Ok(result)
     }
 
-    pub fn extract_expressions(
+    fn extract_askama_nodes(
         &self,
         source: &str,
-        node: &Node,
-    ) -> Result<(String, Vec<Placeholder>), Box<dyn std::error::Error>> {
+        root: &Node,
+    ) -> Result<(String, Vec<AskamaNode>), Box<dyn std::error::Error>> {
         let mut result = String::new();
         let mut placeholders = Vec::new();
+        let mut last_end = 0;
 
-        self.extract_expressions_recursive(source, node, &mut result, &mut placeholders)?;
+        // Walk through each child node in the AST
+        let mut cursor = root.walk();
+        for child in root.children(&mut cursor) {
+            let start = child.start_byte();
+            let end = child.end_byte();
 
-        Ok((result, placeholders))
-    }
+            // Grab any text that comes before this node
+            if start > last_end {
+                let text_content = &source[last_end..start];
+                result.push_str(text_content);
+            }
 
-    fn extract_expressions_recursive(
-        &self,
-        source: &str,
-        node: &Node,
-        result: &mut String,
-        placeholders: &mut Vec<Placeholder>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut cursor = node.walk();
-
-        for child in node.children(&mut cursor) {
             match child.kind() {
-                "content" => {
-                    let text = child.utf8_text(source.as_bytes())?;
-                    result.push_str(text);
-                }
                 "control_tag" => {
                     let tag_text = child.utf8_text(source.as_bytes())?;
-                    let placeholder = format!("__CTRL_{}__", placeholders.len());
-                    placeholders.push(Placeholder::Control(self.trim_trim(tag_text)));
+                    let trim_left = tag_text.starts_with(CTRL_OPEN_TRIM);
+                    let trim_right = tag_text.ends_with(CTRL_CLOSE_TRIM);
+                    let inner = helper::extract_inner_content(tag_text, CTRL_OPEN, CTRL_CLOSE);
+                    let tag_type = helper::get_tag_type(tag_text);
+
+                    let placeholder = format!(
+                        "{}{}{}",
+                        ASKAMA_CTRL_TOKEN,
+                        placeholders.len(),
+                        ASKAMA_END_TOKEN
+                    );
+
+                    placeholders.push(AskamaNode::Control {
+                        inner,
+                        trim_left,
+                        trim_right,
+                        tag_type,
+                    });
                     result.push_str(&placeholder);
                 }
                 "render_expression" => {
                     let expr_text = child.utf8_text(source.as_bytes())?;
-                    let placeholder = format!("__EXPR_{}__", placeholders.len());
-                    placeholders.push(Placeholder::Expression(self.trim_trim(expr_text)));
+                    // Check if this expression uses whitespace trimming
+                    let trim_left = expr_text.starts_with(EXPR_OPEN_TRIM);
+                    let trim_right = expr_text.ends_with(EXPR_CLOSE_TRIM);
+                    let inner = helper::extract_inner_content(expr_text, EXPR_OPEN, EXPR_CLOSE);
+                    let placeholder = format!(
+                        "{}{}{}",
+                        ASKAMA_EXPR_TOKEN,
+                        placeholders.len(),
+                        ASKAMA_END_TOKEN
+                    );
+                    placeholders.push(AskamaNode::Expression {
+                        inner,
+                        trim_left,
+                        trim_right,
+                    });
                     result.push_str(&placeholder);
                 }
                 "comment" => {
                     let comment_text = child.utf8_text(source.as_bytes())?;
-                    let placeholder = format!("__COMMENT_{}__", placeholders.len());
-                    placeholders.push(Placeholder::Comment(self.trim_trim(comment_text)));
+                    let inner =
+                        helper::extract_inner_content(comment_text, COMMENT_OPEN, COMMENT_CLOSE);
+                    let placeholder = format!(
+                        "{}{}{}",
+                        ASKAMA_COMMENT_TOKEN,
+                        placeholders.len(),
+                        ASKAMA_END_TOKEN
+                    );
+                    placeholders.push(AskamaNode::Comment { inner });
                     result.push_str(&placeholder);
                 }
+                // Everything else gets added as-is
                 _ => {
-                    // For other nodes, recursively process children
-                    self.extract_expressions_recursive(source, &child, result, placeholders)?;
+                    let text = child.utf8_text(source.as_bytes())?;
+                    result.push_str(text);
                 }
+            }
+            last_end = end;
+        }
+
+        // Don't forget any text that comes after the last node
+        if last_end < source.len() {
+            let text_content = &source[last_end..];
+            result.push_str(text_content);
+        }
+
+        Ok((result, placeholders))
+    }
+
+    fn try_format(
+        &mut self,
+        html: &str,
+        placeholders: &[AskamaNode],
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        // If we only have template tags and no actual HTML
+        // use the formatter that understands the template syntax
+        {
+            let mut s = html.to_string();
+            for i in 0..placeholders.len() {
+                let expr = format!("{}{}{}", ASKAMA_EXPR_TOKEN, i, ASKAMA_END_TOKEN);
+                let ctrl = format!("{}{}{}", ASKAMA_CTRL_TOKEN, i, ASKAMA_END_TOKEN);
+                let comment = format!("{}{}{}", ASKAMA_COMMENT_TOKEN, i, ASKAMA_END_TOKEN);
+                s = s.replace(&expr, "");
+                s = s.replace(&ctrl, "");
+                s = s.replace(&comment, "");
+            }
+            if s.trim().is_empty() {
+                // Pure template content - handle it specially
+                return Ok(self.format_template(html, placeholders).trim().to_string());
             }
         }
 
-        Ok(())
-    }
-
-    pub fn trim_trim(&self, expr: &str) -> String {
-        // For now, just return the expression as-is, no formatting
-        expr.to_string()
-    }
-
-    fn format_html(&mut self, html: &str) -> Result<String, Box<dyn std::error::Error>> {
-        // Parse HTML
+        // Try to parse as HTML
         let html_tree = self
             .html_parser
             .parse(html, None)
@@ -151,22 +196,125 @@ impl AskamaFormatter {
         let root = html_tree.root_node();
 
         if root.has_error() {
-            // Fallback if HTML is invalid
+            // If HTML parsing fails, fall back to basic indentation
             return Ok(self.basic_indent(html));
         }
 
-        // Format HTML with proper indentation, starting from the root
-        let mut formatted = self.format_html_node(&root, html.as_bytes(), 0)?;
+        // Format the HTML with proper structure
+        let formatted = self.format_html_node(&root, html.as_bytes(), 0, placeholders)?;
 
-        // Trim trailing newlines for clean output
-        while formatted.ends_with('\n') || formatted.ends_with('\r') {
-            formatted.pop();
+        Ok(formatted.trim().to_string())
+    }
+
+    fn format_template(&self, html: &str, placeholders: &[AskamaNode]) -> String {
+        // Break down the input into tokens (placeholders and regular text)
+        let mut tokens: Vec<&str> = Vec::new();
+        let s = html;
+        let mut i = 0usize;
+        while i < s.len() {
+            if let Some(rest) = s.get(i..) {
+                if let Some(stripped) = rest.strip_prefix(ASKAMA_TOKEN) {
+                    // Found a placeholder - find where it ends
+                    if let Some(second_underscore_pos) = stripped.find(ASKAMA_END_TOKEN) {
+                        let end =
+                            i + ASKAMA_TOKEN.len() + second_underscore_pos + ASKAMA_END_TOKEN.len();
+                        if end <= s.len() {
+                            tokens.push(&s[i..end]);
+                            i = end;
+                            continue;
+                        }
+                    }
+                    // Couldn't find proper end, treat as regular text
+                    tokens.push(&s[i..]);
+                    break;
+                } else if let Some(placeholder_start) = rest.find(ASKAMA_TOKEN) {
+                    // Add text before the next placeholder
+                    let end = i + placeholder_start;
+                    if end > i {
+                        tokens.push(&s[i..end]);
+                    }
+                    i = end;
+                } else {
+                    // No more placeholders found
+                    tokens.push(&s[i..]);
+                    break;
+                }
+            } else {
+                break;
+            }
         }
 
-        // Convert __ii__ markers to actual indentation
-        formatted = self.convert_markers_to_spaces(&formatted);
+        // Helper to get placeholder info for indentation logic
+        fn get_placeholder_for_indent<'a>(
+            token: &'a str,
+            placeholders: &'a [AskamaNode],
+        ) -> Option<&'a AskamaNode> {
+            let t = token.trim();
+            for prefix in &[ASKAMA_EXPR_TOKEN, ASKAMA_CTRL_TOKEN, ASKAMA_COMMENT_TOKEN] {
+                if let Some(rest) = t.strip_prefix(prefix)
+                    && let Some(idx_str) = rest.strip_suffix(ASKAMA_END_TOKEN)
+                    && let Ok(idx) = idx_str.parse::<usize>()
+                {
+                    return placeholders.get(idx);
+                }
+            }
+            None
+        }
 
-        Ok(formatted)
+        // Build the formatted output with proper indentation
+        let mut lines: Vec<String> = Vec::new();
+        let mut indent_level: i32 = 0;
+
+        for token in tokens {
+            let token_trimmed = token.trim();
+            if token_trimmed.is_empty() {
+                continue;
+            }
+
+            // Calculate how indentation should change around this token
+            let (pre_adjust, post_adjust) = if let Some(placeholder) =
+                get_placeholder_for_indent(token_trimmed, placeholders)
+            {
+                // Use our stored metadata for control flow
+                match placeholder {
+                    AskamaNode::Control { tag_type, .. } => {
+                        match tag_type {
+                            ControlTag::Open => (0, 1),    // indent after
+                            ControlTag::Middle => (-1, 0), // outdent before
+                            ControlTag::Close => (-1, 0),  // outdent before
+                            ControlTag::Other => (0, 0),   // no change
+                        }
+                    }
+                    _ => (0, 0), // expressions and comments don't affect indentation
+                }
+            } else {
+                // Parse the token content directly as fallback
+                helper::calculate_indent_adjustments(token_trimmed, placeholders)
+            };
+
+            // Adjust indent before rendering this token
+            indent_level = (indent_level + pre_adjust).max(0);
+
+            let indent = " ".repeat(indent_level as usize * self.indent_size);
+
+            // Add the token with current indentation
+            if helper::is_askama_token(token_trimmed) {
+                lines.push(format!("{}{}", indent, token_trimmed));
+            } else {
+                // Handle multi-line plain text
+                for line in token_trimmed.lines() {
+                    let trimmed = line.trim();
+                    if !trimmed.is_empty() {
+                        lines.push(format!("{}{}", indent, trimmed));
+                    }
+                }
+            }
+
+            // Adjust indent after rendering this token
+            indent_level = (indent_level + post_adjust).max(0);
+        }
+
+        lines.join("\n")
     }
 
     fn format_html_node(
@@ -174,173 +322,258 @@ impl AskamaFormatter {
         node: &Node,
         source: &[u8],
         indent_level: usize,
+        placeholders: &[AskamaNode],
     ) -> Result<String, Box<dyn std::error::Error>> {
         let mut result = String::new();
-        let indent = "__ii__".repeat(indent_level);
-
-        if !node.is_named() {
-            return Ok(String::new());
-        }
+        let indent = " ".repeat(indent_level * self.indent_size);
 
         match node.kind() {
-            "document" => {
-                // For document, process children without adding indentation to the document itself
+            "document" | "fragment" => {
+                // Process children while tracking dynamic indent changes from control tags
                 let mut cursor = node.walk();
+                let mut current_indent: i32 = indent_level as i32;
                 for child in node.children(&mut cursor) {
-                    // Document children start at indent level 0
-                    result.push_str(&self.format_html_node(&child, source, 0)?);
+                    if child.kind() == "text" {
+                        let text_content = child.utf8_text(source)?;
+                        let trimmed = text_content.trim();
+                        if !trimmed.is_empty() {
+                            if trimmed.contains(ASKAMA_TOKEN) {
+                                // Handle mixed text/placeholder content
+                                let (s, delta) = self.format_text_with_placeholders(
+                                    trimmed,
+                                    placeholders,
+                                    current_indent as usize,
+                                );
+                                result.push_str(&s);
+                                current_indent = (current_indent + delta).max(0);
+                            } else if helper::is_askama_token(trimmed) {
+                                writeln!(
+                                    result,
+                                    "{}{}",
+                                    " ".repeat(current_indent as usize * self.indent_size),
+                                    trimmed
+                                )
+                                .unwrap();
+                            } else {
+                                // Regular text content
+                                for line in trimmed.lines() {
+                                    let trimmed_line = line.trim();
+                                    if !trimmed_line.is_empty() {
+                                        writeln!(
+                                            result,
+                                            "{}{}",
+                                            " ".repeat(current_indent as usize * self.indent_size),
+                                            trimmed_line
+                                        )
+                                        .unwrap();
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Non-text nodes use current indent level
+                        let child_str = self.format_html_node(
+                            &child,
+                            source,
+                            current_indent as usize,
+                            placeholders,
+                        )?;
+                        result.push_str(&child_str);
+                    }
                 }
             }
             "doctype" => {
-                // DOCTYPE should be at the current indent level
-                result.push_str(&format!("{}{}\n", indent, node.utf8_text(source)?));
+                writeln!(result, "{}{}", indent, node.utf8_text(source)?).unwrap();
             }
             "element" => {
-                // Iterate through children to find start_tag and end_tag
-                let mut cursor = node.walk();
-                let children: Vec<Node> = node.children(&mut cursor).collect();
-
-                // Find start_tag (should be first)
-                let start_tag = children.iter().find(|child| child.kind() == "start_tag");
-                // Find end_tag (should be last)
-                let end_tag = children.iter().find(|child| child.kind() == "end_tag");
-
-                if let Some(start) = start_tag {
-                    // Check if this element should be formatted inline
-                    let content_children: Vec<&Node> = children
-                        .iter()
-                        .filter(|child| child.kind() != "start_tag" && child.kind() != "end_tag")
-                        .collect();
-
-                    let should_be_inline = content_children.len() == 1
-                        && content_children[0].kind() == "text"
-                        && !content_children[0]
-                            .utf8_text(source)
-                            .unwrap_or("")
-                            .trim()
-                            .contains('\n')
-                        && content_children[0]
-                            .utf8_text(source)
-                            .unwrap_or("")
-                            .trim()
-                            .len()
-                            < self.max_inline_length;
-
-                    if should_be_inline {
-                        // Inline element: put everything on one line
-                        let text_content =
-                            content_children[0].utf8_text(source).unwrap_or("").trim();
-
-                        if let Some(end) = end_tag {
-                            result.push_str(&format!(
-                                "{}{}{}{}\n",
-                                indent,
-                                start.utf8_text(source)?,
-                                text_content,
-                                end.utf8_text(source)?
-                            ));
-                        } else {
-                            result.push_str(&format!(
-                                "{}{}{}\n",
-                                indent,
-                                start.utf8_text(source)?,
-                                text_content
-                            ));
-                        }
-                    } else {
-                        // Block element: multi-line format
-                        result.push_str(&format!("{}{}\n", indent, start.utf8_text(source)?));
-
-                        // Process all children that are not start_tag or end_tag with increased indentation
-                        for child in &children {
-                            if child.kind() != "start_tag" && child.kind() != "end_tag" {
-                                result.push_str(&self.format_html_node(
-                                    child,
-                                    source,
-                                    indent_level + 1, // Increment indentation for children
-                                )?);
-                            }
-                        }
-
-                        // Add the end tag with current indentation if it exists
-                        if let Some(end) = end_tag {
-                            result.push_str(&format!("{}{}\n", indent, end.utf8_text(source)?));
-                        }
-                    }
-                } else {
-                    // Fallback for self-closing or malformed elements
-                    result.push_str(&format!("{}{}\n", indent, node.utf8_text(source)?));
-                }
+                result.push_str(&self.format_html_element(
+                    node,
+                    source,
+                    indent_level,
+                    placeholders,
+                )?);
             }
             "text" => {
                 let text_content = node.utf8_text(source)?;
-                let trimmed_text = text_content.trim();
-                if !trimmed_text.is_empty() {
-                    // Check if this text contains placeholders (Askama expressions)
-                    if self.contains_placeholders(trimmed_text) {
-                        // Split by lines and indent each line properly
-                        for line in trimmed_text.lines() {
-                            let line_trimmed = line.trim();
-                            if !line_trimmed.is_empty() {
-                                result.push_str(&format!("{}{}\n", indent, line_trimmed));
+                let trimmed = text_content.trim();
+                if !trimmed.is_empty() {
+                    if trimmed.contains(ASKAMA_TOKEN) {
+                        // Text with embedded placeholders
+                        let (s, _delta) =
+                            self.format_text_with_placeholders(trimmed, placeholders, indent_level);
+                        result.push_str(&s);
+                    } else if helper::is_askama_token(trimmed) {
+                        writeln!(result, "{}{}", indent, trimmed).unwrap();
+                    } else {
+                        // Plain text content
+                        for line in trimmed.lines() {
+                            let trimmed_line = line.trim();
+                            if !trimmed_line.is_empty() {
+                                writeln!(result, "{}{}", indent, trimmed_line).unwrap();
                             }
                         }
-                    } else {
-                        result.push_str(&format!("{}{}\n", indent, trimmed_text));
                     }
                 }
-                // Skip empty text nodes
             }
             _ => {
-                // For any other node types, include them with indentation
-                result.push_str(&format!("{}{}\n", indent, node.utf8_text(source)?));
+                // Handle other node types generically
+                let content = node.utf8_text(source)?;
+                if !content.trim().is_empty() {
+                    writeln!(result, "{}{}", indent, content).unwrap();
+                }
             }
         }
 
         Ok(result)
     }
 
-    fn contains_placeholders(&self, text: &str) -> bool {
-        text.contains("__EXPR_") || text.contains("__CTRL_") || text.contains("__COMMENT_")
-    }
+    fn format_html_element(
+        &self,
+        node: &Node,
+        source: &[u8],
+        indent_level: usize,
+        placeholders: &[AskamaNode],
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let mut result = String::new();
+        let indent = " ".repeat(indent_level * self.indent_size);
 
-    fn convert_markers_to_spaces(&self, text: &str) -> String {
-        text.lines()
-            .map(|line| {
-                let mut indent_count = 0;
-                let mut remaining = line;
+        // Find start_tag, end_tag, and content
+        let mut cursor = node.walk();
+        let children: Vec<Node> = node.children(&mut cursor).collect();
 
-                // Count __ii__ prefixes
-                while let Some(stripped) = remaining.strip_prefix("__ii__") {
-                    indent_count += 1;
-                    remaining = stripped;
-                }
+        let start_tag = children.iter().find(|n| n.kind() == "start_tag");
+        let end_tag = children.iter().find(|n| n.kind() == "end_tag");
+        let content_children: Vec<&Node> = children
+            .iter()
+            .filter(|n| n.kind() != "start_tag" && n.kind() != "end_tag")
+            .collect();
 
-                // Return with proper indentation
-                if remaining.trim().is_empty() {
-                    String::new() // Empty line
-                } else {
-                    format!(
-                        "{}{}",
-                        " ".repeat(indent_count * self.indent_size),
-                        remaining
+        // Decide between inline and block formatting
+        let should_inline = self.should_be_inline(&content_children, source)?;
+
+        if let Some(start) = start_tag {
+            if should_inline && content_children.len() == 1 {
+                // Keep it on one line
+                let content = content_children[0].utf8_text(source)?.trim();
+                if let Some(end) = end_tag {
+                    writeln!(
+                        result,
+                        "{}{}{}{}",
+                        indent,
+                        start.utf8_text(source)?,
+                        content,
+                        end.utf8_text(source)?
                     )
+                    .unwrap();
+                } else {
+                    // Self-closing tag
+                    writeln!(result, "{}{}", indent, start.utf8_text(source)?).unwrap();
                 }
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
+            } else {
+                // Multi-line block format
+                writeln!(result, "{}{}", indent, start.utf8_text(source)?).unwrap();
+
+                // Format content with tracking for dynamic indent changes
+                let mut current_indent: i32 = (indent_level + 1) as i32;
+
+                for child in content_children {
+                    match child.kind() {
+                        "text" => {
+                            let text_content = child.utf8_text(source)?;
+                            let trimmed = text_content.trim();
+                            if !trimmed.is_empty() {
+                                if trimmed.contains(ASKAMA_TOKEN) {
+                                    let (s, delta) = self.format_text_with_placeholders(
+                                        trimmed,
+                                        placeholders,
+                                        current_indent as usize,
+                                    );
+                                    result.push_str(&s);
+                                    current_indent = (current_indent + delta).max(0);
+                                } else if helper::is_askama_token(trimmed) {
+                                    writeln!(
+                                        result,
+                                        "{}{}",
+                                        " ".repeat(current_indent as usize * self.indent_size),
+                                        trimmed
+                                    )
+                                    .unwrap();
+                                } else {
+                                    result.push_str(&self.format_html_node(
+                                        child,
+                                        source,
+                                        current_indent as usize,
+                                        placeholders,
+                                    )?);
+                                }
+                            }
+                        }
+                        _ => {
+                            // Format other child nodes with current indent
+                            result.push_str(&self.format_html_node(
+                                child,
+                                source,
+                                current_indent as usize,
+                                placeholders,
+                            )?);
+                        }
+                    }
+                }
+
+                // Close the element
+                if let Some(end) = end_tag {
+                    writeln!(result, "{}{}", indent, end.utf8_text(source)?).unwrap();
+                }
+            }
+        }
+
+        Ok(result)
     }
 
-    fn restore_expressions(&self, formatted_html: &str, placeholders: &[Placeholder]) -> String {
+    fn should_be_inline(
+        &self,
+        content: &[&Node],
+        source: &[u8],
+    ) -> Result<bool, Box<dyn std::error::Error>> {
+        if content.len() != 1 {
+            return Ok(false);
+        }
+
+        let node = content[0];
+        if node.kind() != "text" {
+            return Ok(false);
+        }
+
+        let text = node.utf8_text(source)?.trim();
+        // Placeholders can always be inline regardless of length
+        if helper::is_askama_token(text) {
+            return Ok(true);
+        }
+        Ok(!text.contains('\n') && text.len() <= self.max_inline_length)
+    }
+
+    fn restore_askama_nodes(&self, formatted_html: &str, placeholders: &[AskamaNode]) -> String {
         let mut result = formatted_html.to_string();
 
-        for (i, placeholder) in placeholders.iter().enumerate() {
+        // Process placeholders in reverse order to avoid replacement conflicts
+        let mut indexed_placeholders: Vec<(usize, &AskamaNode)> =
+            placeholders.iter().enumerate().collect();
+        indexed_placeholders.sort_by(|a, b| b.0.cmp(&a.0));
+
+        for (i, placeholder) in indexed_placeholders {
             let placeholder_marker = match placeholder {
-                Placeholder::Expression(_) => format!("__EXPR_{}__", i),
-                Placeholder::Control(_) => format!("__CTRL_{}__", i),
-                Placeholder::Comment(_) => format!("__COMMENT_{}__", i),
+                AskamaNode::Control { .. } => {
+                    format!("{}{}{}", ASKAMA_CTRL_TOKEN, i, ASKAMA_END_TOKEN)
+                }
+                AskamaNode::Expression { .. } => {
+                    format!("{}{}{}", ASKAMA_EXPR_TOKEN, i, ASKAMA_END_TOKEN)
+                }
+                AskamaNode::Comment { .. } => {
+                    format!("{}{}{}", ASKAMA_COMMENT_TOKEN, i, ASKAMA_END_TOKEN)
+                }
             };
 
+            // Replace the placeholder with the original Askama syntax
             if result.contains(&placeholder_marker) {
                 result = result.replace(&placeholder_marker, &placeholder.to_string());
             }
@@ -350,18 +583,121 @@ impl AskamaFormatter {
     }
 
     fn basic_indent(&self, html: &str) -> String {
-        let indented = html
-            .lines()
+        html.lines()
             .map(|line| {
-                if line.trim().is_empty() {
-                    line.to_string()
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    String::new()
                 } else {
-                    format!("__ii__{}", line.trim())
+                    format!("{}{}", " ".repeat(self.indent_size), trimmed)
                 }
             })
             .collect::<Vec<_>>()
-            .join("\n");
+            .join("\n")
+    }
 
-        self.convert_markers_to_spaces(&indented)
+    // Returns formatted text and the net change in indentation level
+    fn format_text_with_placeholders(
+        &self,
+        text: &str,
+        placeholders: &[AskamaNode],
+        indent_level: usize,
+    ) -> (String, i32) {
+        // Break text into tokens (placeholders and regular text chunks)
+        let mut tokens: Vec<&str> = Vec::new();
+        let s = text;
+        let mut i = 0usize;
+        while i < s.len() {
+            if let Some(rest) = s.get(i..) {
+                if rest.starts_with(ASKAMA_TOKEN) {
+                    // Try to find the complete placeholder
+                    if let Some(end_rel) = rest.find(ASKAMA_END_TOKEN) {
+                        let end = i + end_rel + ASKAMA_END_TOKEN.len();
+                        if end <= s.len() {
+                            tokens.push(&s[i..end]);
+                            i = end;
+                            continue;
+                        }
+                    }
+                    // Fallback if we can't find the end
+                    tokens.push(&s[i..]);
+                    break;
+                } else if let Some(next_placeholder_pos) = rest.find(ASKAMA_TOKEN) {
+                    let end = i + next_placeholder_pos;
+                    if end > i {
+                        tokens.push(&s[i..end]);
+                    }
+                    i = end;
+                } else {
+                    // No more placeholders
+                    tokens.push(&s[i..]);
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        let mut result = String::new();
+        let mut lvl = indent_level as i32;
+        let start_lvl = lvl;
+
+        for token in tokens {
+            let token_trimmed = token.trim();
+            if token_trimmed.is_empty() {
+                continue;
+            }
+
+            // Calculate indentation changes for this token
+            let (pre_adjust, post_adjust) = {
+                // Try to get placeholder metadata first
+                let mut found_meta: Option<&AskamaNode> = None;
+                if token_trimmed.starts_with(ASKAMA_TOKEN) {
+                    for prefix in &[ASKAMA_EXPR_TOKEN, ASKAMA_CTRL_TOKEN, ASKAMA_COMMENT_TOKEN] {
+                        if let Some(rest) = token_trimmed.strip_prefix(prefix)
+                            && let Some(idx_str) = rest.strip_suffix(ASKAMA_END_TOKEN)
+                            && let Ok(idx) = idx_str.parse::<usize>()
+                        {
+                            found_meta = placeholders.get(idx);
+                            break;
+                        }
+                    }
+                }
+
+                if let Some(placeholder) = found_meta {
+                    match placeholder {
+                        AskamaNode::Control { tag_type, .. } => match tag_type {
+                            ControlTag::Open => (0, 1),
+                            ControlTag::Close | ControlTag::Middle => (-1, 0),
+                            ControlTag::Other => (0, 0),
+                        },
+                        _ => (0, 0),
+                    }
+                } else {
+                    helper::calculate_indent_adjustments(token_trimmed, placeholders)
+                }
+            };
+
+            lvl = (lvl + pre_adjust).max(0);
+            let indent = " ".repeat(lvl as usize * self.indent_size);
+
+            if helper::is_askama_token(token_trimmed) {
+                // Put placeholder on its own line
+                writeln!(result, "{}{}", indent, token_trimmed).unwrap();
+            } else {
+                // Handle multi-line text chunks
+                for line in token_trimmed.lines() {
+                    let trimmed_line = line.trim();
+                    if !trimmed_line.is_empty() {
+                        writeln!(result, "{}{}", indent, trimmed_line).unwrap();
+                    }
+                }
+            }
+
+            lvl = (lvl + post_adjust).max(0);
+        }
+
+        let net_delta = lvl - start_lvl;
+        (result, net_delta)
     }
 }

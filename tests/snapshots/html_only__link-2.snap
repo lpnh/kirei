@@ -1,5 +1,5 @@
 ---
 source: tests/html_only.rs
-expression: input
+expression: formatted_output
 ---
 <a href="https://example.com">Visit us</a>

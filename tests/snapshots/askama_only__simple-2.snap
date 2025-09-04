@@ -1,0 +1,9 @@
+---
+source: tests/askama_only.rs
+expression: formatted_output
+---
+{{ user.name }}
+{% for item in items %}
+  {{ item }}
+{% endfor %}
+{# comment here #}

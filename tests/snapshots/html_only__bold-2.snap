@@ -1,0 +1,12 @@
+---
+source: tests/html_only.rs
+expression: formatted_output
+---
+<div>
+  <h1>Main Heading</h1>
+  <p>
+    Some content with
+    <strong>bold text</strong>
+    .
+  </p>
+</div>

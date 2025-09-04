@@ -1,0 +1,5 @@
+---
+source: tests/askama_only.rs
+expression: input
+---
+{% if foo %}{% endif %}

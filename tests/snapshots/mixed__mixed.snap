@@ -1,0 +1,5 @@
+---
+source: tests/mixed.rs
+expression: input
+---
+<div id="content"> {% block content %} <p>Oh, this is a paragraph</p> {% endblock %} </div>

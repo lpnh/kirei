@@ -1,0 +1,9 @@
+---
+source: tests/mixed.rs
+expression: formatted_output
+---
+<div id="content">
+  {% block content %}
+    <p>Oh, this is a paragraph</p>
+  {% endblock %}
+</div>
