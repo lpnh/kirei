@@ -68,7 +68,7 @@ impl AskamaFormatter {
         // Replace Askama nodes with temporary placeholder tokens
         let (html_with_placeholders, placeholders) = self.extract_askama_nodes(source, &root)?;
 
-        // Validate placeholder indices for safety
+        // Validate placeholder indices
         helper::validate_placeholder_indices(&html_with_placeholders, &placeholders)?;
 
         // Format the HTML structure while preserving our placeholders
@@ -102,66 +102,20 @@ impl AskamaFormatter {
             }
 
             match child.kind() {
-                "control_tag" => {
-                    let tag_text = child.utf8_text(source.as_bytes())?;
-                    let open_delimiter = child.child(0).unwrap().kind().to_string();
-                    let close_delimiter = child.child(2).unwrap().kind().to_string();
-                    let inner = helper::extract_inner_content(tag_text, CTRL_OPEN, CTRL_CLOSE);
-                    let style = Style::try_from_node(child).unwrap();
+                "control_tag" | "render_expression" | "comment" => {
+                    if let Some(askama_node) = AskamaNode::from_node(child, source) {
+                        let token = match &askama_node {
+                            AskamaNode::Control { .. } => ASKAMA_CTRL_TOKEN,
+                            AskamaNode::Expression { .. } => ASKAMA_EXPR_TOKEN,
+                            AskamaNode::Comment { .. } => ASKAMA_COMMENT_TOKEN,
+                        };
 
-                    let placeholder = format!(
-                        "{}{}{}",
-                        ASKAMA_CTRL_TOKEN,
-                        placeholders.len(),
-                        ASKAMA_END_TOKEN
-                    );
+                        let placeholder =
+                            format!("{}{}{}", token, placeholders.len(), ASKAMA_END_TOKEN);
 
-                    placeholders.push(AskamaNode::Control {
-                        inner,
-                        open_delimiter,
-                        close_delimiter,
-                        style,
-                    });
-                    result.push_str(&placeholder);
-                }
-                "render_expression" => {
-                    let expr_text = child.utf8_text(source.as_bytes())?;
-                    let inner = helper::extract_inner_content(expr_text, EXPR_OPEN, EXPR_CLOSE);
-                    let open_delimiter = child.child(0).unwrap().kind().to_string();
-                    let close_delimiter = child.child(2).unwrap().kind().to_string();
-                    let placeholder = format!(
-                        "{}{}{}",
-                        ASKAMA_EXPR_TOKEN,
-                        placeholders.len(),
-                        ASKAMA_END_TOKEN
-                    );
-                    placeholders.push(AskamaNode::Expression {
-                        inner,
-                        open_delimiter,
-                        close_delimiter,
-                        style: Style::Inline,
-                    });
-                    result.push_str(&placeholder);
-                }
-                "comment" => {
-                    let comment_text = child.utf8_text(source.as_bytes())?;
-                    let open_delimiter = child.child(0).unwrap().kind().to_string();
-                    let close_delimiter = child.child(1).unwrap().kind().to_string();
-                    let inner =
-                        helper::extract_inner_content(comment_text, COMMENT_OPEN, COMMENT_CLOSE);
-                    let placeholder = format!(
-                        "{}{}{}",
-                        ASKAMA_COMMENT_TOKEN,
-                        placeholders.len(),
-                        ASKAMA_END_TOKEN
-                    );
-                    placeholders.push(AskamaNode::Comment {
-                        inner,
-                        open_delimiter,
-                        close_delimiter,
-                        style: Style::Inline,
-                    });
-                    result.push_str(&placeholder);
+                        placeholders.push(askama_node);
+                        result.push_str(&placeholder);
+                    }
                 }
                 // Everything else gets added as-is
                 _ => {
@@ -169,6 +123,7 @@ impl AskamaFormatter {
                     result.push_str(text);
                 }
             }
+
             last_end = end;
         }
 
@@ -558,7 +513,7 @@ impl AskamaFormatter {
             return Ok(false);
         }
 
-        // Check if any placeholders require block formatting using improved helper
+        // Check if any placeholders require block formatting
         for &idx in &placeholder_indices {
             if let Some(placeholder) = placeholders.get(idx) {
                 // Use the helper function for cleaner code

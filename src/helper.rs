@@ -115,7 +115,7 @@ fn get_placeholder_for_indent<'a>(
     let token = token.trim();
 
     // Check each token type prefix to find the placeholder index
-    for &prefix in &[ASKAMA_EXPR_TOKEN, ASKAMA_CTRL_TOKEN, ASKAMA_COMMENT_TOKEN] {
+    for &prefix in TOKEN_PREFIXES {
         if let Some(rest) = token.strip_prefix(prefix)
             && let Some(idx_str) = rest.strip_suffix(ASKAMA_END_TOKEN)
             && let Ok(idx) = idx_str.parse::<usize>()
@@ -124,35 +124,6 @@ fn get_placeholder_for_indent<'a>(
         }
     }
     None
-}
-
-// Extract content between delimiters, handling trim markers
-pub(crate) fn extract_inner_content(content: &str, open_delim: &str, close_delim: &str) -> String {
-    let mut inner = content.trim();
-
-    // Strip the opening delimiter
-    if let Some(after_open) = inner.strip_prefix(open_delim) {
-        inner = after_open;
-        // Check for trim characters (-, +, ~) right after the opening delimiter
-        if let Some(first_char) = inner.chars().next()
-            && matches!(first_char, '-' | '+' | '~')
-        {
-            inner = &inner[first_char.len_utf8()..];
-        }
-    }
-
-    // Strip the closing delimiter
-    if let Some(before_close) = inner.strip_suffix(close_delim) {
-        inner = before_close;
-        // Check for trim characters right before the closing delimiter
-        if let Some(last_char) = inner.chars().next_back()
-            && matches!(last_char, '-' | '+' | '~')
-        {
-            inner = &inner[..inner.len() - last_char.len_utf8()];
-        }
-    }
-
-    inner.to_string()
 }
 
 // Helper to determine if a placeholder should be formatted inline

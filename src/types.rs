@@ -1,4 +1,5 @@
 use std::fmt;
+use tree_sitter::Node;
 
 // Someone said this helps with the performance
 pub(crate) const TOKEN_PREFIXES: &[&str] =
@@ -10,14 +11,6 @@ pub(crate) const ASKAMA_CTRL_TOKEN: &str = "__ASKAMA_CTRL_";
 pub(crate) const ASKAMA_EXPR_TOKEN: &str = "__ASKAMA_EXPR_";
 pub(crate) const ASKAMA_COMMENT_TOKEN: &str = "__ASKAMA_COMMENT_";
 pub(crate) const ASKAMA_END_TOKEN: &str = "_ASKAMA_END__";
-
-// Askama template syntax delimiters
-pub(crate) const CTRL_OPEN: &str = "{%";
-pub(crate) const CTRL_CLOSE: &str = "%}";
-pub(crate) const EXPR_OPEN: &str = "{{";
-pub(crate) const EXPR_CLOSE: &str = "}}";
-pub(crate) const COMMENT_OPEN: &str = "{#";
-pub(crate) const COMMENT_CLOSE: &str = "#}";
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Indentation(pub i8, pub i8); // (before, after)
@@ -57,7 +50,7 @@ impl Style {
 
 impl Style {
     // Get get Style from Node kind
-    pub fn try_from_node(child: tree_sitter::Node<'_>) -> Option<Self> {
+    pub fn try_from_node(child: Node<'_>) -> Option<Self> {
         let grand_child = child.child(1)?;
 
         match grand_child.kind() {
@@ -117,6 +110,72 @@ pub(crate) enum AskamaNode {
         close_delimiter: String,
         style: Style,
     },
+}
+
+impl AskamaNode {
+    // Create an AskamaNode from a tree-sitter node and source text
+    pub fn from_node(child: Node<'_>, source: &str) -> Option<Self> {
+        let (open_delimiter, close_delimiter, inner) = Self::split_node(child, source)?;
+
+        match child.kind() {
+            "control_tag" => {
+                let style = Style::try_from_node(child)?;
+                Some(AskamaNode::Control {
+                    inner,
+                    open_delimiter,
+                    close_delimiter,
+                    style,
+                })
+            }
+            "render_expression" => Some(AskamaNode::Expression {
+                inner,
+                open_delimiter,
+                close_delimiter,
+                style: Style::Inline,
+            }),
+            "comment" => Some(AskamaNode::Comment {
+                inner,
+                open_delimiter,
+                close_delimiter,
+                style: Style::Inline,
+            }),
+            _ => None,
+        }
+    }
+
+    // Extract the open and close delimiters, and the inner content from a node
+    fn split_node<'a>(node: Node<'a>, source: &'a str) -> Option<(String, String, String)> {
+        if node.child_count() < 2 {
+            return None;
+        }
+
+        let first_child = node.child(0)?;
+        let last_child = node.child(node.child_count() - 1)?;
+
+        // Extract delimiter text and trim any surrounding whitespace
+        let open = first_child
+            .utf8_text(source.as_bytes())
+            .ok()?
+            .trim()
+            .to_string();
+        let close = last_child
+            .utf8_text(source.as_bytes())
+            .ok()?
+            .trim()
+            .to_string();
+
+        // Use byte positions to extract the content between delimiters
+        let start = first_child.end_byte();
+        let end = last_child.start_byte();
+
+        let inner = if start < end {
+            source[start..end].trim().to_string()
+        } else {
+            String::new()
+        };
+
+        Some((open, close, inner))
+    }
 }
 
 impl fmt::Display for AskamaNode {
