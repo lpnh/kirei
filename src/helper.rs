@@ -6,39 +6,79 @@ pub(crate) fn is_askama_token(text: &str) -> bool {
         || text.starts_with(ASKAMA_COMMENT_TOKEN)
 }
 
-// Calculate indentation adjustments for a line based on control tags
-pub(crate) fn calculate_indent_adjustments(line: &str, placeholders: &[AskamaNode]) -> (i32, i32) {
-    let mut pre_adjust = 0;
-    let mut post_adjust = 0;
+// Format template element with semantic indentation
+pub(crate) fn format_template_block(
+    token: &str,
+    indent_level: &mut i32,
+    indent_size: usize,
+    placeholders: &[AskamaNode],
+    mut output_handler: impl FnMut(&str),
+) {
+    let token_trimmed = token.trim();
+    if token_trimmed.is_empty() {
+        return;
+    }
 
-    // First, check if we have control placeholders with metadata we can use
-    for (i, placeholder) in placeholders.iter().enumerate() {
-        if let AskamaNode::Control { tag_type, .. } = placeholder {
-            let marker = format!("{}{}{}", ASKAMA_CTRL_TOKEN, i, ASKAMA_EXPR_TOKEN);
-            if line.contains(&marker) {
-                match tag_type {
-                    ControlTag::Open => post_adjust += 1,
-                    ControlTag::Close => pre_adjust -= 1,
-                    ControlTag::Middle => {
-                        // Middle tags like 'else' - outdent before printing,
-                        // but don't increase indent after
-                        pre_adjust -= 1;
-                    }
-                    ControlTag::Other => {}
-                }
-                // Keep scanning - there might be multiple control tags on one line
+    // Calculate how the block indentation should change
+    let (pre_adjust, post_adjust) = block_indent_adjustments(token_trimmed, placeholders);
+
+    // Adjust indent before rendering this element
+    *indent_level = (*indent_level + pre_adjust).max(0);
+
+    let indent = " ".repeat(*indent_level as usize * indent_size);
+
+    // Render the template element with current indentation
+    if is_askama_token(token_trimmed) {
+        output_handler(&format!("{}{}", indent, token_trimmed));
+    } else {
+        // Handle multi-line plain text content
+        for line in token_trimmed.lines() {
+            let trimmed = line.trim();
+            if !trimmed.is_empty() {
+                output_handler(&format!("{}{}", indent, trimmed));
             }
         }
     }
 
-    if pre_adjust == 0 && post_adjust == 0 {
-        // NOTE: Text without html tags end up here
-    }
-
-    (pre_adjust, post_adjust)
+    // Adjust indent after rendering this element
+    *indent_level = (*indent_level + post_adjust).max(0);
 }
 
-// Returns the tag type
+// Indentation adjustments based on template control tag
+fn block_indent_adjustments(token: &str, placeholders: &[AskamaNode]) -> (i32, i32) {
+    let placeholder = get_placeholder_for_indent(token, placeholders);
+
+    match placeholder {
+        Some(AskamaNode::Control { tag_type, .. }) => match tag_type {
+            ControlTag::Open => (0, 1),    // indent after opening block
+            ControlTag::Middle => (-1, 0), // outdent before middle block
+            ControlTag::Close => (-1, 0),  // outdent before closing block
+            ControlTag::Other => (0, 0),   // no indentation change
+        },
+        _ => (0, 0), // expressions, comments, and plain text
+    }
+}
+
+// Extract placeholder metadata for indentation calculation
+fn get_placeholder_for_indent<'a>(
+    token: &str,
+    placeholders: &'a [AskamaNode],
+) -> Option<&'a AskamaNode> {
+    let token = token.trim();
+
+    // Check each token type prefix to find the placeholder index
+    for prefix in &[ASKAMA_EXPR_TOKEN, ASKAMA_CTRL_TOKEN, ASKAMA_COMMENT_TOKEN] {
+        if let Some(rest) = token.strip_prefix(prefix)
+            && let Some(idx_str) = rest.strip_suffix(ASKAMA_END_TOKEN)
+            && let Ok(idx) = idx_str.parse::<usize>()
+        {
+            return placeholders.get(idx);
+        }
+    }
+    None
+}
+
+// Return the tag type
 pub(crate) fn get_tag_type(child: tree_sitter::Node) -> ControlTag {
     if let Some(grand_child) = child.child(1) {
         // Control tag type based on its node type

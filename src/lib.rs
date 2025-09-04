@@ -249,74 +249,20 @@ impl AskamaFormatter {
             }
         }
 
-        // Helper to get placeholder info for indentation logic
-        fn get_placeholder_for_indent<'a>(
-            token: &'a str,
-            placeholders: &'a [AskamaNode],
-        ) -> Option<&'a AskamaNode> {
-            let t = token.trim();
-            for prefix in &[ASKAMA_EXPR_TOKEN, ASKAMA_CTRL_TOKEN, ASKAMA_COMMENT_TOKEN] {
-                if let Some(rest) = t.strip_prefix(prefix)
-                    && let Some(idx_str) = rest.strip_suffix(ASKAMA_END_TOKEN)
-                    && let Ok(idx) = idx_str.parse::<usize>()
-                {
-                    return placeholders.get(idx);
-                }
-            }
-            None
-        }
-
         // Build the formatted output with proper indentation
         let mut lines: Vec<String> = Vec::new();
         let mut indent_level: i32 = 0;
 
         for token in tokens {
-            let token_trimmed = token.trim();
-            if token_trimmed.is_empty() {
-                continue;
-            }
-
-            // Calculate how indentation should change around this token
-            let (pre_adjust, post_adjust) = if let Some(placeholder) =
-                get_placeholder_for_indent(token_trimmed, placeholders)
-            {
-                // Use our stored metadata for control flow
-                match placeholder {
-                    AskamaNode::Control { tag_type, .. } => {
-                        match tag_type {
-                            ControlTag::Open => (0, 1),    // indent after
-                            ControlTag::Middle => (-1, 0), // outdent before
-                            ControlTag::Close => (-1, 0),  // outdent before
-                            ControlTag::Other => (0, 0),   // no change
-                        }
-                    }
-                    _ => (0, 0), // expressions and comments don't affect indentation
-                }
-            } else {
-                // Parse the token content directly as fallback
-                helper::calculate_indent_adjustments(token_trimmed, placeholders)
-            };
-
-            // Adjust indent before rendering this token
-            indent_level = (indent_level + pre_adjust).max(0);
-
-            let indent = " ".repeat(indent_level as usize * self.indent_size);
-
-            // Add the token with current indentation
-            if helper::is_askama_token(token_trimmed) {
-                lines.push(format!("{}{}", indent, token_trimmed));
-            } else {
-                // Handle multi-line plain text
-                for line in token_trimmed.lines() {
-                    let trimmed = line.trim();
-                    if !trimmed.is_empty() {
-                        lines.push(format!("{}{}", indent, trimmed));
-                    }
-                }
-            }
-
-            // Adjust indent after rendering this token
-            indent_level = (indent_level + post_adjust).max(0);
+            helper::format_template_block(
+                token,
+                &mut indent_level,
+                self.indent_size,
+                placeholders,
+                |formatted_line| {
+                    lines.push(formatted_line.to_string());
+                },
+            );
         }
 
         lines.join("\n")
@@ -648,58 +594,15 @@ impl AskamaFormatter {
         let start_lvl = lvl;
 
         for token in tokens {
-            let token_trimmed = token.trim();
-            if token_trimmed.is_empty() {
-                continue;
-            }
-
-            // Calculate indentation changes for this token
-            let (pre_adjust, post_adjust) = {
-                // Try to get placeholder metadata first
-                let mut found_meta: Option<&AskamaNode> = None;
-                if token_trimmed.starts_with(ASKAMA_TOKEN) {
-                    for prefix in &[ASKAMA_EXPR_TOKEN, ASKAMA_CTRL_TOKEN, ASKAMA_COMMENT_TOKEN] {
-                        if let Some(rest) = token_trimmed.strip_prefix(prefix)
-                            && let Some(idx_str) = rest.strip_suffix(ASKAMA_END_TOKEN)
-                            && let Ok(idx) = idx_str.parse::<usize>()
-                        {
-                            found_meta = placeholders.get(idx);
-                            break;
-                        }
-                    }
-                }
-
-                if let Some(placeholder) = found_meta {
-                    match placeholder {
-                        AskamaNode::Control { tag_type, .. } => match tag_type {
-                            ControlTag::Open => (0, 1),
-                            ControlTag::Close | ControlTag::Middle => (-1, 0),
-                            ControlTag::Other => (0, 0),
-                        },
-                        _ => (0, 0),
-                    }
-                } else {
-                    helper::calculate_indent_adjustments(token_trimmed, placeholders)
-                }
-            };
-
-            lvl = (lvl + pre_adjust).max(0);
-            let indent = " ".repeat(lvl as usize * self.indent_size);
-
-            if helper::is_askama_token(token_trimmed) {
-                // Put placeholder on its own line
-                writeln!(result, "{}{}", indent, token_trimmed).unwrap();
-            } else {
-                // Handle multi-line text chunks
-                for line in token_trimmed.lines() {
-                    let trimmed_line = line.trim();
-                    if !trimmed_line.is_empty() {
-                        writeln!(result, "{}{}", indent, trimmed_line).unwrap();
-                    }
-                }
-            }
-
-            lvl = (lvl + post_adjust).max(0);
+            helper::format_template_block(
+                token,
+                &mut lvl,
+                self.indent_size,
+                placeholders,
+                |formatted_line| {
+                    writeln!(result, "{}", formatted_line).unwrap();
+                },
+            );
         }
 
         let net_delta = lvl - start_lvl;
