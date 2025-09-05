@@ -3,7 +3,7 @@ source: tests/mixed.rs
 expression: formatted_output
 ---
 {% block first %}
-  {% block inner %}
-    <p>A cool paragraph</p>
-  {% endblock %}
+    {% block inner %}
+        <p>A cool paragraph</p>
+    {% endblock %}
 {% endblock %}

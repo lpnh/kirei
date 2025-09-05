@@ -3,25 +3,25 @@ source: tests/html_only.rs
 expression: formatted_output
 ---
 <div class="container">
-  <header>
-    <nav>
-      <ul>
-        <li>
-          <a href="/">Home</a>
-        </li>
-      </ul>
-    </nav>
-  </header>
-  <main>
-    <section>
-      <h2>Section Heading</h2>
-      <p>This is a paragraph.</p>
-    </section>
-  </main>
-  <footer>
-    <p>
-      &copy;
-      2025
-    </p>
-  </footer>
+    <header>
+        <nav>
+            <ul>
+                <li>
+                    <a href="/">Home</a>
+                </li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        <section>
+            <h2>Section Heading</h2>
+            <p>This is a paragraph.</p>
+        </section>
+    </main>
+    <footer>
+        <p>
+            &copy;
+            2025
+        </p>
+    </footer>
 </div>

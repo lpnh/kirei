@@ -32,7 +32,7 @@ impl AskamaFormatter {
         Ok(Self {
             askama_parser,
             html_parser,
-            indent_size: 2,
+            indent_size: 4,
             max_inline_length: 80,
         })
     }

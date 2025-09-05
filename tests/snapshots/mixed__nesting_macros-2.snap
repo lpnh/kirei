@@ -3,15 +3,15 @@ source: tests/mixed.rs
 expression: formatted_output
 ---
 {% macro container() %}
-  <div class="container">{{ caller() }}</div>
+    <div class="container">{{ caller() }}</div>
 {% endmacro %}
 {% macro outer_container() %}
-  {# Create an alias to our `caller`, so we can access it within container: #}
-  {% set outer_caller = caller %}
-  <div class="outer-container">
-    {# nested macro invocation - will overwrite the `caller` variable: #}
-    {% call container() %}
-    {{ outer_caller() }}
-  {% endcall %}
-  </div>
+    {# Create an alias to our `caller`, so we can access it within container: #}
+    {% set outer_caller = caller %}
+    <div class="outer-container">
+        {# nested macro invocation - will overwrite the `caller` variable: #}
+        {% call container() %}
+        {{ outer_caller() }}
+    {% endcall %}
+    </div>
 {% endmacro %}
