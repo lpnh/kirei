@@ -1,6 +1,28 @@
 use kirei::AskamaFormatter;
 
 #[test]
+fn empty_comment() {
+    let mut formatter = AskamaFormatter::default();
+    let input = r#"{#-   ~#}"#;
+
+    let formatted_output = formatter.format(input).expect("Formatting failed");
+
+    insta::assert_snapshot!(input);
+    insta::assert_snapshot!(formatted_output);
+}
+
+#[test]
+fn nested_comments() {
+    let mut formatter = AskamaFormatter::default();
+    let input = r#"{#-   Some    {# Nested {#~   Comments #}   +#}    ~#}"#;
+
+    let formatted_output = formatter.format(input).expect("Formatting failed");
+
+    insta::assert_snapshot!(input);
+    insta::assert_snapshot!(formatted_output);
+}
+
+#[test]
 fn if_with_whitespace() {
     let mut formatter = AskamaFormatter::default();
     let input = r#"{% if foo %}         {% endif %}"#;

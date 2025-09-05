@@ -177,7 +177,10 @@ impl AskamaNode {
             String::new()
         };
 
-        Some((open, close, inner))
+        // This can be a good place to handle the whitespace controls in the future
+        let trimmed_inner = inner.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        Some((open, close, trimmed_inner))
     }
 }
 
@@ -202,12 +205,12 @@ impl fmt::Display for AskamaNode {
                 close_delimiter,
                 ..
             } => {
-                let formatted_inner = inner.split_whitespace().collect::<Vec<_>>().join(" ");
-                write!(
-                    f,
-                    "{} {} {}",
-                    open_delimiter, formatted_inner, close_delimiter
-                )
+                if inner.is_empty() {
+                    // No content, no whitespace
+                    write!(f, "{}{}{}", open_delimiter, inner, close_delimiter)
+                } else {
+                    write!(f, "{} {} {}", open_delimiter, inner, close_delimiter)
+                }
             }
         }
     }
