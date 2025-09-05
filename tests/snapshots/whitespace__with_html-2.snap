@@ -5,5 +5,5 @@ expression: formatted_output
 {% if foo %}
     {{ bar }}
 {% else if another -%}
-<p>nothing</p>
+    <p>nothing</p>
 {%- endif %}

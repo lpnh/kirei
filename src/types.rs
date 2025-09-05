@@ -27,7 +27,8 @@ impl BlockKind {
     pub fn indentation(self) -> Indentation {
         match self {
             BlockKind::Open | BlockKind::Inner => Indentation(0, 1),
-            BlockKind::Clause | BlockKind::Close => Indentation(-1, 0),
+            BlockKind::Clause => Indentation(-1, 1),
+            BlockKind::Close => Indentation(-1, 0),
         }
     }
 }
