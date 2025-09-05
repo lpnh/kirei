@@ -24,10 +24,9 @@ pub(crate) enum BlockKind {
 }
 
 impl BlockKind {
-    pub fn indentation(&self) -> Indentation {
+    pub fn indentation(self) -> Indentation {
         match self {
-            BlockKind::Open => Indentation(0, 1),
-            BlockKind::Inner => Indentation(0, 1),
+            BlockKind::Open | BlockKind::Inner => Indentation(0, 1),
             BlockKind::Clause | BlockKind::Close => Indentation(-1, 0),
         }
     }
@@ -40,7 +39,7 @@ pub(crate) enum Style {
 }
 
 impl Style {
-    pub fn indentation(&self) -> Indentation {
+    pub fn indentation(self) -> Indentation {
         match self {
             Style::Inline => Indentation(0, 0),
             Style::Block(kind) => kind.indentation(),

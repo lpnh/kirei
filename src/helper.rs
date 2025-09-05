@@ -126,15 +126,6 @@ fn get_placeholder_for_indent<'a>(
     None
 }
 
-// Helper to determine if a placeholder should be formatted inline
-pub(crate) fn should_format_inline(placeholder: &AskamaNode) -> bool {
-    match placeholder {
-        AskamaNode::Control { style, .. }
-        | AskamaNode::Expression { style, .. }
-        | AskamaNode::Comment { style, .. } => matches!(style, Style::Inline),
-    }
-}
-
 // Enhanced placeholder validation
 pub(crate) fn validate_placeholder_indices(
     text: &str,

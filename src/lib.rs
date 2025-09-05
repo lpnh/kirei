@@ -516,8 +516,11 @@ impl AskamaFormatter {
         // Check if any placeholders require block formatting
         for &idx in &placeholder_indices {
             if let Some(placeholder) = placeholders.get(idx) {
-                // Use the helper function for cleaner code
-                if !helper::should_format_inline(placeholder) {
+                if match placeholder {
+                    AskamaNode::Control { style, .. }
+                    | AskamaNode::Expression { style, .. }
+                    | AskamaNode::Comment { style, .. } => matches!(style, Style::Block(_)),
+                } {
                     return Ok(false);
                 }
             } else {
