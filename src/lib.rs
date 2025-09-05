@@ -379,7 +379,7 @@ impl AskamaFormatter {
             .collect();
 
         // Decide between inline and block formatting
-        let should_inline = self.should_be_inline(&content_children, source, placeholders)?;
+        let should_inline = self.should_be_inline(&content_children, source, placeholders);
 
         if let Some(start) = start_tag {
             if should_inline && content_children.len() == 1 {
@@ -466,71 +466,50 @@ impl AskamaFormatter {
         content: &[&Node],
         source: &[u8],
         placeholders: &[AskamaNode],
-    ) -> Result<bool, Box<dyn std::error::Error>> {
-        // Multiple content nodes require block formatting
-        if content.len() != 1 {
-            return Ok(false);
+    ) -> bool {
+        if content.len() != 1 || content[0].kind() != "text" {
+            return false; // Single text node
         }
 
-        // Only text nodes are candidates for inline formatting
-        let node = content[0];
-        if node.kind() != "text" {
-            return Ok(false);
+        let text = match content[0].utf8_text(source) {
+            Ok(t) => t.trim(),
+            Err(_) => return false,
+        };
+
+        if text.len() > self.max_inline_length || text.contains('\n') {
+            return false;
         }
 
-        let text = node.utf8_text(source)?.trim();
-
-        // Handle simple text without placeholders using original logic
         if !text.contains(ASKAMA_TOKEN) {
-            return Ok(!text.contains('\n') && text.len() <= self.max_inline_length);
+            return true; // No nested placeholders
         }
 
-        // Analyze placeholder content
         let placeholder_indices = helper::collect_placeholder_indices(text);
-
         if placeholder_indices.is_empty() {
-            // Malformed placeholders - use conservative block formatting
-            return Ok(false);
+            return false; // Malformed structure
         }
 
-        // Check what remains after removing all placeholders
+        // Check for substantial non-placeholder content
         let mut text_without_placeholders = text.to_string();
         for &idx in &placeholder_indices {
-            // Remove all possible placeholder formats
-            let patterns = [
-                format!("{}{}{}", ASKAMA_EXPR_TOKEN, idx, ASKAMA_END_TOKEN),
-                format!("{}{}{}", ASKAMA_CTRL_TOKEN, idx, ASKAMA_END_TOKEN),
-                format!("{}{}{}", ASKAMA_COMMENT_TOKEN, idx, ASKAMA_END_TOKEN),
-            ];
-
-            for pattern in &patterns {
-                text_without_placeholders = text_without_placeholders.replace(pattern, "");
+            for prefix in TOKEN_PREFIXES {
+                let pattern = format!("{}{}{}", prefix, idx, ASKAMA_END_TOKEN);
+                text_without_placeholders = text_without_placeholders.replace(&pattern, "");
             }
         }
 
-        // If there's substantial text beyond placeholders, prefer block formatting
         if !text_without_placeholders.trim().is_empty() {
-            return Ok(false);
+            return false; // has substantial text beyond placeholders
         }
 
-        // Check if any placeholders require block formatting
-        for &idx in &placeholder_indices {
-            if let Some(placeholder) = placeholders.get(idx) {
-                if match placeholder {
-                    AskamaNode::Control { style, .. }
-                    | AskamaNode::Expression { style, .. }
-                    | AskamaNode::Comment { style, .. } => matches!(style, Style::Block(_)),
-                } {
-                    return Ok(false);
-                }
-            } else {
-                // Unknown placeholder index - be conservative
-                return Ok(false);
-            }
-        }
-
-        // Final check for length and line breaks
-        Ok(text.len() <= self.max_inline_length && !text.contains('\n'))
+        // All placeholders style must be inline
+        placeholder_indices.iter().all(|&idx| {
+            placeholders.get(idx).is_some_and(|node| match node {
+                AskamaNode::Control { style, .. }
+                | AskamaNode::Expression { style, .. }
+                | AskamaNode::Comment { style, .. } => matches!(style, Style::Inline),
+            })
+        })
     }
 
     fn restore_askama_nodes(&self, formatted_html: &str, placeholders: &[AskamaNode]) -> String {
