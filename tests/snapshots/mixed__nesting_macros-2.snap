@@ -11,7 +11,7 @@ expression: formatted_output
     <div class="outer-container">
         {# nested macro invocation - will overwrite the `caller` variable: #}
         {% call container() %}
-        {{ outer_caller() }}
-    {% endcall %}
+            {{ outer_caller() }}
+        {% endcall %}
     </div>
 {% endmacro %}

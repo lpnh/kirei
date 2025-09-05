@@ -18,15 +18,16 @@ pub(crate) struct Indentation(pub i8, pub i8); // (before, after)
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum BlockKind {
     Open,   // Tags that start blocks: if, for, block, etc.
-    Clause, // Tags that continue blocks at same indent: else, else if
     Inner,  // Tags that continue blocks with new indent: when
+    Clause, // Tags that continue blocks at same indent: else, else if
     Close,  // Tags that end blocks: endif, endfor, endblock, etc.
 }
 
 impl BlockKind {
     pub fn indentation(self) -> Indentation {
         match self {
-            BlockKind::Open | BlockKind::Inner => Indentation(0, 1),
+            BlockKind::Open => Indentation(0, 1),
+            BlockKind::Inner => Indentation(0, 0),
             BlockKind::Clause => Indentation(-1, 1),
             BlockKind::Close => Indentation(-1, 0),
         }
@@ -54,10 +55,14 @@ impl Style {
         let grand_child = child.child(1)?;
 
         match grand_child.kind() {
-            "if_statement" | "for_statement" | "block_statement" | "filter_statement"
-            | "match_statement" | "macro_statement" | "call_statement" => {
-                Some(Style::Block(BlockKind::Open))
-            }
+            "if_statement"
+            | "for_statement"
+            | "block_statement"
+            | "filter_statement"
+            | "match_statement"
+            | "macro_statement"
+            | "call_statement"
+            | "macro_call_statement" => Some(Style::Block(BlockKind::Open)),
 
             "else_statement" | "else_if_statement" => Some(Style::Block(BlockKind::Clause)),
 
@@ -71,11 +76,9 @@ impl Style {
             | "endmacro_statement"
             | "endcall_statement" => Some(Style::Block(BlockKind::Close)),
 
-            "macro_call_statement"
-            | "let_statement"
-            | "extends_statement"
-            | "include_statement"
-            | "import_statement" => Some(Style::Inline),
+            "let_statement" | "extends_statement" | "include_statement" | "import_statement" => {
+                Some(Style::Inline)
+            }
 
             unknown => {
                 eprintln!(
