@@ -8,7 +8,7 @@ expression: formatted_output
         <title>
             {% block title %}
                 {{ title }}
-                - My Site
+            - My Site
             {% endblock %}
         </title>
         {% block head %}

@@ -6,34 +6,34 @@ expression: formatted_output
 {%- block title -%}
     {%- match lang -%}
         {%- when Lang::en -%}
-        Hello,
+Hello,
         {{ name }}
-        !
+!
         {%- when Lang::de -%}
-        Hallo,
+Hallo,
         {{ name }}
-        !
+!
         {%- when Lang::fr -%}
-        Bonjour,
+Bonjour,
         {{ name }}
-        !
+!
     {%- endmatch -%}
 {%- endblock -%}
 {%- block content -%}
     <h1>
         {%- match lang -%}
             {%- when Lang::en -%}
-            Hello!
+        Hello!
             {%- when Lang::de -%}
-            Hallo!
+        Hallo!
             {%- when Lang::fr -%}
-            Bonjour!
+        Bonjour!
         {%- endmatch -%}
     </h1>
     <p>
         {%- match lang -%}
             {%- when Lang::en -%}
-            Hello,
+        Hello,
             <strong>{{ name }}</strong>
             , nice to meet you!
             {#-~#}
@@ -62,14 +62,16 @@ expression: formatted_output
         <a href="/{{ lang }}/index.html?name={{ name | urlencode }}">
             {%- match lang -%}
                 {%- when Lang::en -%}
-                Back to the first page.
+            Back to the first page.
                 {%- when Lang::de -%}
-                Zurück zur ersten Seite.
+            Zurück zur ersten Seite.
                 {%- when Lang::fr -%}
-                Retour à la première page.
+            Retour à la première page.
             {%- endmatch -%}
         </a>
     </h2>
-    {%- call lang_select("greet-me", name|urlencode|fmt("?name={}")) -%}
+    {%-
+        call lang_select("greet-me", name|urlencode|fmt("?name={}"))
+    -%}
     {%- endcall -%}
 {%- endblock -%}

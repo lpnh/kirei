@@ -4,6 +4,6 @@ expression: formatted_output
 ---
 {% if foo ~%}
     {{- bar -}}
-{% else if another -%}
-    nothing
+{% else if  another -%}
+nothing
 {%- endif %}
