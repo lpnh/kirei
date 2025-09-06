@@ -3,5 +3,5 @@ source: tests/askama_only.rs
 expression: formatted_output
 ---
 {% if foo %}
-this is some text
+    this is some text
 {% endif %}

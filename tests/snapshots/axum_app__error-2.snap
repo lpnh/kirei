@@ -6,18 +6,18 @@ expression: formatted_output
 {%- block title -%}
     {%- match err -%}
         {% when AppError::NotFound -%}
-404: Not Found
+        404: Not Found
     {% else -%}
-500: Internal Server Error
+        500: Internal Server Error
     {%- endmatch -%}
 {%- endblock -%}
 {%- block content -%}
     <h1>
         {%- match err -%}
             {% when AppError::NotFound -%}
-        404: Not Found
+            404: Not Found
         {% else -%}
-        500: Internal Server Error
+            500: Internal Server Error
         {%- endmatch -%}
     </h1>
     {%- match err -%}

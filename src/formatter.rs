@@ -106,8 +106,6 @@ fn format_html_with_indent(
     indent: &mut i32,
     result: &mut String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let prefix = " ".repeat((*indent as usize) * config.indent_size);
-
     match node.kind() {
         "document" | "fragment" => {
             let mut cursor = node.walk();
@@ -130,12 +128,14 @@ fn format_html_with_indent(
                         *indent = (*indent + post).max(0);
                     }
                 } else if !token.trim().is_empty() {
-                    result.push_str(&format!("{}{}\n", prefix, token.trim()));
+                    let current_prefix = " ".repeat((*indent as usize) * config.indent_size);
+                    result.push_str(&format!("{}{}\n", current_prefix, token.trim()));
                 }
             }
         }
         _ => {
-            result.push_str(&format!("{}{}\n", prefix, node.utf8_text(source)?));
+            let current_prefix = " ".repeat((*indent as usize) * config.indent_size);
+            result.push_str(&format!("{}{}\n", current_prefix, node.utf8_text(source)?));
         }
     }
 

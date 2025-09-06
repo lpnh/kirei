@@ -43,7 +43,7 @@ fn parse_askama_node(node: Node, source: &str) -> Option<AskamaNode> {
 
     match node.kind() {
         "control_tag" => {
-            let maybe_block = is_block_kind(node)?;
+            let maybe_block = is_block(node)?;
             Some(AskamaNode::Control {
                 inner,
                 dlmts: (open, close),
@@ -62,7 +62,7 @@ fn parse_askama_node(node: Node, source: &str) -> Option<AskamaNode> {
     }
 }
 
-fn is_block_kind(node: Node) -> Option<Block> {
+fn is_block(node: Node) -> Option<Block> {
     let child = node.child(1)?;
     match child.kind() {
         "if_statement"
