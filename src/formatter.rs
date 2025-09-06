@@ -81,18 +81,11 @@ pub(crate) fn format_template_with_html(
     config: &Config,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let tree = html_parser.parse(html, None).ok_or("HTML parse failed")?;
-    format_html_tree(&tree.root_node(), html.as_bytes(), nodes, config, 0)
-}
-
-fn format_html_tree(
-    node: &Node,
-    source: &[u8],
-    nodes: &[AskamaNode],
-    config: &Config,
-    indent: usize,
-) -> Result<String, Box<dyn std::error::Error>> {
+    let node = &tree.root_node();
+    let source = html.as_bytes();
     let mut result = String::new();
-    let mut current_indent = indent as i32;
+    let mut current_indent = 0;
+
     format_html_with_indent(
         node,
         source,
@@ -101,6 +94,7 @@ fn format_html_tree(
         &mut current_indent,
         &mut result,
     )?;
+
     Ok(result)
 }
 

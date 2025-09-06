@@ -59,14 +59,14 @@ impl AskamaFormatter {
         // 2: Split the AST into html content String and AskamaNode
         let (html, nodes) = extract_nodes(source, &ast_tree.root_node())?;
 
-        // Phase 3: Format the html String with placeholders (AskamaNode)
+        // 3: Format the html String with placeholders (AskamaNode)
         let formatted = if is_just_template(&html, &nodes) {
             format_template_only(&html, &nodes, &self.config)
         } else {
             format_template_with_html(&mut self.html_parser, &html, &nodes, &self.config)?
         };
 
-        // Phase 4: Restore the original Askama template code
+        // 4: Restore the original Askama template code
         Ok(restore_nodes(&formatted, &nodes, &self.config))
     }
 }

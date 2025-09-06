@@ -39,7 +39,7 @@ pub(crate) fn extract_nodes(
 }
 
 fn parse_askama_node(node: Node, source: &str) -> Option<AskamaNode> {
-    let (open, close, inner) = extract_dlmts(node, source)?;
+    let (open, close, inner) = extract_delimiters(node, source)?;
 
     match node.kind() {
         "control_tag" => {
@@ -99,7 +99,7 @@ fn is_block_kind(node: Node) -> Option<Block> {
     }
 }
 
-fn extract_dlmts(node: Node, source: &str) -> Option<(String, String, String)> {
+fn extract_delimiters(node: Node, source: &str) -> Option<(String, String, String)> {
     let first = node.child(0)?;
     let last = node.child(node.child_count() - 1)?;
 
@@ -108,6 +108,7 @@ fn extract_dlmts(node: Node, source: &str) -> Option<(String, String, String)> {
 
     let start = first.end_byte();
     let end = last.start_byte();
+
     let inner = if start < end {
         source[start..end].trim().to_string()
     } else {
