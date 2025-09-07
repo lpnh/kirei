@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+textwrap = "0.16.2"
 tree-sitter = "0.25.8"
 tree-sitter-askama = { path = "../../parsers/tree-sitter-askama" }
 tree-sitter-html = "0.23.2"

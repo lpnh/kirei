@@ -13,14 +13,14 @@ expression: formatted_output
     <head>
         {#-
             A base template can contain `blocks`, which my be overridden templates that use
-    this base template. A block may contain a default content, if the extending
-    template does want to / need to override the content of a block.
+            this base template. A block may contain a default content, if the extending
+            template does want to / need to override the content of a block.
 
-    E.g. maybe you would like to have "Askama example application" as default title for
-    your pages, then simply add this text (without quotation marks) in the block!
+            E.g. maybe you would like to have "Askama example application" as default title for
+            your pages, then simply add this text (without quotation marks) in the block!
 
-    The default content can be as complex as you need it to be.
-    E.g. it may contain any nodes like `{% if … %}`, and even other blocks.
+            The default content can be as complex as you need it to be.
+            E.g. it may contain any nodes like `{% if … %}`, and even other blocks.
         ~#}
         <title>
             {% block title %}
@@ -28,16 +28,16 @@ expression: formatted_output
         </title>
         {#-
             In a real application you most likely would want to link style sheets,
-    any JavaScripts etc. using e.g. `actix-files`, instead of embedding the content
-    in your generated HTML.
+            any JavaScripts etc. using e.g. `actix-files`, instead of embedding the content
+            in your generated HTML.
 
-    As you can see, this comment starts with `-`, which will tells the comment
-    to strip all white spaces before it, until it finds the first non-white space
-    character, a `>`.
+            As you can see, this comment starts with `-`, which will tells the comment
+            to strip all white spaces before it, until it finds the first non-white space
+            character, a `>`.
 
-    The comment is also terminated with `~`. This also strips white spaces, but
-    will leave one space, or a newline character, if the stripped content contained
-    a newline.
+            The comment is also terminated with `~`. This also strips white spaces, but
+            will leave one space, or a newline character, if the stripped content contained
+            a newline.
         ~#}
         <style>
 /*<![CDATA[*/

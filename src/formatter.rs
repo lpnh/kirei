@@ -1,3 +1,4 @@
+use textwrap::{Options, wrap};
 use tree_sitter::{Node, Parser};
 
 use crate::Config;
@@ -6,31 +7,28 @@ use crate::types::*;
 
 pub(crate) fn format_template_only(html: &str, nodes: &[AskamaNode], config: &Config) -> String {
     let mut result = Vec::new();
-    let mut indent = 0;
+    let mut indent_size = 0;
 
     for token in tokenize(html) {
         if let Some(idx) = extract_placeholder_index(token) {
             if let Some(node) = nodes.get(idx) {
                 let (pre, post) = node.indent_delta();
-                indent = (indent + pre).max(0);
+                indent_size = (indent_size + pre).max(0);
                 result.push(format!(
                     "{}{}",
-                    " ".repeat((indent * config.indent_size as i32).try_into().unwrap()),
-                    format_node(node, indent.try_into().unwrap(), config)
+                    " ".repeat(
+                        (indent_size * config.indent_size as i32)
+                            .try_into()
+                            .unwrap()
+                    ),
+                    format_node(node, indent_size.try_into().unwrap(), config)
                 ));
-                indent = (indent + post).max(0);
+                indent_size = (indent_size + post).max(0);
             }
         } else if !token.trim().is_empty() {
-            for line in token.lines() {
-                let trimmed = line.trim();
-                if !trimmed.is_empty() {
-                    result.push(format!(
-                        "{}{}",
-                        " ".repeat((indent * config.indent_size as i32).try_into().unwrap()),
-                        trimmed
-                    ));
-                }
-            }
+            let indent = "";
+            let wrapped = wrap_text_with_indent(token.trim(), indent, config.max_line_length);
+            result.extend(wrapped);
         }
     }
 
@@ -95,7 +93,17 @@ pub(crate) fn format_template_with_html(
         &mut result,
     )?;
 
-    Ok(result)
+    Ok(result.trim_end().to_string())
+}
+
+pub(crate) fn wrap_text_with_indent(text: &str, indent: &str, max_length: usize) -> Vec<String> {
+    let available_width = max_length.saturating_sub(indent.len());
+    let options = Options::new(available_width);
+
+    wrap(text, &options)
+        .into_iter()
+        .map(|line| format!("{}{}", indent, line))
+        .collect()
 }
 
 fn format_html_with_indent(
@@ -118,24 +126,45 @@ fn format_html_with_indent(
         }
         "text" => {
             let text = node.utf8_text(source)?;
-            for token in tokenize(text) {
-                if let Some(idx) = extract_placeholder_index(token) {
-                    if let Some(node) = nodes.get(idx) {
-                        let (pre, post) = node.indent_delta();
-                        *indent = (*indent + pre).max(0);
-                        let node_prefix = " ".repeat((*indent as usize) * config.indent_size);
-                        result.push_str(&format!("{}{}\n", node_prefix, token.trim()));
-                        *indent = (*indent + post).max(0);
-                    }
-                } else if !token.trim().is_empty() {
-                    let current_prefix = " ".repeat((*indent as usize) * config.indent_size);
-                    result.push_str(&format!("{}{}\n", current_prefix, token.trim()));
-                }
-            }
+            format_text_with_indent(text, nodes, config, indent, result)?;
         }
         _ => {
-            let current_prefix = " ".repeat((*indent as usize) * config.indent_size);
-            result.push_str(&format!("{}{}\n", current_prefix, node.utf8_text(source)?));
+            let current_indent = " ".repeat((*indent as usize) * config.indent_size);
+            result.push_str(&format!("{}{}\n", current_indent, node.utf8_text(source)?));
+        }
+    }
+
+    Ok(())
+}
+
+fn format_text_with_indent(
+    text: &str,
+    nodes: &[AskamaNode],
+    config: &Config,
+    indent: &mut i32,
+    result: &mut String,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for token in tokenize(text) {
+        if let Some(idx) = extract_placeholder_index(token) {
+            if let Some(node) = nodes.get(idx) {
+                let (pre, post) = node.indent_delta();
+                *indent = (*indent + pre).max(0);
+                let node_prefix = " ".repeat((*indent as usize) * config.indent_size);
+
+                // Format the node with proper indentation
+                let formatted_node = format_node(node, (*indent).try_into().unwrap_or(0), config);
+                result.push_str(&format!("{}{}\n", node_prefix, formatted_node));
+
+                // Apply post-delta for subsequent content
+                *indent = (*indent + post).max(0);
+            }
+        } else if !token.trim().is_empty() {
+            // Handle text content with wrapping, using current indent
+            let wrapped_lines = wrap_text_content(token, (*indent).try_into().unwrap_or(0), config);
+            for line in wrapped_lines {
+                result.push_str(&line);
+                result.push('\n');
+            }
         }
     }
 
@@ -179,7 +208,7 @@ fn format_element(
         } else {
             result.push_str(&format!("{}{}\n", prefix, start_text));
             *indent += 1;
-            for child in content {
+            for child in &content {
                 format_html_with_indent(child, source, nodes, config, indent, result)?;
             }
             *indent -= 1;
@@ -200,4 +229,21 @@ fn should_inline(content: &[&Node], source: &[u8], _nodes: &[AskamaNode], config
             .utf8_text(source)
             .map(|t| !t.contains('\n') && t.len() < config.max_line_length / 2)
             .unwrap_or(false)
+}
+
+fn wrap_text_content(text: &str, indent: usize, config: &Config) -> Vec<String> {
+    let prefix = " ".repeat(indent * config.indent_size);
+    let mut result = Vec::new();
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let wrapped = wrap_text_with_indent(trimmed, &prefix, config.max_line_length);
+        result.extend(wrapped);
+    }
+
+    result
 }
