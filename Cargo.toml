@@ -1,7 +1,17 @@
 [package]
 name = "kirei"
+description = "Askama format tool"
 version = "0.1.0"
+authors = ["lpnh <paniguel.lpnh@gmail.com>"]
+license = "Unlicense"
+readme = "README.md"
+keywords = ["askama", "formatter"]
+categories = ["development-tools"]
+repository = "https://github.com/lpnh/kirei.git"
 edition = "2024"
+autoexamples = false
+
+include = ["src/*"]
 
 [dependencies]
 textwrap = "0.16.2"
@@ -10,7 +20,7 @@ tree-sitter-askama = "0.1.0"
 tree-sitter-html = "0.23.2"
 
 [dev-dependencies]
-insta = "1.43.1"
+insta = "1.43.2"
 
 [profile.dev.package]
 insta.opt-level = 3
