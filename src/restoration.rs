@@ -1,4 +1,4 @@
-use crate::Config;
+use crate::formatter::Config;
 use crate::formatter::wrap_text_with_indent;
 use crate::types::AskamaNode;
 

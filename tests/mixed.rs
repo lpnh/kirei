@@ -1,4 +1,4 @@
-use kirei::AskamaFormatter;
+use kirei::formatter::AskamaFormatter;
 
 #[test]
 fn for_item() {
