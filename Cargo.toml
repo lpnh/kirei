@@ -1,6 +1,6 @@
 [package]
 name = "kirei"
-description = "Askama format tool"
+description = "Askama formatter"
 version = "0.1.0"
 authors = ["lpnh <paniguel.lpnh@gmail.com>"]
 license = "Unlicense"
