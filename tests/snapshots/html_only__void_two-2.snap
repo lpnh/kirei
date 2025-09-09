@@ -1,0 +1,11 @@
+---
+source: tests/html_only.rs
+expression: formatted_output
+---
+<div>
+    Text
+    <div>More text</div>
+    <img src="image.jpg" >
+        Some text
+    <br />
+</div>

@@ -110,3 +110,25 @@ fn container() {
     insta::assert_snapshot!(input);
     insta::assert_snapshot!(formatted_output);
 }
+
+#[test]
+fn void_one() {
+    let mut formatter = AskamaFormatter::default();
+    let input = r#"<div>Text<img src="image.jpg" ><br />Some text<div> More text</div></div>"#;
+
+    let formatted_output = formatter.format(input).expect("Formatting failed");
+
+    insta::assert_snapshot!(input);
+    insta::assert_snapshot!(formatted_output);
+}
+
+#[test]
+fn void_two() {
+    let mut formatter = AskamaFormatter::default();
+    let input = r#"<div>Text<div>More text</div><img src="image.jpg" >Some text<br /></div>"#;
+
+    let formatted_output = formatter.format(input).expect("Formatting failed");
+
+    insta::assert_snapshot!(input);
+    insta::assert_snapshot!(formatted_output);
+}

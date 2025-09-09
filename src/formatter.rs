@@ -68,7 +68,7 @@ impl AskamaFormatter {
 }
 
 fn is_just_template(html: &str, nodes: &[AskamaNode]) -> bool {
-    // Check if content is purely Askama template (no HTML structure)
+    // Check if content is just Askama template (no HTML node)
     let mut test = html.to_string();
     for (i, _) in nodes.iter().enumerate() {
         test = test.replace(&nodes[i].placeholder(i), "");
@@ -250,8 +250,17 @@ fn format_element(
     indent: &mut i32,
     result: &mut String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let prefix = " ".repeat((*indent as usize) * config.indent_size);
+    // Handle self-closing tags
+    if node.child_count() == 1
+        && let Some(child) = node.child(0)
+        && child.kind() == "self_closing_tag"
+    {
+        let prefix = " ".repeat((*indent as usize) * config.indent_size);
+        result.push_str(&format!("{}{}\n", prefix, child.utf8_text(source)?));
+        return Ok(());
+    }
 
+    // Consolidate all node parsing and data extraction at the beginning
     let mut cursor = node.walk();
     let children: Vec<Node> = node.children(&mut cursor).collect();
 
@@ -259,38 +268,81 @@ fn format_element(
     let end_tag = children.iter().find(|n| n.kind() == "end_tag");
     let content: Vec<&Node> = children
         .iter()
-        .filter(|n| n.kind() != "start_tag" && n.kind() != "end_tag")
+        .filter(|n| {
+            n.kind() != "start_tag" && n.kind() != "end_tag" && n.kind() != "self_closing_tag"
+        })
         .collect();
 
-    if let Some(start) = start_tag {
-        let start_text = start.utf8_text(source)?;
+    // If there's no start tag, do NOT format this element
+    let start = match start_tag {
+        Some(s) => s,
+        None => return Ok(()),
+    };
 
-        if should_inline(&content, source, nodes, config) {
-            if let Some(end) = end_tag {
-                let content_text = content[0].utf8_text(source)?.trim();
-                result.push_str(&format!(
-                    "{}{}{}{}\n",
-                    prefix,
-                    start_text,
-                    content_text,
-                    end.utf8_text(source)?
-                ));
-            }
-        } else {
-            result.push_str(&format!("{}{}\n", prefix, start_text));
+    let start_text = start.utf8_text(source)?;
+    let is_void = is_void_element(start, source)?;
+    let prefix = " ".repeat((*indent as usize) * config.indent_size);
+
+    // Separates the "inline" case from all others
+    if !is_void && should_inline(&content, source, nodes, config) {
+        // Format as a single, inline element
+        let content_text = content
+            .first()
+            .map_or(Ok(""), |n| n.utf8_text(source))?
+            .trim();
+        let end_text = end_tag.map_or(Ok(""), |n| n.utf8_text(source))?;
+
+        result.push_str(&format!(
+            "{}{}{}{}\n",
+            prefix, start_text, content_text, end_text
+        ));
+    } else {
+        // Format as a multi-line block (also handles void elements)
+        result.push_str(&format!("{}{}\n", prefix, start_text));
+
+        // Recursively format content, if any exists
+        if !content.is_empty() {
             *indent += 1;
             for child in &content {
                 format_html_with_indent(child, source, nodes, config, indent, result)?;
             }
             *indent -= 1;
+        }
 
-            if let Some(end) = end_tag {
-                result.push_str(&format!("{}{}\n", prefix, end.utf8_text(source)?));
-            }
+        // Add the closing tag only for non-void elements
+        if !is_void && let Some(end) = end_tag {
+            result.push_str(&format!("{}{}\n", prefix, end.utf8_text(source)?));
         }
     }
 
     Ok(())
+}
+
+fn is_void_element(start_tag: &Node, source: &[u8]) -> Result<bool, Box<dyn std::error::Error>> {
+    let mut cursor = start_tag.walk();
+    for child in start_tag.children(&mut cursor) {
+        if child.kind() == "tag_name" {
+            let tag_name = child.utf8_text(source)?.to_lowercase();
+            return Ok(matches!(
+                tag_name.as_str(),
+                "area"
+                    | "base"
+                    | "br"
+                    | "col"
+                    | "embed"
+                    | "hr"
+                    | "img"
+                    | "input"
+                    | "link"
+                    | "meta"
+                    | "param"
+                    | "source"
+                    | "track"
+                    | "wbr"
+            ));
+        }
+    }
+    Ok(false)
 }
 
 fn should_inline(content: &[&Node], source: &[u8], _nodes: &[AskamaNode], config: &Config) -> bool {

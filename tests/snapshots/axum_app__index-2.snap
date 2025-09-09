@@ -76,6 +76,13 @@ autocomplete="off"
                     Je m'appelle
                 {%- endmatch -%}
                 :
+                <input
+type="text"
+value="{{ name }}"
+name="name"
+required
+style="width: 10em"
+/>
             </label>
         </p>
         <p>

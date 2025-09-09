@@ -11,6 +11,7 @@ expression: formatted_output
 <!DOCTYPE html>
 <html lang="{{ lang }}">
     <head>
+        <meta charset="UTF-8" />
         {#-
             A base template can contain `blocks`, which my be overridden templates that use
             this base template. A block may contain a default content, if the extending
@@ -26,6 +27,11 @@ expression: formatted_output
             {% block title %}
             {% endblock %}
         </title>
+        <meta http-equiv="expires" content="Sat, 01 Dec 2001 00:00:00 GMT" />
+        <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
+        <meta http-equiv="pragma" content="no-cache" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="robots" content="noindex, nofollow" />
         {#-
             In a real application you most likely would want to link style sheets,
             any JavaScripts etc. using e.g. `actix-files`, instead of embedding the content

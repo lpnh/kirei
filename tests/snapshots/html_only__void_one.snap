@@ -1,0 +1,5 @@
+---
+source: tests/html_only.rs
+expression: input
+---
+<div>Text<img src="image.jpg" ><br />Some text<div> More text</div></div>
