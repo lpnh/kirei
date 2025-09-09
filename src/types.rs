@@ -60,4 +60,35 @@ impl AskamaNode {
             _ => (0, 0), // Inline
         }
     }
+
+    pub(crate) fn is_opening_block(&self) -> bool {
+        matches!(
+            self,
+            Self::Control {
+                maybe_block: Some(Block::Open),
+                ..
+            }
+        )
+    }
+
+    pub(crate) fn is_closing_block(&self) -> bool {
+        matches!(
+            self,
+            Self::Control {
+                maybe_block: Some(Block::Close),
+                ..
+            }
+        )
+    }
+
+    pub(crate) fn get_block_type(&self) -> Option<&str> {
+        match self {
+            Self::Control {
+                inner,
+                maybe_block: Some(_),
+                ..
+            } => inner.split_whitespace().next(),
+            _ => None,
+        }
+    }
 }

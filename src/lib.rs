@@ -12,8 +12,8 @@ use crate::formatter::AskamaFormatter;
 
 use std::io::{self, Read};
 
-pub fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
-    let (input, maybe_filepath) = get_input_and_filepath(&args)?;
+pub fn run(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let (input, maybe_filepath) = get_input_and_filepath(args)?;
     let mut kirei = AskamaFormatter::default();
     let raw_formatted = kirei.format(&input)?;
 

@@ -1,9 +1,9 @@
 use kirei::formatter::AskamaFormatter;
 
 #[test]
-fn comment() {
+fn empty_block() {
     let mut formatter = AskamaFormatter::default();
-    let input = r"{# A Comment #}";
+    let input = r"{% block content %}{% endblock %}";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 
@@ -12,9 +12,11 @@ fn comment() {
 }
 
 #[test]
-fn empty_if() {
+fn empty_block_with_whitespace() {
     let mut formatter = AskamaFormatter::default();
-    let input = r"{% if foo %}{% endif %}";
+    let input = r"
+{% block content %}      {% endblock %}
+";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 
@@ -23,20 +25,13 @@ fn empty_if() {
 }
 
 #[test]
-fn if_with_text() {
+fn empty_block_with_whitespace_and_html() {
     let mut formatter = AskamaFormatter::default();
-    let input = r"{% if foo %} this is some text {% endif %}";
-
-    let formatted_output = formatter.format(input).expect("Formatting failed");
-
-    insta::assert_snapshot!(input);
-    insta::assert_snapshot!(formatted_output);
-}
-
-#[test]
-fn simple() {
-    let mut formatter = AskamaFormatter::default();
-    let input = r"{{ user.name }}{% for item in items %}{{ item }}{% endfor %}{# comment here #}";
+    let input = r"
+<div>
+{%~ block content ~%}     {%~ endblock ~%}
+</div>
+";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 

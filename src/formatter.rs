@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use textwrap::{Options, wrap};
 use tree_sitter::{Node, Parser};
 
@@ -67,43 +68,72 @@ impl AskamaFormatter {
     }
 }
 
-fn is_just_template(html: &str, nodes: &[AskamaNode]) -> bool {
-    // Check if content is just Askama template (no HTML node)
-    let mut test = html.to_string();
-    for (i, _) in nodes.iter().enumerate() {
-        test = test.replace(&nodes[i].placeholder(i), "");
-    }
-    test.trim().is_empty()
+pub(crate) fn format_template_only(html: &str, nodes: &[AskamaNode], config: &Config) -> String {
+    let mut indent_level = 0;
+    let mut result = String::new();
+
+    format_token_stream(
+        &tokenize(html),
+        nodes,
+        config,
+        &mut indent_level,
+        &mut result,
+    );
+
+    result
 }
 
-pub(crate) fn format_template_only(html: &str, nodes: &[AskamaNode], config: &Config) -> String {
-    let mut result = Vec::new();
-    let mut indent_size = 0;
+// Process a stream of text and Askama tokens
+fn format_token_stream(
+    tokens: &[&str],
+    nodes: &[AskamaNode],
+    config: &Config,
+    indent_level: &mut i32,
+    result: &mut String,
+) {
+    let significant_tokens: Vec<_> = tokens.iter().filter(|s| !s.trim().is_empty()).collect();
+    let mut token_iter = significant_tokens.iter().peekable();
 
-    for token in tokenize(html) {
-        if let Some(idx) = extract_placeholder_index(token) {
-            if let Some(node) = nodes.get(idx) {
+    while let Some(token) = token_iter.next() {
+        if let Some(idx1) = extract_placeholder_index(token) {
+            // Look ahead for an empty block pair
+            if let Some(next_token) = token_iter.peek()
+                && let Some(idx2) = extract_placeholder_index(next_token)
+                && let (Some(node1), Some(node2)) = (nodes.get(idx1), nodes.get(idx2))
+                && are_empty_block_pair(node1, node2)
+            {
+                let formatted_opening = format_node(node1, 0, config);
+                let formatted_closing = format_node(node2, 0, config);
+                let current_indent = indent_str(*indent_level, config);
+                writeln!(
+                    result,
+                    "{}{}{}",
+                    current_indent, formatted_opening, formatted_closing
+                )
+                .ok();
+                token_iter.next(); // Consume the next token
+                continue;
+            }
+
+            // Regular Askama node processing
+            if let Some(node) = nodes.get(idx1) {
                 let (pre, post) = node.indent_delta();
-                indent_size = (indent_size + pre).max(0);
-                result.push(format!(
-                    "{}{}",
-                    " ".repeat(
-                        (indent_size * config.indent_size as i32)
-                            .try_into()
-                            .unwrap()
-                    ),
-                    format_node(node, indent_size.try_into().unwrap(), config)
-                ));
-                indent_size = (indent_size + post).max(0);
+                *indent_level = (*indent_level + pre).max(0);
+                let current_indent = indent_str(*indent_level, config);
+                let formatted_node = format_node(node, *indent_level as usize, config);
+                writeln!(result, "{}{}", current_indent, formatted_node).ok();
+                *indent_level = (*indent_level + post).max(0);
             }
         } else if !token.trim().is_empty() {
-            let indent = "";
-            let wrapped = wrap_text_with_indent(token.trim(), indent, config.max_line_length);
-            result.extend(wrapped);
+            // Text content processing
+            let prefix = indent_str(*indent_level, config);
+            let wrapped_lines =
+                wrap_text_with_indent(token.trim(), &prefix, config.max_line_length);
+            for line in wrapped_lines {
+                writeln!(result, "{}", line).ok();
+            }
         }
     }
-
-    result.join("\n")
 }
 
 fn tokenize(input: &str) -> Vec<&str> {
@@ -150,14 +180,12 @@ pub(crate) fn format_template_with_html(
     config: &Config,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let tree = html_parser.parse(html, None).ok_or("HTML parse failed")?;
-    let node = &tree.root_node();
-    let source = html.as_bytes();
     let mut result = String::new();
     let mut current_indent = 0;
 
     format_html_with_indent(
-        node,
-        source,
+        &tree.root_node(),
+        html.as_bytes(),
         nodes,
         config,
         &mut current_indent,
@@ -170,7 +198,6 @@ pub(crate) fn format_template_with_html(
 pub(crate) fn wrap_text_with_indent(text: &str, indent: &str, max_length: usize) -> Vec<String> {
     let available_width = max_length.saturating_sub(indent.len());
     let options = Options::new(available_width);
-
     wrap(text, &options)
         .into_iter()
         .map(|line| format!("{}{}", indent, line))
@@ -187,8 +214,7 @@ fn format_html_with_indent(
 ) -> Result<(), Box<dyn std::error::Error>> {
     match node.kind() {
         "document" | "fragment" => {
-            let mut cursor = node.walk();
-            for child in node.children(&mut cursor) {
+            for child in node.children(&mut node.walk()) {
                 format_html_with_indent(&child, source, nodes, config, indent, result)?;
             }
         }
@@ -197,48 +223,18 @@ fn format_html_with_indent(
         }
         "text" => {
             let text = node.utf8_text(source)?;
-            format_text_with_indent(text, nodes, config, indent, result)?;
+            format_token_stream(&tokenize(text), nodes, config, indent, result);
         }
         _ => {
-            let current_indent = " ".repeat((*indent as usize) * config.indent_size);
-            result.push_str(&format!("{}{}\n", current_indent, node.utf8_text(source)?));
+            writeln!(
+                result,
+                "{}{}",
+                indent_str(*indent, config),
+                node.utf8_text(source)?
+            )
+            .ok();
         }
     }
-
-    Ok(())
-}
-
-fn format_text_with_indent(
-    text: &str,
-    nodes: &[AskamaNode],
-    config: &Config,
-    indent: &mut i32,
-    result: &mut String,
-) -> Result<(), Box<dyn std::error::Error>> {
-    for token in tokenize(text) {
-        if let Some(idx) = extract_placeholder_index(token) {
-            if let Some(node) = nodes.get(idx) {
-                let (pre, post) = node.indent_delta();
-                *indent = (*indent + pre).max(0);
-                let node_prefix = " ".repeat((*indent as usize) * config.indent_size);
-
-                // Format the node with proper indentation
-                let formatted_node = format_node(node, (*indent).try_into().unwrap_or(0), config);
-                result.push_str(&format!("{}{}\n", node_prefix, formatted_node));
-
-                // Apply post-delta for subsequent content
-                *indent = (*indent + post).max(0);
-            }
-        } else if !token.trim().is_empty() {
-            // Handle text content with wrapping, using current indent
-            let wrapped_lines = wrap_text_content(token, (*indent).try_into().unwrap_or(0), config);
-            for line in wrapped_lines {
-                result.push_str(&line);
-                result.push('\n');
-            }
-        }
-    }
-
     Ok(())
 }
 
@@ -250,123 +246,113 @@ fn format_element(
     indent: &mut i32,
     result: &mut String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Handle self-closing tags
-    if node.child_count() == 1
-        && let Some(child) = node.child(0)
-        && child.kind() == "self_closing_tag"
-    {
-        let prefix = " ".repeat((*indent as usize) * config.indent_size);
-        result.push_str(&format!("{}{}\n", prefix, child.utf8_text(source)?));
+    let prefix = indent_str(*indent, config);
+
+    if let Some(child) = node.child(0).filter(|c| c.kind() == "self_closing_tag") {
+        writeln!(result, "{}{}", prefix, child.utf8_text(source)?).ok();
         return Ok(());
     }
 
-    // Consolidate all node parsing and data extraction at the beginning
-    let mut cursor = node.walk();
-    let children: Vec<Node> = node.children(&mut cursor).collect();
-
-    let start_tag = children.iter().find(|n| n.kind() == "start_tag");
+    let children: Vec<Node> = node.children(&mut node.walk()).collect();
+    let maybe_start_tag = children.iter().find(|n| n.kind() == "start_tag");
     let end_tag = children.iter().find(|n| n.kind() == "end_tag");
     let content: Vec<&Node> = children
         .iter()
-        .filter(|n| {
-            n.kind() != "start_tag" && n.kind() != "end_tag" && n.kind() != "self_closing_tag"
-        })
+        .filter(|n| !matches!(n.kind(), "start_tag" | "end_tag" | "self_closing_tag"))
         .collect();
 
-    // If there's no start tag, do NOT format this element
-    let start = match start_tag {
-        Some(s) => s,
-        None => return Ok(()),
+    let Some(start_tag) = maybe_start_tag else {
+        return Ok(());
     };
 
-    let start_text = start.utf8_text(source)?;
-    let is_void = is_void_element(start, source)?;
-    let prefix = " ".repeat((*indent as usize) * config.indent_size);
+    let start_text = start_tag.utf8_text(source)?;
+    let is_void = is_void_element(start_tag, source)?;
 
-    // Separates the "inline" case from all others
-    if !is_void && should_inline(&content, source, nodes, config) {
-        // Format as a single, inline element
-        let content_text = content
-            .first()
-            .map_or(Ok(""), |n| n.utf8_text(source))?
-            .trim();
+    if !is_void && should_inline(&content, source, config) {
+        let content_text = content[0].utf8_text(source)?.trim();
         let end_text = end_tag.map_or(Ok(""), |n| n.utf8_text(source))?;
-
-        result.push_str(&format!(
-            "{}{}{}{}\n",
+        writeln!(
+            result,
+            "{}{}{}{}",
             prefix, start_text, content_text, end_text
-        ));
+        )
+        .ok();
     } else {
-        // Format as a multi-line block (also handles void elements)
-        result.push_str(&format!("{}{}\n", prefix, start_text));
-
-        // Recursively format content, if any exists
+        writeln!(result, "{}{}", prefix, start_text).ok();
         if !content.is_empty() {
             *indent += 1;
-            for child in &content {
+            for child in content {
                 format_html_with_indent(child, source, nodes, config, indent, result)?;
             }
             *indent -= 1;
         }
-
-        // Add the closing tag only for non-void elements
         if !is_void && let Some(end) = end_tag {
-            result.push_str(&format!("{}{}\n", prefix, end.utf8_text(source)?));
+            writeln!(result, "{}{}", prefix, end.utf8_text(source)?).ok();
         }
     }
 
     Ok(())
 }
 
+fn indent_str(indent_level: i32, config: &Config) -> String {
+    " ".repeat((indent_level as usize) * config.indent_size)
+}
+
+fn is_just_template(html: &str, nodes: &[AskamaNode]) -> bool {
+    let mut stripped_html = html.to_string();
+    for (i, _) in nodes.iter().enumerate() {
+        stripped_html = stripped_html.replace(&nodes[i].placeholder(i), "");
+    }
+    stripped_html.trim().is_empty()
+}
+
 fn is_void_element(start_tag: &Node, source: &[u8]) -> Result<bool, Box<dyn std::error::Error>> {
-    let mut cursor = start_tag.walk();
-    for child in start_tag.children(&mut cursor) {
-        if child.kind() == "tag_name" {
-            let tag_name = child.utf8_text(source)?.to_lowercase();
-            return Ok(matches!(
-                tag_name.as_str(),
-                "area"
-                    | "base"
-                    | "br"
-                    | "col"
-                    | "embed"
-                    | "hr"
-                    | "img"
-                    | "input"
-                    | "link"
-                    | "meta"
-                    | "param"
-                    | "source"
-                    | "track"
-                    | "wbr"
-            ));
-        }
+    if let Some(tag_name_node) = start_tag
+        .children(&mut start_tag.walk())
+        .find(|c| c.kind() == "tag_name")
+    {
+        let tag_name = tag_name_node.utf8_text(source)?.to_lowercase();
+        return Ok(matches!(
+            tag_name.as_str(),
+            "area"
+                | "base"
+                | "br"
+                | "col"
+                | "embed"
+                | "hr"
+                | "img"
+                | "input"
+                | "link"
+                | "meta"
+                | "param"
+                | "source"
+                | "track"
+                | "wbr"
+        ));
     }
     Ok(false)
 }
 
-fn should_inline(content: &[&Node], source: &[u8], _nodes: &[AskamaNode], config: &Config) -> bool {
-    content.len() == 1
-        && content[0].kind() == "text"
-        && content[0]
-            .utf8_text(source)
-            .map(|t| !t.contains('\n') && t.len() < config.max_line_length / 2)
-            .unwrap_or(false)
+fn are_empty_block_pair(opening: &AskamaNode, closing: &AskamaNode) -> bool {
+    if let (Some(open_type), Some(close_type)) =
+        (opening.get_block_type(), closing.get_block_type())
+        && opening.is_opening_block()
+        && closing.is_closing_block()
+    {
+        return close_type == format!("end{}", open_type);
+    }
+    false
 }
 
-fn wrap_text_content(text: &str, indent: usize, config: &Config) -> Vec<String> {
-    let prefix = " ".repeat(indent * config.indent_size);
-    let mut result = Vec::new();
-
-    for line in text.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
+fn should_inline(content: &[&Node], source: &[u8], config: &Config) -> bool {
+    if content.len() == 1
+        && content[0].kind() == "text"
+        && let Ok(text) = content[0].utf8_text(source)
+    {
+        if text.contains(ASKAMA_TOKEN) {
+            return false;
         }
-
-        let wrapped = wrap_text_with_indent(trimmed, &prefix, config.max_line_length);
-        result.extend(wrapped);
+        return !text.contains('\n') && text.len() < config.max_line_length / 2;
     }
-
-    result
+    false
 }

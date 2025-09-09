@@ -24,8 +24,7 @@ expression: formatted_output
             E.g. it may contain any nodes like `{% if … %}`, and even other blocks.
         ~#}
         <title>
-            {% block title %}
-            {% endblock %}
+            {% block title %}{% endblock %}
         </title>
         <meta http-equiv="expires" content="Sat, 01 Dec 2001 00:00:00 GMT" />
         <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
@@ -52,8 +51,7 @@ expression: formatted_output
 </style>
     </head>
     <body>
-        {%~ block content %}
-        {% endblock ~%}
+        {%~ block content %}{% endblock ~%}
     </body>
 </html>
 {%- macro lang_select(page, query="") -%}

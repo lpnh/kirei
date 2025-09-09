@@ -34,7 +34,9 @@ expression: formatted_output
         {%- match lang -%}
             {%- when Lang::en -%}
             Hello,
-            <strong>{{ name }}</strong>
+            <strong>
+                {{ name }}
+            </strong>
             , nice to meet you!
             {#-~#}
             I'm a
@@ -42,7 +44,9 @@ expression: formatted_output
             example application.
             {%- when Lang::de -%}
             Hallo,
-            <strong>{{ name }}</strong>
+            <strong>
+                {{ name }}
+            </strong>
             , schön dich kennenzulernen!
             {#-~#}
             Ich bin eine
@@ -50,7 +54,9 @@ expression: formatted_output
             -Beispielanwendung.
             {%- when Lang::fr -%}
             Bonjour,
-            <strong>{{ name }}</strong>
+            <strong>
+                {{ name }}
+            </strong>
             , ravi de vous rencontrer !
             {#-~#}
             Je suis une application d'exemple de
@@ -71,7 +77,6 @@ expression: formatted_output
         </a>
     </h2>
     {%-
-        call lang_select("greet-me", name|urlencode|fmt("?name={}"))
-    -%}
-    {%- endcall -%}
+    call lang_select("greet-me", name|urlencode|fmt("?name={}"))
+-%}{%- endcall -%}
 {%- endblock -%}

@@ -1,0 +1,7 @@
+---
+source: tests/collapsing.rs
+expression: formatted_output
+---
+<div>
+    {%~ block content ~%}{%~ endblock ~%}
+</div>

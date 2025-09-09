@@ -104,6 +104,5 @@ style="width: 10em"
         The called macro is defined in base template "_layout.html",
         and used to display the language selection footer.
     ~#}
-    {%- call lang_select("index") -%}
-    {%- endcall -%}
+    {%- call lang_select("index") -%}{%- endcall -%}
 {%- endblock -%}

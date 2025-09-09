@@ -4,7 +4,7 @@ use kirei::formatter::AskamaFormatter;
 fn for_item() {
     let mut formatter = AskamaFormatter::default();
     let input =
-        r#"<h1>Users</h1><ul>{% for user in users %}<li>{{ user.name }}</li>{% endfor %}</ul>"#;
+        r"<h1>Users</h1><ul>{% for user in users %}<li>{{ user.name }}</li>{% endfor %}</ul>";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 
@@ -17,7 +17,7 @@ fn nesting_blocks() {
     let mut formatter = AskamaFormatter::default();
 
     let input =
-        r#"{% block first %}{% block inner %}<p>A cool paragraph</p>{% endblock %}{% endblock %}"#;
+        r"{% block first %}{% block inner %}<p>A cool paragraph</p>{% endblock %}{% endblock %}";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 

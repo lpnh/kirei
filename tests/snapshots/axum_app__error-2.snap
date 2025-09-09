@@ -23,7 +23,9 @@ expression: formatted_output
     {%- match err -%}
         {% when AppError::NotFound -%}
         {% when AppError::Render(err) -%}
-        <pre>{{ err }}</pre>
+        <pre>
+            {{ err }}
+        </pre>
     {%- endmatch -%}
     <h2>
         <a href="/">Back to the first page.</a>

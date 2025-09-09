@@ -3,7 +3,9 @@ source: tests/mixed.rs
 expression: formatted_output
 ---
 {% macro container() %}
-    <div class="container">{{ caller() }}</div>
+    <div class="container">
+        {{ caller() }}
+    </div>
 {% endmacro %}
 {% macro outer_container() %}
     {#

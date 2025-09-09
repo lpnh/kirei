@@ -11,8 +11,7 @@ expression: formatted_output
                 - My Site
             {% endblock %}
         </title>
-        {% block head %}
-        {% endblock %}
+        {% block head %}{% endblock %}
     </head>
     <body>
         <div id="content">

@@ -3,7 +3,7 @@ use kirei::formatter::AskamaFormatter;
 #[test]
 fn empty_comment() {
     let mut formatter = AskamaFormatter::default();
-    let input = r#"{#-   ~#}"#;
+    let input = r"{#-   ~#}";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 
@@ -14,7 +14,7 @@ fn empty_comment() {
 #[test]
 fn nested_comments() {
     let mut formatter = AskamaFormatter::default();
-    let input = r#"{#-   Some    {# Nested {#~   Comments #}   +#}    ~#}"#;
+    let input = r"{#-   Some    {# Nested {#~   Comments #}   +#}    ~#}";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 
@@ -25,7 +25,7 @@ fn nested_comments() {
 #[test]
 fn if_with_whitespace() {
     let mut formatter = AskamaFormatter::default();
-    let input = r#"{% if foo %}         {% endif %}"#;
+    let input = r"{% if foo %}         {% endif %}";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 
@@ -37,7 +37,7 @@ fn if_with_whitespace() {
 fn simple_control() {
     let mut formatter = AskamaFormatter::default();
 
-    let input = r#"{%   if condition %}<p>Hello</p>{% endif    %}"#;
+    let input = r"{%   if condition %}<p>Hello</p>{% endif    %}";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 
@@ -48,7 +48,7 @@ fn simple_control() {
 #[test]
 fn simple_expression() {
     let mut formatter = AskamaFormatter::default();
-    let input = r#"<div>{{user.name}}</div>"#;
+    let input = r"<div>{{user.name}}</div>";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 
@@ -60,7 +60,7 @@ fn simple_expression() {
 fn whitespace_control() {
     let mut formatter = AskamaFormatter::default();
 
-    let input = r#"{% if foo ~%}{{- bar -}}{% else if another -%} nothing {%- endif %}"#;
+    let input = r"{% if foo ~%}{{- bar -}}{% else if another -%} nothing {%- endif %}";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 
@@ -72,8 +72,7 @@ fn whitespace_control() {
 fn complex_whitespace_control() {
     let mut formatter = AskamaFormatter::default();
 
-    let input =
-        r#"{%     if foo ~%}{{-    bar -}}{% else if  another   -%} nothing {%-   endif %}"#;
+    let input = r"{%     if foo ~%}{{-    bar -}}{% else if  another   -%} nothing {%-   endif %}";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 
@@ -85,7 +84,7 @@ fn complex_whitespace_control() {
 fn with_html() {
     let mut formatter = AskamaFormatter::default();
 
-    let input = r#"{% if foo %} {{ bar }} {% else if another -%} <p>nothing   </p>{%- endif %}"#;
+    let input = r"{% if foo %} {{ bar }} {% else if another -%} <p>nothing   </p>{%- endif %}";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 

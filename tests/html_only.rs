@@ -14,7 +14,7 @@ fn empty() {
 #[test]
 fn hello_world() {
     let mut formatter = AskamaFormatter::default();
-    let input = r#"<p>Hello, world!</p>"#;
+    let input = r"<p>Hello, world!</p>";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 
@@ -25,7 +25,7 @@ fn hello_world() {
 #[test]
 fn doctype() {
     let mut formatter = AskamaFormatter::default();
-    let input = r#"<!DOCTYPE html><title>Page Title</title>"#;
+    let input = r"<!DOCTYPE html><title>Page Title</title>";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 
@@ -58,7 +58,7 @@ fn image() {
 #[test]
 fn list() {
     let mut formatter = AskamaFormatter::default();
-    let input = r#"<ul><li>Item 1</li><li>Item 2</li></ul>"#;
+    let input = r"<ul><li>Item 1</li><li>Item 2</li></ul>";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 
@@ -81,7 +81,7 @@ fn form() {
 fn bold() {
     let mut formatter = AskamaFormatter::default();
     let input =
-        r#"<div><h1>Main Heading</h1><p>Some content with <strong>bold text</strong>.</p></div>"#;
+        r"<div><h1>Main Heading</h1><p>Some content with <strong>bold text</strong>.</p></div>";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 
