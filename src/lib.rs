@@ -1,5 +1,6 @@
 #![allow(clippy::uninlined_format_args)]
 
+mod context;
 mod extraction;
 pub mod formatter;
 mod restoration;

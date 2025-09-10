@@ -1,6 +1,4 @@
-use crate::formatter::Config;
-use crate::formatter::wrap_text_with_indent;
-use crate::types::AskamaNode;
+use crate::{context::wrap_text_with_indent, formatter::Config, types::AskamaNode};
 
 pub(crate) fn restore_nodes(html: &str, nodes: &[AskamaNode], config: &Config) -> String {
     let mut result = html.to_string();
