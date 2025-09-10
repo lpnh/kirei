@@ -68,8 +68,12 @@ impl AskamaNode {
                 block_info: Some((Block::Close, _)),
                 ..
             } => (-1, 0),
-            _ => (0, 0), // Inline
+            _ => (0, 0),
         }
+    }
+
+    pub(crate) fn is_expr(&self) -> bool {
+        matches!(self, Self::Expression { .. })
     }
 
     pub(crate) fn get_block_info(&self) -> Option<(Block, BlockType)> {
@@ -77,5 +81,15 @@ impl AskamaNode {
             Self::Control { block_info, .. } => *block_info,
             _ => None,
         }
+    }
+
+    pub(crate) fn prefers_inline(&self) -> bool {
+        matches!(
+            self.get_block_info(),
+            Some(
+                (Block::Open | Block::Close, BlockType::MacroCall)
+                    | (Block::Inner, BlockType::Match)
+            )
+        ) || matches!(self, AskamaNode::Expression { .. })
     }
 }

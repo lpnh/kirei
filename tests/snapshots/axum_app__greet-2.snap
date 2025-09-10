@@ -5,18 +5,9 @@ expression: formatted_output
 {% extends "_layout.html" %}
 {%- block title -%}
     {%- match lang -%}
-        {%- when Lang::en -%}
-        Hello,
-        {{ name }}
-        !
-        {%- when Lang::de -%}
-        Hallo,
-        {{ name }}
-        !
-        {%- when Lang::fr -%}
-        Bonjour,
-        {{ name }}
-        !
+        {%- when Lang::en -%} Hello, {{ name }}!
+        {%- when Lang::de -%} Hallo, {{ name }}!
+        {%- when Lang::fr -%} Bonjour, {{ name }}!
     {%- endmatch -%}
 {%- endblock -%}
 {%- block content -%}
@@ -76,7 +67,5 @@ expression: formatted_output
             {%- endmatch -%}
         </a>
     </h2>
-    {%-
-    call lang_select("greet-me", name|urlencode|fmt("?name={}"))
--%}{%- endcall -%}
+    {%- call lang_select("greet-me", name|urlencode|fmt("?name={}")) -%}{%- endcall -%}
 {%- endblock -%}

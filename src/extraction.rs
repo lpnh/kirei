@@ -1,5 +1,6 @@
-use crate::types::{AskamaNode, Block, BlockType};
 use tree_sitter::Node;
+
+use crate::types::{AskamaNode, Block, BlockType};
 
 pub(crate) fn extract_nodes(
     source: &str,
@@ -14,12 +15,10 @@ pub(crate) fn extract_nodes(
         let start = child.start_byte();
         let end = child.end_byte();
 
-        // Add text before node
         if start > pos {
             html.push_str(&source[pos..start]);
         }
 
-        // Process node
         if let Some(node) = parse_askama_node(child, source) {
             html.push_str(&node.placeholder(nodes.len()));
             nodes.push(node);
@@ -30,7 +29,6 @@ pub(crate) fn extract_nodes(
         pos = end;
     }
 
-    // Add remaining text
     if pos < source.len() {
         html.push_str(&source[pos..]);
     }
@@ -43,7 +41,7 @@ fn parse_askama_node(node: Node, source: &str) -> Option<AskamaNode> {
 
     match node.kind() {
         "control_tag" => {
-            let block_info = is_block(node);
+            let block_info = detect_block_type(node);
             Some(AskamaNode::Control {
                 inner,
                 dlmts: (open, close),
@@ -62,7 +60,7 @@ fn parse_askama_node(node: Node, source: &str) -> Option<AskamaNode> {
     }
 }
 
-fn is_block(node: Node) -> Option<(Block, BlockType)> {
+fn detect_block_type(node: Node) -> Option<(Block, BlockType)> {
     let child = node.child(1)?;
     match child.kind() {
         "if_statement" => Some((Block::Open, BlockType::If)),
@@ -74,7 +72,6 @@ fn is_block(node: Node) -> Option<(Block, BlockType)> {
         "macro_call_statement" => Some((Block::Open, BlockType::MacroCall)),
 
         "else_statement" | "else_if_statement" => Some((Block::Clause, BlockType::If)),
-
         "when_statement" => Some((Block::Inner, BlockType::Match)),
 
         "endif_statement" => Some((Block::Close, BlockType::If)),
@@ -85,16 +82,7 @@ fn is_block(node: Node) -> Option<(Block, BlockType)> {
         "endmacro_statement" => Some((Block::Close, BlockType::Macro)),
         "endcall_statement" => Some((Block::Close, BlockType::MacroCall)),
 
-        "let_statement" | "extends_statement" | "include_statement" | "import_statement" => None,
-
-        unknown => {
-            eprintln!(
-                "Unknown statement type '{}' in node '{}'",
-                unknown,
-                child.kind()
-            );
-            None
-        }
+        _ => None,
     }
 }
 

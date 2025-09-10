@@ -2,6 +2,4 @@
 source: tests/whitespace.rs
 expression: formatted_output
 ---
-{#-
-    Some    {# Nested {#~   Comments #}   +#}
-~#}
+{#- Some    {# Nested {#~   Comments #}   +#} ~#}
