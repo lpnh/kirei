@@ -208,12 +208,10 @@ pub(crate) fn wrap_text_with_indent(text: &str, indent: &str, max_length: usize)
 }
 
 fn are_empty_block_pair(opening: &AskamaNode, closing: &AskamaNode) -> bool {
-    if let (Some(open_type), Some(close_type)) =
-        (opening.get_block_type(), closing.get_block_type())
-        && opening.is_opening_block()
-        && closing.is_closing_block()
+    if let (Some((Block::Open, open_type)), Some((Block::Close, close_type))) =
+        (opening.get_block_info(), closing.get_block_info())
     {
-        return close_type == format!("end{}", open_type);
+        return open_type == close_type;
     }
     false
 }

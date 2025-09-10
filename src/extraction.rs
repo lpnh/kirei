@@ -1,4 +1,4 @@
-use crate::types::{AskamaNode, Block};
+use crate::types::{AskamaNode, Block, BlockType};
 use tree_sitter::Node;
 
 pub(crate) fn extract_nodes(
@@ -43,11 +43,11 @@ fn parse_askama_node(node: Node, source: &str) -> Option<AskamaNode> {
 
     match node.kind() {
         "control_tag" => {
-            let maybe_block = is_block(node)?;
+            let block_info = is_block(node);
             Some(AskamaNode::Control {
                 inner,
                 dlmts: (open, close),
-                maybe_block: Some(maybe_block),
+                block_info,
             })
         }
         "render_expression" => Some(AskamaNode::Expression {
@@ -62,29 +62,28 @@ fn parse_askama_node(node: Node, source: &str) -> Option<AskamaNode> {
     }
 }
 
-fn is_block(node: Node) -> Option<Block> {
+fn is_block(node: Node) -> Option<(Block, BlockType)> {
     let child = node.child(1)?;
     match child.kind() {
-        "if_statement"
-        | "for_statement"
-        | "block_statement"
-        | "filter_statement"
-        | "match_statement"
-        | "macro_statement"
-        | "call_statement"
-        | "macro_call_statement" => Some(Block::Open),
+        "if_statement" => Some((Block::Open, BlockType::If)),
+        "for_statement" => Some((Block::Open, BlockType::For)),
+        "block_statement" => Some((Block::Open, BlockType::Block)),
+        "filter_statement" => Some((Block::Open, BlockType::Filter)),
+        "match_statement" => Some((Block::Open, BlockType::Match)),
+        "macro_statement" => Some((Block::Open, BlockType::Macro)),
+        "macro_call_statement" => Some((Block::Open, BlockType::MacroCall)),
 
-        "else_statement" | "else_if_statement" => Some(Block::Clause),
+        "else_statement" | "else_if_statement" => Some((Block::Clause, BlockType::If)),
 
-        "when_statement" => Some(Block::Inner),
+        "when_statement" => Some((Block::Inner, BlockType::Match)),
 
-        "endif_statement"
-        | "endfor_statement"
-        | "endblock_statement"
-        | "endfilter_statement"
-        | "endmatch_statement"
-        | "endmacro_statement"
-        | "endcall_statement" => Some(Block::Close),
+        "endif_statement" => Some((Block::Close, BlockType::If)),
+        "endfor_statement" => Some((Block::Close, BlockType::For)),
+        "endblock_statement" => Some((Block::Close, BlockType::Block)),
+        "endfilter_statement" => Some((Block::Close, BlockType::Filter)),
+        "endmatch_statement" => Some((Block::Close, BlockType::Match)),
+        "endmacro_statement" => Some((Block::Close, BlockType::Macro)),
+        "endcall_statement" => Some((Block::Close, BlockType::MacroCall)),
 
         "let_statement" | "extends_statement" | "include_statement" | "import_statement" => None,
 

@@ -12,12 +12,23 @@ pub(crate) enum Block {
     Close,  // Tags that end blocks: endif, endfor, endblock, etc.
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BlockType {
+    If,
+    For,
+    Block,
+    Filter,
+    Match,
+    Macro,
+    MacroCall,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum AskamaNode {
     Control {
         inner: String,
         dlmts: (String, String),
-        maybe_block: Option<Block>,
+        block_info: Option<(Block, BlockType)>,
     },
     Expression {
         inner: String,
@@ -42,52 +53,28 @@ impl AskamaNode {
     pub(crate) fn indent_delta(&self) -> (i32, i32) {
         match self {
             Self::Control {
-                maybe_block: Some(Block::Open),
+                block_info: Some((Block::Open, _)),
                 ..
             } => (0, 1),
             Self::Control {
-                maybe_block: Some(Block::Inner),
+                block_info: Some((Block::Inner, _)),
                 ..
             } => (0, 0),
             Self::Control {
-                maybe_block: Some(Block::Clause),
+                block_info: Some((Block::Clause, _)),
                 ..
             } => (-1, 1),
             Self::Control {
-                maybe_block: Some(Block::Close),
+                block_info: Some((Block::Close, _)),
                 ..
             } => (-1, 0),
             _ => (0, 0), // Inline
         }
     }
 
-    pub(crate) fn is_opening_block(&self) -> bool {
-        matches!(
-            self,
-            Self::Control {
-                maybe_block: Some(Block::Open),
-                ..
-            }
-        )
-    }
-
-    pub(crate) fn is_closing_block(&self) -> bool {
-        matches!(
-            self,
-            Self::Control {
-                maybe_block: Some(Block::Close),
-                ..
-            }
-        )
-    }
-
-    pub(crate) fn get_block_type(&self) -> Option<&str> {
+    pub(crate) fn get_block_info(&self) -> Option<(Block, BlockType)> {
         match self {
-            Self::Control {
-                inner,
-                maybe_block: Some(_),
-                ..
-            } => inner.split_whitespace().next(),
+            Self::Control { block_info, .. } => *block_info,
             _ => None,
         }
     }
