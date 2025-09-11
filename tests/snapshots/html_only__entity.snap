@@ -1,0 +1,6 @@
+---
+source: tests/html_only.rs
+expression: input
+---
+        <p>&copy;   
+    2025</p>

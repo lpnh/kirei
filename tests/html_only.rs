@@ -23,6 +23,47 @@ fn hello_world() {
 }
 
 #[test]
+fn hello_world_with_newline() {
+    let mut formatter = AskamaFormatter::default();
+    let input = r#"
+        <p>
+        Hello,     
+    world!
+  </p>
+"#;
+
+    let formatted_output = formatter.format(input).expect("Formatting failed");
+
+    insta::assert_snapshot!(input);
+    insta::assert_snapshot!(formatted_output);
+}
+
+#[test]
+fn hello_with_div() {
+    let mut formatter = AskamaFormatter::default();
+    let input = r"<div><p>Hello, world!</p></div>";
+
+    let formatted_output = formatter.format(input).expect("Formatting failed");
+
+    insta::assert_snapshot!(input);
+    insta::assert_snapshot!(formatted_output);
+}
+
+#[test]
+fn entity() {
+    let mut formatter = AskamaFormatter::default();
+    let input = r#"
+        <p>&copy;   
+    2025</p>
+"#;
+
+    let formatted_output = formatter.format(input).expect("Formatting failed");
+
+    insta::assert_snapshot!(input);
+    insta::assert_snapshot!(formatted_output);
+}
+
+#[test]
 fn doctype() {
     let mut formatter = AskamaFormatter::default();
     let input = r"<!DOCTYPE html><title>Page Title</title>";

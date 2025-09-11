@@ -21,27 +21,21 @@ expression: formatted_output
     <p>
         {%- match lang -%}
             {%- when Lang::en -%} Hello,
-            <strong>
-                {{ name }}
-            </strong>
+            <strong>{{ name }}</strong>
             , nice to meet you!
             {#-~#}
             I'm a
             <a href="https://askama.readthedocs.io/">Askama</a>
             example application.
             {%- when Lang::de -%} Hallo,
-            <strong>
-                {{ name }}
-            </strong>
+            <strong>{{ name }}</strong>
             , schön dich kennenzulernen!
             {#-~#}
             Ich bin eine
             <a href="https://askama.readthedocs.io/">Askama</a>
             -Beispielanwendung.
             {%- when Lang::fr -%} Bonjour,
-            <strong>
-                {{ name }}
-            </strong>
+            <strong>{{ name }}</strong>
             , ravi de vous rencontrer !
             {#-~#}
             Je suis une application d'exemple de

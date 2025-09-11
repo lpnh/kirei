@@ -1,0 +1,8 @@
+---
+source: tests/html_only.rs
+expression: input
+---
+        <p>
+        Hello,     
+    world!
+  </p>

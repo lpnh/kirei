@@ -19,9 +19,6 @@ expression: formatted_output
         </section>
     </main>
     <footer>
-        <p>
-            &copy;
-            2025
-        </p>
+        <p>&copy; 2025</p>
     </footer>
 </div>

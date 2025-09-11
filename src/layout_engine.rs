@@ -60,7 +60,7 @@ impl<'a> LayoutEngine<'a> {
                 }
             }
             "element" => self.process_element(node, source)?,
-            "text" => {
+            "text" | "entity" => {
                 let text = node.utf8_text(source)?;
                 let tokens = tokenize(text);
                 self.process_tokens(&tokens);
@@ -205,59 +205,79 @@ impl<'a> LayoutEngine<'a> {
         node: &Node,
         source: &[u8],
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // Handle self-closing tags
+        // Handle self-closing tags directly
         if let Some(child) = node.child(0).filter(|c| c.kind() == "self_closing_tag") {
             self.write_line(child.utf8_text(source)?);
             return Ok(());
         }
 
         let children: Vec<Node> = node.children(&mut node.walk()).collect();
-        let start_tag = children.iter().find(|n| n.kind() == "start_tag");
+        let Some(start_tag) = children.iter().find(|n| n.kind() == "start_tag") else {
+            // If there’s no start tag, this is not an element node
+            return Ok(());
+        };
         let end_tag = children.iter().find(|n| n.kind() == "end_tag");
         let content: Vec<&Node> = children
             .iter()
             .filter(|n| !matches!(n.kind(), "start_tag" | "end_tag" | "self_closing_tag"))
             .collect();
 
-        let Some(start_tag) = start_tag else {
-            return Ok(());
-        };
-
         let start_text = start_tag.utf8_text(source)?;
         let is_void = Self::is_void_element(start_tag, source)?;
 
-        // Check if content should be inlined
-        if !is_void && self.should_inline_content(&content, source) {
-            let content_text = content[0].utf8_text(source)?.trim();
+        // Try inlining content if possible
+        if !is_void && let Some(content_text) = self.try_inline_content(&content, source) {
             let end_text = end_tag.map_or(Ok(""), |n| n.utf8_text(source))?;
             self.write_line(&format!("{}{}{}", start_text, content_text, end_text));
-        } else {
-            self.write_line(start_text);
-            if !content.is_empty() {
-                self.indent_level += 1;
-                for child in content {
-                    self.process_html(child, source)?;
-                }
-                self.indent_level -= 1;
-            }
-            if !is_void && let Some(end) = end_tag {
-                self.write_line(end.utf8_text(source)?);
-            }
+            return Ok(());
         }
+
+        // Fallback: write start tag + indented multiline content + end tag
+        self.write_line(start_text);
+        if !content.is_empty() {
+            self.indent_level += 1;
+            for child in content {
+                self.process_html(child, source)?;
+            }
+            self.indent_level -= 1;
+        }
+        if !is_void && let Some(end) = end_tag {
+            self.write_line(end.utf8_text(source)?);
+        }
+
         Ok(())
     }
 
-    fn should_inline_content(&self, content: &[&Node], source: &[u8]) -> bool {
-        content.len() == 1
-            && content[0].kind() == "text"
-            && content[0]
-                .utf8_text(source)
-                .map(|text| {
-                    !text.contains(ASKAMA_TOKEN)
-                        && !text.contains('\n')
-                        && text.len() < self.config.max_line_length / 2
-                })
-                .unwrap_or(false)
+    // Try to inline if it is simple and short enough
+    // Returns the normalized inline text or None otherwise
+    fn try_inline_content(&self, content: &[&Node], source: &[u8]) -> Option<String> {
+        if content.is_empty() {
+            return None;
+        }
+
+        // Only inline if all nodes are text or entity
+        if !content
+            .iter()
+            .all(|n| matches!(n.kind(), "text" | "entity"))
+        {
+            return None;
+        }
+
+        let combined_text = normalize_inline_text(content, source);
+        if combined_text.is_empty() {
+            return None;
+        }
+
+        if combined_text.contains(ASKAMA_TOKEN) {
+            // NOTE: currently allowing Askama expressions to be inline
+            // return None;
+        }
+
+        if combined_text.len() < self.config.max_line_length / 2 {
+            Some(combined_text)
+        } else {
+            None
+        }
     }
 
     // === ASKMA NODE FORMATTING (Static methods for reuse) ===
@@ -498,4 +518,23 @@ fn extract_placeholder_index(token: &str) -> Option<usize> {
                 .parse()
                 .ok()
         })
+}
+
+fn normalize_inline_text(content: &[&Node], source: &[u8]) -> String {
+    let mut result = String::new();
+    let mut first = true;
+
+    for node in content {
+        if let Ok(text) = node.utf8_text(source) {
+            for word in text.split_whitespace() {
+                if !first {
+                    result.push(' ');
+                }
+                result.push_str(word);
+                first = false;
+            }
+        }
+    }
+
+    result
 }

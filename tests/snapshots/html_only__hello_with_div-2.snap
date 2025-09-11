@@ -1,0 +1,7 @@
+---
+source: tests/html_only.rs
+expression: formatted_output
+---
+<div>
+    <p>Hello, world!</p>
+</div>
