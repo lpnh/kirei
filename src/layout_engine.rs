@@ -213,7 +213,7 @@ impl<'a> LayoutEngine<'a> {
 
         let children: Vec<Node> = node.children(&mut node.walk()).collect();
         let Some(start_tag) = children.iter().find(|n| n.kind() == "start_tag") else {
-            // If there’s no start tag, this is not an element node
+            // If there's no start tag, this is not an element node
             return Ok(());
         };
         let end_tag = children.iter().find(|n| n.kind() == "end_tag");
@@ -225,14 +225,14 @@ impl<'a> LayoutEngine<'a> {
         let start_text = start_tag.utf8_text(source)?;
         let is_void = Self::is_void_element(start_tag, source)?;
 
-        // Try inlining content if possible
+        // Try inlining content first...
         if !is_void && let Some(content_text) = self.try_inline_content(&content, source) {
             let end_text = end_tag.map_or(Ok(""), |n| n.utf8_text(source))?;
             self.write_line(&format!("{}{}{}", start_text, content_text, end_text));
             return Ok(());
         }
 
-        // Fallback: write start tag + indented multiline content + end tag
+        // ...return indented multiline content otherwise
         self.write_line(start_text);
         if !content.is_empty() {
             self.indent_level += 1;
@@ -263,7 +263,7 @@ impl<'a> LayoutEngine<'a> {
             return None;
         }
 
-        let combined_text = normalize_inline_text(content, source);
+        let combined_text = Self::normalize_inline_text(content, source);
         if combined_text.is_empty() {
             return None;
         }
@@ -323,9 +323,9 @@ impl<'a> LayoutEngine<'a> {
 
         let total_len = dlmts.0.len() + inner.len() + dlmts.1.len() + 2;
 
-        if inner.contains('\n') && inner.lines().count() > 1 {
-            format!("{}\n{}\n{}", dlmts.0, inner.trim(), dlmts.1)
-        } else if total_len > config.max_line_length * 2 {
+        if (inner.contains('\n') && inner.lines().count() > 1)
+            || (total_len > config.max_line_length * 2)
+        {
             format!("{}\n{}\n{}", dlmts.0, inner.trim(), dlmts.1)
         } else {
             format!("{} {} {}", dlmts.0, inner.trim(), dlmts.1)
@@ -461,6 +461,25 @@ impl<'a> LayoutEngine<'a> {
         ))
     }
 
+    fn normalize_inline_text(content: &[&Node], source: &[u8]) -> String {
+        let mut result = String::new();
+        let mut first = true;
+
+        for node in content {
+            if let Ok(text) = node.utf8_text(source) {
+                for word in text.split_whitespace() {
+                    if !first {
+                        result.push(' ');
+                    }
+                    result.push_str(word);
+                    first = false;
+                }
+            }
+        }
+
+        result
+    }
+
     fn wrap_text_with_indent(text: &str, indent: &str, max_length: usize) -> Vec<String> {
         let available_width = max_length.saturating_sub(indent.len());
         wrap(text, Options::new(available_width))
@@ -518,23 +537,4 @@ fn extract_placeholder_index(token: &str) -> Option<usize> {
                 .parse()
                 .ok()
         })
-}
-
-fn normalize_inline_text(content: &[&Node], source: &[u8]) -> String {
-    let mut result = String::new();
-    let mut first = true;
-
-    for node in content {
-        if let Ok(text) = node.utf8_text(source) {
-            for word in text.split_whitespace() {
-                if !first {
-                    result.push(' ');
-                }
-                result.push_str(word);
-                first = false;
-            }
-        }
-    }
-
-    result
 }

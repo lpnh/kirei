@@ -68,7 +68,7 @@ impl AskamaNode {
                 block_info: Some((Block::Close, _)),
                 ..
             } => (-1, 0),
-            _ => (0, 0),
+            _ => (0, 0), // Should we handle Expressions and Comments here too?
         }
     }
 
