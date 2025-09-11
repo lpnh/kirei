@@ -131,22 +131,34 @@ impl<'a> LayoutEngine<'a> {
         None
     }
 
+    // Still hacky, but better than nothing
     fn try_inline_match_pattern(&mut self, node: &AskamaNode, tokens: &[Token]) -> Option<usize> {
         if let Some((Block::Inner, BlockType::Match)) = node.get_block_info() {
             let mut inline_content = String::new();
             let mut tokens_consumed = 0;
 
-            // Collect inline content following the match pattern
+            // Collect everything inline until we hit another when/endmatch block
+            // This handles the parsing artifacts by treating everything as one line
             for token in &tokens[1..] {
                 match token {
                     Token::Text(text) => {
-                        if text.contains('\n') {
-                            break;
-                        }
-                        inline_content.push_str(text);
+                        // Replace any newlines with spaces to force inline
+                        let inline_text = text.replace('\n', " ");
+                        inline_content.push_str(&inline_text);
                     }
                     Token::Placeholder(idx) => {
                         if let Some(inner_node) = self.nodes.get(*idx) {
+                            // Check if this is another when/endmatch block - if so, stop
+                            if let Some((Block::Inner, BlockType::Match)) =
+                                inner_node.get_block_info()
+                            {
+                                break;
+                            }
+                            if let Some((Block::Close, BlockType::Match)) =
+                                inner_node.get_block_info()
+                            {
+                                break;
+                            }
                             if inner_node.is_expr() {
                                 let formatted_expr =
                                     Self::format_askama_node(inner_node, 0, self.config);
@@ -370,12 +382,10 @@ impl<'a> LayoutEngine<'a> {
             for line in wrapped_lines {
                 writeln!(self.output, "{}", line).ok();
             }
+        } else if self.output.ends_with('\n') || self.output.is_empty() {
+            self.write_line(trimmed);
         } else {
-            if self.output.ends_with('\n') || self.output.is_empty() {
-                self.write_line(trimmed);
-            } else {
-                write!(self.output, "{}", trimmed).ok();
-            }
+            write!(self.output, "{}", trimmed).ok();
         }
     }
 

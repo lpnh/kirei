@@ -5,8 +5,7 @@ expression: formatted_output
 {% extends "_layout.html" %}
 {%- block title -%}
     {%- match err -%}
-        {% when AppError::NotFound -%}
-        404: Not Found
+        {% when AppError::NotFound -%} 404: Not Found
     {% else -%}
         500: Internal Server Error
     {%- endmatch -%}
@@ -14,8 +13,7 @@ expression: formatted_output
 {%- block content -%}
     <h1>
         {%- match err -%}
-            {% when AppError::NotFound -%}
-            404: Not Found
+            {% when AppError::NotFound -%} 404: Not Found
         {% else -%}
             500: Internal Server Error
         {%- endmatch -%}

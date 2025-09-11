@@ -8,23 +8,17 @@ expression: formatted_output
         In here you can see how to use the language URL compment to select the text to display.
     -#}
     {%- match lang -%}
-        {%- when Lang::en -%}
-        Hello!
-        {%- when Lang::de -%}
-        Hallo!
-        {%- when Lang::fr -%}
-        Bonjour!
+        {%- when Lang::en -%} Hello!
+        {%- when Lang::de -%} Hallo!
+        {%- when Lang::fr -%} Bonjour!
     {%- endmatch -%}
 {%- endblock -%}
 {%- block content -%}
     <h1>
         {%- match lang -%}
-            {%- when Lang::en -%}
-            Hello!
-            {%- when Lang::de -%}
-            Hallo!
-            {%- when Lang::fr -%}
-            Bonjour!
+            {%- when Lang::en -%} Hello!
+            {%- when Lang::de -%} Hallo!
+            {%- when Lang::fr -%} Bonjour!
         {%- endmatch -%}
     </h1>
     <form
@@ -43,20 +37,17 @@ autocomplete="off"
                 so that single space remains.
             -#}
             {%- match lang -%}
-                {%- when Lang::en -%}
-                I would like to say
+                {%- when Lang::en -%} I would like to say
                 <em>hello</em>
                 .
                 {#-~#}
                 Would you please tell me your name?
-                {%- when Lang::de -%}
-                Ich möchte dir gerne
+                {%- when Lang::de -%} Ich möchte dir gerne
                 <em>hallo</em>
                 sagen.
                 {#-~#}
                 Bitte nenne mir doch deinen Namen!
-                {%- when Lang::fr -%}
-                Je voudrais vous dire
+                {%- when Lang::fr -%} Je voudrais vous dire
                 <em>bonjour</em>
                 .
                 {#-~#}
@@ -66,12 +57,9 @@ autocomplete="off"
         <p>
             <label>
                 {%- match lang -%}
-                    {%- when Lang::en -%}
-                    My name is
-                    {%- when Lang::de -%}
-                    Ich heiße
-                    {%- when Lang::fr -%}
-                    Je m'appelle
+                    {%- when Lang::en -%} My name is
+                    {%- when Lang::de -%} Ich heiße
+                    {%- when Lang::fr -%} Je m'appelle
                 {%- endmatch -%}
                 :
                 <input
@@ -87,12 +75,9 @@ style="width: 10em"
             <label>
                 <button type="submit">
                     {%- match lang -%}
-                        {%- when Lang::en -%}
-                        Greet me, then!
-                        {%- when Lang::de -%}
-                        Dann begrüße mich!
-                        {%- when Lang::fr -%}
-                        Saluons-nous !
+                        {%- when Lang::en -%} Greet me, then!
+                        {%- when Lang::de -%} Dann begrüße mich!
+                        {%- when Lang::fr -%} Saluons-nous !
                     {%- endmatch -%}
                 </button>
             </label>

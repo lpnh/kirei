@@ -13,18 +13,14 @@ expression: formatted_output
 {%- block content -%}
     <h1>
         {%- match lang -%}
-            {%- when Lang::en -%}
-            Hello!
-            {%- when Lang::de -%}
-            Hallo!
-            {%- when Lang::fr -%}
-            Bonjour!
+            {%- when Lang::en -%} Hello!
+            {%- when Lang::de -%} Hallo!
+            {%- when Lang::fr -%} Bonjour!
         {%- endmatch -%}
     </h1>
     <p>
         {%- match lang -%}
-            {%- when Lang::en -%}
-            Hello,
+            {%- when Lang::en -%} Hello,
             <strong>
                 {{ name }}
             </strong>
@@ -33,8 +29,7 @@ expression: formatted_output
             I'm a
             <a href="https://askama.readthedocs.io/">Askama</a>
             example application.
-            {%- when Lang::de -%}
-            Hallo,
+            {%- when Lang::de -%} Hallo,
             <strong>
                 {{ name }}
             </strong>
@@ -43,8 +38,7 @@ expression: formatted_output
             Ich bin eine
             <a href="https://askama.readthedocs.io/">Askama</a>
             -Beispielanwendung.
-            {%- when Lang::fr -%}
-            Bonjour,
+            {%- when Lang::fr -%} Bonjour,
             <strong>
                 {{ name }}
             </strong>
@@ -58,12 +52,9 @@ expression: formatted_output
     <h2>
         <a href="/{{ lang }}/index.html?name={{ name | urlencode }}">
             {%- match lang -%}
-                {%- when Lang::en -%}
-                Back to the first page.
-                {%- when Lang::de -%}
-                Zurück zur ersten Seite.
-                {%- when Lang::fr -%}
-                Retour à la première page.
+                {%- when Lang::en -%} Back to the first page.
+                {%- when Lang::de -%} Zurück zur ersten Seite.
+                {%- when Lang::fr -%} Retour à la première page.
             {%- endmatch -%}
         </a>
     </h2>
