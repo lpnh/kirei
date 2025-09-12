@@ -4,9 +4,7 @@ expression: formatted_output
 ---
 {% extends "_layout.html" %}
 {%- block title -%}
-    {#-
-        In here you can see how to use the language URL compment to select the text to display.
-    -#}
+    {#- In here you can see how to use the language URL compment to select the text to display. -#}
     {%- match lang -%}
         {%- when Lang::en -%} Hello!
         {%- when Lang::de -%} Hallo!
@@ -22,10 +20,10 @@ expression: formatted_output
         {%- endmatch -%}
     </h1>
     <form
-method="GET"
-action="/{{ lang }}/greet-me.html"
-autocomplete="off"
->
+    method="GET"
+    action="/{{ lang }}/greet-me.html"
+    autocomplete="off"
+    >
         <p>
             {#-
                 If your text contains long lines, you may want to split them,
@@ -63,12 +61,12 @@ autocomplete="off"
                 {%- endmatch -%}
                 :
                 <input
-type="text"
-value="{{ name }}"
-name="name"
-required
-style="width: 10em"
-/>
+                type="text"
+                value="{{ name }}"
+                name="name"
+                required
+                style="width: 10em"
+                />
             </label>
         </p>
         <p>

@@ -1,6 +1,6 @@
 use tree_sitter::Node;
 
-use crate::types::{AskamaNode, Block, BlockType};
+use crate::types::{AskamaNode, Block, BlockType, Delimiters};
 
 pub(crate) fn extract_nodes(
     source: &str,
@@ -37,25 +37,19 @@ pub(crate) fn extract_nodes(
 }
 
 fn parse_askama_node(node: Node, source: &str) -> Option<AskamaNode> {
-    let (open, close, inner) = extract_delimiters(node, source)?;
+    let (dlmts, inner) = extract_delimiters(node, source)?;
 
     match node.kind() {
         "control_tag" => {
             let block_info = detect_block_type(node);
             Some(AskamaNode::Control {
+                dlmts,
                 inner,
-                dlmts: (open, close),
                 block_info,
             })
         }
-        "render_expression" => Some(AskamaNode::Expression {
-            inner,
-            dlmts: (open, close),
-        }),
-        "comment" => Some(AskamaNode::Comment {
-            inner,
-            dlmts: (open, close),
-        }),
+        "render_expression" => Some(AskamaNode::Expression { dlmts, inner }),
+        "comment" => Some(AskamaNode::Comment { dlmts, inner }),
         _ => None,
     }
 }
@@ -86,7 +80,7 @@ fn detect_block_type(node: Node) -> Option<(Block, BlockType)> {
     }
 }
 
-fn extract_delimiters(node: Node, source: &str) -> Option<(String, String, String)> {
+fn extract_delimiters(node: Node, source: &str) -> Option<(Delimiters, String)> {
     let first = node.child(0)?;
     let last = node.child(node.child_count() - 1)?;
 
@@ -102,5 +96,5 @@ fn extract_delimiters(node: Node, source: &str) -> Option<(String, String, Strin
         String::new()
     };
 
-    Some((open, close, inner))
+    Some((Delimiters { open, close }, inner))
 }

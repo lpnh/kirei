@@ -205,7 +205,7 @@ fn script() {
 #[test]
 fn style() {
     let mut formatter = AskamaFormatter::default();
-    let input = r#"
+    let input = r"
 <style>
   @media (max-width: 600px) {
     body {
@@ -213,7 +213,7 @@ fn style() {
     }
   }
 </style>
-"#;
+";
 
     let formatted_output = formatter.format(input).expect("Formatting failed");
 

@@ -2,6 +2,7 @@
 pub(crate) struct Config {
     pub indent_size: usize,
     pub max_line_length: usize,
+    pub comment_threshold: usize,
 }
 
 impl Default for Config {
@@ -9,6 +10,7 @@ impl Default for Config {
         Self {
             indent_size: 4,
             max_line_length: 80,
+            comment_threshold: 100,
         }
     }
 }

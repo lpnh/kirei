@@ -9,6 +9,7 @@ pub(crate) struct LayoutEngine<'a> {
     config: &'a Config,
     indent_level: i32,
     output: String,
+    at_line_start: bool,
 }
 
 impl<'a> LayoutEngine<'a> {
@@ -18,6 +19,7 @@ impl<'a> LayoutEngine<'a> {
             config,
             indent_level: 0,
             output: String::new(),
+            at_line_start: true,
         }
     }
 
@@ -26,7 +28,7 @@ impl<'a> LayoutEngine<'a> {
     }
 
     // Main entry point for processing tokens (template syntax and raw text)
-    pub fn process_tokens(&mut self, tokens: &[Token]) {
+    pub(crate) fn process_tokens(&mut self, tokens: &[Token]) {
         let mut i = 0;
         while i < tokens.len() {
             match &tokens[i] {
@@ -40,7 +42,7 @@ impl<'a> LayoutEngine<'a> {
                     }
                 }
                 Token::Text(text) => {
-                    self.write_text(text);
+                    self.write_wrapped(text);
                 }
             }
             i += 1;
@@ -48,7 +50,7 @@ impl<'a> LayoutEngine<'a> {
     }
 
     // Main entry point for processing HTML nodes with placeholders
-    pub fn process_html(
+    pub(crate) fn process_html(
         &mut self,
         node: &Node,
         source: &[u8],
@@ -60,9 +62,7 @@ impl<'a> LayoutEngine<'a> {
                 }
             }
             "element" => self.process_element(node, source)?,
-
             "script_element" | "style_element" => self.process_raw_text(node, source)?,
-
             "text" | "entity" => {
                 let text = node.utf8_text(source)?;
                 let tokens = tokenize(text);
@@ -74,7 +74,11 @@ impl<'a> LayoutEngine<'a> {
     }
 
     // Restore placeholders with formatted template content (for final output)
-    pub fn restore_placeholders(html: &str, nodes: &[AskamaNode], config: &Config) -> String {
+    pub(crate) fn restore_placeholders(
+        html: &str,
+        nodes: &[AskamaNode],
+        config: &Config,
+    ) -> String {
         let mut result = html.to_string();
 
         // Process in reverse to avoid index shifting
@@ -95,10 +99,29 @@ impl<'a> LayoutEngine<'a> {
         let (pre, post) = node.indent_delta();
         self.indent_level = (self.indent_level + pre).max(0);
 
+        // Preserve indentation for multiline comments
+        if let AskamaNode::Comment { inner, .. } = node
+            && inner.contains('\n')
+        {
+            let (open, close) = node.delimiters();
+            self.write_line(open);
+            self.indent_level += 1;
+            for line in inner.lines() {
+                if !line.trim().is_empty() {
+                    self.write_line(line.trim());
+                }
+            }
+            self.indent_level -= 1;
+            self.write_line(close);
+            self.indent_level = (self.indent_level + post).max(0);
+            return;
+        }
+
+        // Regular formatting for other nodes
         let formatted = Self::format_askama_node(node, self.indent_level as usize, self.config);
 
-        if node.prefers_inline() && !self.output.ends_with('\n') {
-            write!(self.output, "{}", formatted).ok();
+        if node.prefers_inline() && !self.at_line_start {
+            self.write_inline(&formatted);
         } else {
             self.write_line(&formatted);
         }
@@ -141,13 +164,10 @@ impl<'a> LayoutEngine<'a> {
             let mut tokens_consumed = 0;
 
             // Collect everything inline until we hit another when/endmatch block
-            // This handles the parsing artifacts by treating everything as one line
             for token in &tokens[1..] {
                 match token {
                     Token::Text(text) => {
-                        // Replace any newlines with spaces to force inline
-                        let inline_text = text.replace('\n', " ");
-                        inline_content.push_str(&inline_text);
+                        inline_content.push_str(text);
                     }
                     Token::Placeholder(idx) => {
                         if let Some(inner_node) = self.nodes.get(*idx) {
@@ -178,23 +198,10 @@ impl<'a> LayoutEngine<'a> {
             }
 
             let formatted_when = Self::format_askama_node(node, 0, self.config);
-            let combined_line = format!("{} {}", formatted_when, inline_content.trim_start());
+            let combined_line = format!("{} {}", formatted_when, inline_content.trim());
 
-            // Check if we should use inline format
-            if !inline_content.trim().is_empty()
-                && !combined_line.contains('\n')
-                && combined_line.len() < self.config.max_line_length
-            {
-                if !self.output.ends_with('\n') && !self.output.is_empty() {
-                    self.output.push('\n');
-                }
-                write!(
-                    self.output,
-                    "{}{}",
-                    self.indent_str(),
-                    combined_line.trim_end()
-                )
-                .ok();
+            if !inline_content.trim().is_empty() {
+                self.write_line(&combined_line);
                 return Some(1 + tokens_consumed);
             }
         }
@@ -266,7 +273,6 @@ impl<'a> LayoutEngine<'a> {
             .filter(|n| matches!(n.kind(), "raw_text"))
             .collect();
 
-        // Write start tag
         if let Some(start) = start_tag {
             self.write_line(start.utf8_text(source)?);
         }
@@ -274,7 +280,6 @@ impl<'a> LayoutEngine<'a> {
         // Process the raw content while preserving structure and Askama tokens
         if !raw_content.is_empty() {
             self.indent_level += 1;
-
             for content_node in raw_content {
                 let raw_text = content_node.utf8_text(source)?;
                 let trimmed_text = raw_text.trim_start_matches(['\n', '\r']);
@@ -282,11 +287,9 @@ impl<'a> LayoutEngine<'a> {
                     self.process_raw_content_with_tokens(trimmed_text);
                 }
             }
-
             self.indent_level -= 1;
         }
 
-        // Write end tag
         if let Some(end) = end_tag {
             self.write_line(end.utf8_text(source)?);
         }
@@ -294,13 +297,13 @@ impl<'a> LayoutEngine<'a> {
         Ok(())
     }
 
+    fn indent_str(&self) -> String {
+        " ".repeat((self.indent_level as usize) * self.config.indent_size)
+    }
+
     // Process text that may contain Askama tokens
     fn process_raw_content_with_tokens(&mut self, text: &str) {
         let tokens = tokenize(text);
-
-        // Track whether we're at the start of a line for proper indentation
-        let mut at_line_start = self.output.ends_with('\n') || self.output.is_empty();
-
         for token in tokens {
             match token {
                 Token::Placeholder(idx) => {
@@ -310,48 +313,14 @@ impl<'a> LayoutEngine<'a> {
                             self.indent_level as usize,
                             self.config,
                         );
-                        self.write_content(&formatted, &mut at_line_start);
+                        self.write_inline(&formatted);
                     }
                 }
                 Token::Text(text_content) => {
-                    self.write_text_content(&text_content, &mut at_line_start);
+                    self.write_inline(&text_content);
                 }
             }
         }
-    }
-
-    // Helper method for writing text content with line break handling
-    fn write_text_content(&mut self, text_content: &str, at_line_start: &mut bool) {
-        if !text_content.contains('\n') {
-            // Simple case: no line breaks
-            self.write_content(text_content, at_line_start);
-            return;
-        }
-
-        // Handle multi-line content
-        for (i, line) in text_content.split('\n').enumerate() {
-            if i > 0 {
-                self.output.push('\n');
-                *at_line_start = true;
-            }
-
-            if line.trim().is_empty() {
-                *at_line_start = true;
-            } else {
-                self.write_content(line, at_line_start);
-            }
-        }
-    }
-
-    // Helper method for writing content with proper indentation
-    fn write_content(&mut self, content: &str, at_line_start: &mut bool) {
-        if *at_line_start && !content.trim().is_empty() {
-            write!(self.output, "{}{}", self.indent_str(), content.trim_start())
-                .expect("Failed to write to output buffer");
-        } else {
-            write!(self.output, "{}", content).expect("Failed to write to output buffer");
-        }
-        *at_line_start = false;
     }
 
     // Try to inline if it is simple and short enough
@@ -389,84 +358,46 @@ impl<'a> LayoutEngine<'a> {
     // === ASKAMA NODE FORMATTING (Static methods for reuse) ===
 
     fn format_askama_node(node: &AskamaNode, indent: usize, config: &Config) -> String {
+        let (open, close) = node.delimiters();
+        let inner = node.inner();
+
+        if inner.is_empty() {
+            return format!("{}{}", open, close);
+        }
+
+        // Check if we should format inline
+        let should_format_multiline = inner.contains('\n')
+            || match node {
+                AskamaNode::Comment { .. } if config.comment_threshold > 0 => {
+                    let total_len = open.len() + close.len() + inner.len() + 2;
+                    total_len > config.comment_threshold
+                }
+                _ => false,
+            };
+
+        if !should_format_multiline {
+            return format!("{} {} {}", open, inner.trim(), close);
+        }
+
+        // Handle multiline formatting based on node type
         match node {
-            AskamaNode::Control { dlmts, inner, .. } => {
-                Self::format_control(dlmts, inner, indent, config)
+            AskamaNode::Control { .. } => {
+                todo!()
             }
-            AskamaNode::Expression { dlmts, inner } => {
-                Self::format_expression(dlmts, inner, config)
+            AskamaNode::Expression { .. } => {
+                todo!()
             }
-            AskamaNode::Comment { dlmts, inner } => {
-                Self::format_comment(dlmts, inner, indent, config)
-            }
+            AskamaNode::Comment { .. } => Self::format_multiline(node, indent, config),
         }
     }
 
-    fn format_control(
-        dlmts: &(String, String),
-        inner: &str,
-        indent: usize,
-        config: &Config,
-    ) -> String {
-        if inner.is_empty() {
-            return format!("{}{}", dlmts.0, dlmts.1);
-        }
-
-        let total_len = dlmts.0.len() + inner.len() + dlmts.1.len() + 2;
-        let needs_multiline = inner.contains('\n') || total_len > config.max_line_length * 3 / 2;
-
-        if needs_multiline {
-            Self::format_multiline(&dlmts.0, &dlmts.1, inner, indent, config)
-        } else {
-            format!("{} {} {}", dlmts.0, inner.trim(), dlmts.1)
-        }
-    }
-
-    fn format_expression(dlmts: &(String, String), inner: &str, config: &Config) -> String {
-        if inner.is_empty() {
-            return format!("{}{}", dlmts.0, dlmts.1);
-        }
-
-        let total_len = dlmts.0.len() + inner.len() + dlmts.1.len() + 2;
-
-        if (inner.contains('\n') && inner.lines().count() > 1)
-            || (total_len > config.max_line_length * 2)
-        {
-            format!("{}\n{}\n{}", dlmts.0, inner.trim(), dlmts.1)
-        } else {
-            format!("{} {} {}", dlmts.0, inner.trim(), dlmts.1)
-        }
-    }
-
-    fn format_comment(
-        dlmts: &(String, String),
-        inner: &str,
-        indent: usize,
-        config: &Config,
-    ) -> String {
-        if inner.is_empty() {
-            return format!("{}{}", dlmts.0, dlmts.1);
-        }
-
-        let total_len = dlmts.0.len() + inner.len() + dlmts.1.len() + 2;
-
-        if !inner.contains('\n') && total_len <= config.max_line_length {
-            format!("{} {} {}", dlmts.0, inner.trim(), dlmts.1)
-        } else {
-            Self::format_multiline(&dlmts.0, &dlmts.1, inner, indent, config)
-        }
-    }
-
-    fn format_multiline(
-        open: &str,
-        close: &str,
-        inner: &str,
-        indent: usize,
-        config: &Config,
-    ) -> String {
+    fn format_multiline(node: &AskamaNode, indent: usize, config: &Config) -> String {
         let base_indent = " ".repeat(indent * config.indent_size);
-        let inner_indent = " ".repeat((indent + 1) * config.indent_size);
 
+        let (open, close) = node.delimiters();
+
+        let inner_indent = " ".repeat((indent + 1) * config.indent_size);
+        let inner = node.inner();
         let formatted_content = if inner.contains('\n') {
             inner
                 .lines()
@@ -478,45 +409,74 @@ impl<'a> LayoutEngine<'a> {
             format!("{}{}", inner_indent, inner.trim())
         };
 
-        format!("{}\n{}\n{}{}", open, formatted_content, base_indent, close)
+        format!(
+            "{}{}\n{}\n{}{}",
+            base_indent, open, formatted_content, base_indent, close,
+        )
     }
 
-    // === OUTPUT HELPERS ===
+    // === WRITING INTERFACE ===
 
-    fn write_line(&mut self, content: &str) {
-        if !self.output.ends_with('\n') && !self.output.is_empty() {
-            self.output.push('\n');
+    fn write(&mut self, content: &str, force_newline: bool) {
+        if content.trim().is_empty() {
+            if force_newline {
+                self.output.push('\n');
+                self.at_line_start = true;
+            }
+            return;
         }
-        writeln!(self.output, "{}{}", self.indent_str(), content).ok();
+
+        for (i, line) in content.lines().enumerate() {
+            if i > 0 {
+                self.output.push('\n');
+                self.at_line_start = true;
+            }
+
+            if !line.trim().is_empty() {
+                if self.at_line_start {
+                    write!(self.output, "{}{}", self.indent_str(), line.trim_start())
+                        .expect("Failed to write to output buffer");
+                    self.at_line_start = false;
+                } else {
+                    write!(self.output, "{}", line).expect("Failed to write to output buffer");
+                }
+            }
+        }
+
+        if force_newline && !self.at_line_start {
+            self.output.push('\n');
+            self.at_line_start = true;
+        }
     }
 
-    fn write_text(&mut self, text: &str) {
+    // Write a single, line-wrapped block of text
+    fn write_wrapped(&mut self, text: &str) {
         let trimmed = text.trim();
         if trimmed.is_empty() {
             return;
         }
 
-        if trimmed.contains('\n') || trimmed.len() > self.config.max_line_length {
-            let prefix = self.indent_str();
-            let wrapped_lines =
-                Self::wrap_text_with_indent(trimmed, &prefix, self.config.max_line_length);
+        let prefix = self.indent_str();
+        let available_width = self.config.max_line_length.saturating_sub(prefix.len());
+        let wrapped_lines = wrap(trimmed, Options::new(available_width));
 
-            if !self.output.is_empty() && !self.output.ends_with('\n') {
-                self.output.push('\n');
-            }
-
-            for line in wrapped_lines {
-                writeln!(self.output, "{}", line).ok();
-            }
-        } else if self.output.ends_with('\n') || self.output.is_empty() {
-            self.write_line(trimmed);
-        } else {
-            write!(self.output, "{}", trimmed).ok();
+        for line in wrapped_lines {
+            self.write_line(&line);
         }
     }
 
-    fn indent_str(&self) -> String {
-        " ".repeat((self.indent_level as usize) * self.config.indent_size)
+    // Write a single line with a newline at the end
+    fn write_line(&mut self, content: &str) {
+        if !self.at_line_start {
+            self.output.push('\n');
+            self.at_line_start = true;
+        }
+        self.write(content, true);
+    }
+
+    // Write content without a newline at the end
+    fn write_inline(&mut self, content: &str) {
+        self.write(content, false);
     }
 
     // === UTILITY FUNCTIONS ===
@@ -584,14 +544,6 @@ impl<'a> LayoutEngine<'a> {
         }
 
         result
-    }
-
-    fn wrap_text_with_indent(text: &str, indent: &str, max_length: usize) -> Vec<String> {
-        let available_width = max_length.saturating_sub(indent.len());
-        wrap(text, Options::new(available_width))
-            .into_iter()
-            .map(|line| format!("{}{}", indent, line))
-            .collect()
     }
 }
 

@@ -24,19 +24,25 @@ pub(crate) enum BlockType {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct Delimiters {
+    pub(crate) open: String,
+    pub(crate) close: String,
+}
+
+#[derive(Debug, Clone)]
 pub(crate) enum AskamaNode {
     Control {
+        dlmts: Delimiters,
         inner: String,
-        dlmts: (String, String),
         block_info: Option<(Block, BlockType)>,
     },
     Expression {
+        dlmts: Delimiters,
         inner: String,
-        dlmts: (String, String),
     },
     Comment {
+        dlmts: Delimiters,
         inner: String,
-        dlmts: (String, String),
     },
 }
 
@@ -48,6 +54,22 @@ impl AskamaNode {
             Self::Comment { .. } => ASKAMA_COMMENT_TOKEN,
         };
         format!("{}{}{}", token, idx, ASKAMA_END_TOKEN)
+    }
+
+    pub(crate) fn delimiters(&self) -> (&str, &str) {
+        match self {
+            Self::Control { dlmts, .. }
+            | Self::Expression { dlmts, .. }
+            | Self::Comment { dlmts, .. } => (&dlmts.open, &dlmts.close),
+        }
+    }
+
+    pub(crate) fn inner(&self) -> &str {
+        match self {
+            Self::Control { inner, .. }
+            | Self::Expression { inner, .. }
+            | Self::Comment { inner, .. } => inner,
+        }
     }
 
     pub(crate) fn indent_delta(&self) -> (i32, i32) {
