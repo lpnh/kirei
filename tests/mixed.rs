@@ -58,3 +58,71 @@ fn base_template() {
     insta::assert_snapshot!(input);
     insta::assert_snapshot!(formatted_output);
 }
+
+#[test]
+fn head() {
+    let mut formatter = AskamaFormatter::default();
+    let input = r#"
+{% block head %}
+<style>
+.user {
+  color: blue;
+  margin-bottom: 5px;
+}
+</style>
+<script>
+function showCount(count) {
+  console.log("We have " + count + " users.");
+}
+document.addEventListener("DOMContentLoaded", () => {
+  showCount({{ users | length }});
+});
+</script>
+{% endblock %}
+"#;
+
+    let formatted_output = formatter.format(input).expect("Formatting failed");
+
+    insta::assert_snapshot!(input);
+    insta::assert_snapshot!(formatted_output);
+}
+
+#[test]
+fn full_blown() {
+    let mut formatter = AskamaFormatter::default();
+    let input = r#"
+{% extends "base.html" %}
+{% block title %}Profile{% endblock %}
+{% block head %}
+{# Template comment: Styles specific to the profile page #}
+<style>
+/* CSS comment: highlight user name */
+.username {
+font-weight: bold;
+color: {{ name_color }};
+}
+</style>
+<script>
+// JS comment: greet user on page load
+document.addEventListener("DOMContentLoaded", () => {
+alert("Welcome, {{ user.name }}!");
+});
+</script>
+{% endblock %}
+{% block content %}
+<!-- HTML comment: Profile header -->
+<h1 class="username">{{ user.name }}</h1>
+{# Loop through user posts #}
+<ul>
+{% for post in user.posts %}
+<li>{{ post.title }}</li>
+{% endfor %}
+</ul>
+{% endblock %}
+"#;
+
+    let formatted_output = formatter.format(input).expect("Formatting failed");
+
+    insta::assert_snapshot!(input);
+    insta::assert_snapshot!(formatted_output);
+}

@@ -173,3 +173,50 @@ fn void_two() {
     insta::assert_snapshot!(input);
     insta::assert_snapshot!(formatted_output);
 }
+
+#[test]
+fn comment() {
+    let mut formatter = AskamaFormatter::default();
+    let input = r"<!-- Form -->";
+
+    let formatted_output = formatter.format(input).expect("Formatting failed");
+
+    insta::assert_snapshot!(input);
+    insta::assert_snapshot!(formatted_output);
+}
+
+#[test]
+fn script() {
+    let mut formatter = AskamaFormatter::default();
+    let input = r#"
+<script>
+  document.querySelector("button").addEventListener("click", () => {
+    alert("Button clicked!");
+  });
+</script>
+"#;
+
+    let formatted_output = formatter.format(input).expect("Formatting failed");
+
+    insta::assert_snapshot!(input);
+    insta::assert_snapshot!(formatted_output);
+}
+
+#[test]
+fn style() {
+    let mut formatter = AskamaFormatter::default();
+    let input = r#"
+<style>
+  @media (max-width: 600px) {
+    body {
+      background: lightblue;
+    }
+  }
+</style>
+"#;
+
+    let formatted_output = formatter.format(input).expect("Formatting failed");
+
+    insta::assert_snapshot!(input);
+    insta::assert_snapshot!(formatted_output);
+}

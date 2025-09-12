@@ -60,6 +60,9 @@ impl<'a> LayoutEngine<'a> {
                 }
             }
             "element" => self.process_element(node, source)?,
+
+            "script_element" | "style_element" => self.process_raw_text(node, source)?,
+
             "text" | "entity" => {
                 let text = node.utf8_text(source)?;
                 let tokens = tokenize(text);
@@ -86,7 +89,7 @@ impl<'a> LayoutEngine<'a> {
         result
     }
 
-    // === NODE PROCESSING ===
+    // === ASKAMA NODE PROCESSING ===
 
     fn process_node(&mut self, node: &AskamaNode) {
         let (pre, post) = node.indent_delta();
@@ -248,6 +251,109 @@ impl<'a> LayoutEngine<'a> {
         Ok(())
     }
 
+    // Process style and script nodes
+    fn process_raw_text(
+        &mut self,
+        node: &Node,
+        source: &[u8],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let children: Vec<Node> = node.children(&mut node.walk()).collect();
+
+        let start_tag = children.iter().find(|n| n.kind() == "start_tag");
+        let end_tag = children.iter().find(|n| n.kind() == "end_tag");
+        let raw_content: Vec<&Node> = children
+            .iter()
+            .filter(|n| matches!(n.kind(), "raw_text"))
+            .collect();
+
+        // Write start tag
+        if let Some(start) = start_tag {
+            self.write_line(start.utf8_text(source)?);
+        }
+
+        // Process the raw content while preserving structure and Askama tokens
+        if !raw_content.is_empty() {
+            self.indent_level += 1;
+
+            for content_node in raw_content {
+                let raw_text = content_node.utf8_text(source)?;
+                let trimmed_text = raw_text.trim_start_matches(['\n', '\r']);
+                if !trimmed_text.trim().is_empty() {
+                    self.process_raw_content_with_tokens(trimmed_text);
+                }
+            }
+
+            self.indent_level -= 1;
+        }
+
+        // Write end tag
+        if let Some(end) = end_tag {
+            self.write_line(end.utf8_text(source)?);
+        }
+
+        Ok(())
+    }
+
+    // Process text that may contain Askama tokens
+    fn process_raw_content_with_tokens(&mut self, text: &str) {
+        let tokens = tokenize(text);
+
+        // Track whether we're at the start of a line for proper indentation
+        let mut at_line_start = self.output.ends_with('\n') || self.output.is_empty();
+
+        for token in tokens {
+            match token {
+                Token::Placeholder(idx) => {
+                    if let Some(askama_node) = self.nodes.get(idx) {
+                        let formatted = Self::format_askama_node(
+                            askama_node,
+                            self.indent_level as usize,
+                            self.config,
+                        );
+                        self.write_content(&formatted, &mut at_line_start);
+                    }
+                }
+                Token::Text(text_content) => {
+                    self.write_text_content(&text_content, &mut at_line_start);
+                }
+            }
+        }
+    }
+
+    // Helper method for writing text content with line break handling
+    fn write_text_content(&mut self, text_content: &str, at_line_start: &mut bool) {
+        if !text_content.contains('\n') {
+            // Simple case: no line breaks
+            self.write_content(text_content, at_line_start);
+            return;
+        }
+
+        // Handle multi-line content
+        for (i, line) in text_content.split('\n').enumerate() {
+            if i > 0 {
+                self.output.push('\n');
+                *at_line_start = true;
+            }
+
+            if line.trim().is_empty() {
+                *at_line_start = true;
+            } else {
+                self.write_content(line, at_line_start);
+            }
+        }
+    }
+
+    // Helper method for writing content with proper indentation
+    fn write_content(&mut self, content: &str, at_line_start: &mut bool) {
+        if *at_line_start && !content.trim().is_empty() {
+            write!(self.output, "{}{}", self.indent_str(), content.trim_start())
+                .expect("Failed to write to output buffer");
+        } else {
+            write!(self.output, "{}", content).expect("Failed to write to output buffer");
+        }
+        *at_line_start = false;
+    }
+
     // Try to inline if it is simple and short enough
     // Returns the normalized inline text or None otherwise
     fn try_inline_content(&self, content: &[&Node], source: &[u8]) -> Option<String> {
@@ -280,7 +386,7 @@ impl<'a> LayoutEngine<'a> {
         }
     }
 
-    // === ASKMA NODE FORMATTING (Static methods for reuse) ===
+    // === ASKAMA NODE FORMATTING (Static methods for reuse) ===
 
     fn format_askama_node(node: &AskamaNode, indent: usize, config: &Config) -> String {
         match node {

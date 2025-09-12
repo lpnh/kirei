@@ -41,10 +41,10 @@ expression: formatted_output
             a newline.
         ~#}
         <style>
-/*<![CDATA[*/
-    {%~ include "_layout.css" ~%}
-/*]]>*/
-</style>
+            /*<![CDATA[*/
+            {%~ include "_layout.css" ~%}
+            /*]]>*/
+        </style>
     </head>
     <body>
         {%~ block content %}{% endblock ~%}
