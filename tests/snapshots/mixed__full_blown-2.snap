@@ -11,14 +11,14 @@ expression: formatted_output
     <style>
         /* CSS comment: highlight user name */
         .username {
-        font-weight: bold;
-        color: {{ name_color }};
+            font-weight: bold;
+            color: {{ name_color }};
         }
     </style>
     <script>
         // JS comment: greet user on page load
         document.addEventListener("DOMContentLoaded", () => {
-        alert("Welcome, {{ user.name }}!");
+            alert("Welcome, {{ user.name }}!");
         });
     </script>
 {% endblock %}

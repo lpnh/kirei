@@ -283,8 +283,19 @@ impl<'a> LayoutEngine<'a> {
             for content_node in raw_content {
                 let raw_text = content_node.utf8_text(source)?;
                 let trimmed_text = raw_text.trim_start_matches(['\n', '\r']);
-                if !trimmed_text.trim().is_empty() {
-                    self.process_raw_content_with_tokens(trimmed_text);
+
+                // Split into lines and process each with proper indentation
+                let lines: Vec<&str> = trimmed_text.lines().collect();
+                for line in lines.iter() {
+                    let trimmed = line.trim();
+                    if !trimmed.is_empty() {
+                        // Process each line individually to handle Askama tokens
+                        let tokens = tokenize(line);
+                        self.process_line_tokens_with_braces(&tokens);
+                    } else {
+                        // Preserve empty lines
+                        self.write_line("");
+                    }
                 }
             }
             self.indent_level -= 1;
@@ -297,28 +308,76 @@ impl<'a> LayoutEngine<'a> {
         Ok(())
     }
 
-    fn indent_str(&self) -> String {
-        " ".repeat((self.indent_level as usize) * self.config.indent_size)
-    }
+    fn process_line_tokens_with_braces(&mut self, tokens: &[Token]) {
+        let mut line_content = String::new();
 
-    // Process text that may contain Askama tokens
-    fn process_raw_content_with_tokens(&mut self, text: &str) {
-        let tokens = tokenize(text);
+        // Build the complete line content first
         for token in tokens {
             match token {
                 Token::Placeholder(idx) => {
-                    if let Some(askama_node) = self.nodes.get(idx) {
+                    if let Some(askama_node) = self.nodes.get(*idx) {
                         let formatted = Self::format_askama_node(
                             askama_node,
                             self.indent_level as usize,
                             self.config,
                         );
-                        self.write_inline(&formatted);
+                        line_content.push_str(&formatted);
                     }
                 }
                 Token::Text(text_content) => {
-                    self.write_inline(&text_content);
+                    line_content.push_str(text_content);
                 }
+            }
+        }
+
+        let trimmed_line = line_content.trim();
+        if !trimmed_line.is_empty() {
+            self.write_line_with_brace_logic(trimmed_line);
+        }
+    }
+
+    fn write_line_with_brace_logic(&mut self, line: &str) {
+        // Check if line starts with '}' - if so, temporarily decrease indent
+        let temp_indent_decrease = line.trim_start().starts_with('}');
+        if temp_indent_decrease {
+            self.indent_level = self.indent_level.saturating_sub(1);
+        }
+
+        // Write the line with current indent level
+        self.write_line(line);
+
+        // After writing, if line ends with '{', increase indent for next lines
+        if line.trim_end().ends_with('{') {
+            self.indent_level += 1;
+        }
+
+        // Handle lines with both braces (like "} else {")
+        // Count net brace difference for complex cases
+        let open_braces = line.matches('{').count();
+        let close_braces = line.matches('}').count();
+        let net_change = open_braces as i32 - close_braces as i32;
+
+        // If we already handled the opening brace above, subtract 1 from net_change
+        let net_change = if line.trim_end().ends_with('{') && net_change > 0 {
+            net_change - 1
+        } else {
+            net_change
+        };
+
+        // Apply any additional net change (for cases like multiple braces on one line)
+        if net_change > 0 {
+            self.indent_level += net_change;
+        } else if net_change < 0 {
+            // For closing braces that weren't handled by the temp decrease
+            let decrease = (-net_change) as usize;
+            // Only decrease if we didn't already handle it with temp_indent_decrease
+            if !temp_indent_decrease || decrease > 1 {
+                let actual_decrease = if temp_indent_decrease {
+                    decrease - 1
+                } else {
+                    decrease
+                };
+                self.indent_level = self.indent_level.saturating_sub(actual_decrease as i32);
             }
         }
     }
@@ -477,6 +536,10 @@ impl<'a> LayoutEngine<'a> {
     // Write content without a newline at the end
     fn write_inline(&mut self, content: &str) {
         self.write(content, false);
+    }
+
+    fn indent_str(&self) -> String {
+        " ".repeat((self.indent_level as usize) * self.config.indent_size)
     }
 
     // === UTILITY FUNCTIONS ===
