@@ -65,3 +65,20 @@ fn html_lorem_ipsum_newline() {
 fn tmpl_lorem_ipsum_newline() {
     format_and_snapshot!("rules/wrapping/tmpl_lorem_ipsum_newline.html");
 }
+
+// === Collapsing
+
+#[test]
+fn empty_block() {
+    format_and_snapshot!("rules/collapsing/empty_block.html");
+}
+
+#[test]
+fn block_with_whitespace() {
+    format_and_snapshot!("rules/collapsing/block_with_whitespace.html");
+}
+
+#[test]
+fn block_with_newline() {
+    format_and_snapshot!("rules/collapsing/block_with_newline.html");
+}

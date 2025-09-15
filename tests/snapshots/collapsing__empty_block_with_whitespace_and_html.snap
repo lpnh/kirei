@@ -1,7 +1,0 @@
----
-source: tests/collapsing.rs
-expression: input
----
-<div>
-{%~ block content ~%}     {%~ endblock ~%}
-</div>

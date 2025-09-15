@@ -1,5 +1,0 @@
----
-source: tests/collapsing.rs
-expression: formatted_output
----
-{% block content %}{% endblock %}
