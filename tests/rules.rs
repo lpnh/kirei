@@ -33,3 +33,35 @@ fn tmpl_empty_comment() {
 fn no_padding_expression() {
     format_and_snapshot!("rules/delimiter_padding/no_padding_expression.html");
 }
+
+// === Wrapping
+
+#[test]
+fn lorem_ipsum() {
+    format_and_snapshot!("rules/wrapping/lorem_ipsum.html");
+}
+
+#[test]
+fn html_lorem_ipsum() {
+    format_and_snapshot!("rules/wrapping/html_lorem_ipsum.html");
+}
+
+#[test]
+fn tmpl_lorem_ipsum() {
+    format_and_snapshot!("rules/wrapping/tmpl_lorem_ipsum.html");
+}
+
+#[test]
+fn lorem_ipsum_newline() {
+    format_and_snapshot!("rules/wrapping/lorem_ipsum_newline.html");
+}
+
+#[test]
+fn html_lorem_ipsum_newline() {
+    format_and_snapshot!("rules/wrapping/html_lorem_ipsum_newline.html");
+}
+
+#[test]
+fn tmpl_lorem_ipsum_newline() {
+    format_and_snapshot!("rules/wrapping/tmpl_lorem_ipsum_newline.html");
+}
