@@ -1,5 +1,6 @@
 ---
 source: tests/axum_app.rs
+description: "{% extends \"_layout.html\" %}\n{%- block title -%}\n{%- match err -%}\n{% when AppError::NotFound -%} 404: Not Found\n{% else -%} 500: Internal Server Error\n{%- endmatch -%}\n{%- endblock -%}\n{%- block content -%}\n<h1>\n{%- match err -%}\n{% when AppError::NotFound -%} 404: Not Found\n{% else -%} 500: Internal Server Error\n{%- endmatch -%}\n</h1>\n{%- match err -%}\n{% when AppError::NotFound -%}\n{% when AppError::Render(err) -%}\n<pre>{{ err }}</pre>\n{%- endmatch -%}\n<h2><a href=\"/\">Back to the first page.</a></h2>\n{%- endblock -%}\n"
 ---
 {% extends "_layout.html" %}
 {%- block title -%}

@@ -1,8 +1,0 @@
----
-source: tests/html_only.rs
-expression: formatted_output
----
-<ul>
-    <li>Item 1</li>
-    <li>Item 2</li>
-</ul>

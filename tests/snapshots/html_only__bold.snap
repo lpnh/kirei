@@ -1,5 +1,0 @@
----
-source: tests/html_only.rs
-expression: input
----
-<div><h1>Main Heading</h1><p>Some content with <strong>bold text</strong>.</p></div>

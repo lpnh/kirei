@@ -7,6 +7,7 @@ macro_rules! format_and_snapshot {
         let formatted = formatter.format(&input).expect("Formatting failed");
 
         insta::with_settings!({
+            description => input,
             omit_expression => true,
         }, {
             insta::assert_snapshot!(formatted);

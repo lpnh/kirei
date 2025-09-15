@@ -1,0 +1,9 @@
+---
+source: tests/html.rs
+description: "<script>\n  document.querySelector(\"button\").addEventListener(\"click\", () => {\n    alert(\"Button clicked!\");\n  });\n</script>\n"
+---
+<script>
+    document.querySelector("button").addEventListener("click", () => {
+        alert("Button clicked!");
+    });
+</script>

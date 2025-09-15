@@ -1,5 +1,0 @@
----
-source: tests/html_only.rs
-expression: input
----
-<table border="1"><thead><tr><th>Header 1</th></tr></thead><tbody><tr><td>Data 1</td></tr></tbody></table>

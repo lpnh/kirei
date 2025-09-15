@@ -1,0 +1,17 @@
+---
+source: tests/rules.rs
+description: "<p>    \n    This    is\n\n\n    a    multi-line\n\n            paragraph  surrounded    \n\n            by whitespaces \nand \n\n                    blank lines !   \n</p>\n"
+---
+<p>
+    This    is
+
+
+    a    multi-line
+
+    paragraph  surrounded
+
+    by whitespaces
+    and
+
+    blank lines !
+</p>
