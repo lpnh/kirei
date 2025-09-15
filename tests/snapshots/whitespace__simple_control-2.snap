@@ -1,7 +1,0 @@
----
-source: tests/whitespace.rs
-expression: formatted_output
----
-{% if condition %}
-    <p>Hello</p>
-{% endif %}

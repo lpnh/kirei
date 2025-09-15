@@ -1,5 +1,0 @@
----
-source: tests/whitespace.rs
-expression: input
----
-{%   if condition %}<p>Hello</p>{% endif    %}

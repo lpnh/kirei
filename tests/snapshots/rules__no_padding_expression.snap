@@ -1,0 +1,5 @@
+---
+source: tests/rules.rs
+description: "<div>{{user.name}}</div>\n"
+---
+<div>{{ user.name }}</div>

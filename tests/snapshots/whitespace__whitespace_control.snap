@@ -1,5 +1,0 @@
----
-source: tests/whitespace.rs
-expression: input
----
-{% if foo ~%}{{- bar -}}{% else if another -%} nothing {%- endif %}
