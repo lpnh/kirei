@@ -74,6 +74,11 @@ fn empty_block() {
 }
 
 #[test]
+fn empty_if() {
+    format_and_snapshot!("rules/collapsing/empty_if.html");
+}
+
+#[test]
 fn block_with_whitespace() {
     format_and_snapshot!("rules/collapsing/block_with_whitespace.html");
 }

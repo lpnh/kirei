@@ -1,0 +1,6 @@
+---
+source: tests/askama.rs
+description: "{% let name = user.name %} {% let len = name.len() %}\n"
+---
+{% let name = user.name %}
+{% let len = name.len() %}

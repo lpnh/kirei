@@ -1,5 +1,0 @@
----
-source: tests/askama_only.rs
-expression: input
----
-{{ user.name }}{% for item in items %}{{ item }}{% endfor %}{# comment here #}
