@@ -1,0 +1,16 @@
+{% block head %}
+<style>
+.user {
+  color: blue;
+  margin-bottom: 5px;
+}
+</style>
+<script>
+function showCount(count) {
+  console.log("We have " + count + " users.");
+}
+document.addEventListener("DOMContentLoaded", () => {
+  showCount({{ users | length }});
+});
+</script>
+{% endblock %}

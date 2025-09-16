@@ -1,6 +1,6 @@
 ---
 source: tests/mixed.rs
-expression: formatted_output
+description: "{% block first %}{% block inner %}<p>A cool paragraph</p>{% endblock %}{% endblock %}\n"
 ---
 {% block first %}
     {% block inner %}
