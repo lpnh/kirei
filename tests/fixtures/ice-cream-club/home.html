@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Ice Cream Social Club{% endblock %}
+
+{% block content %}
+<section class="card" style="text-align:center;margin-bottom:18px">
+<h2>Welcome to Our Social Club!</h2>
+
+{# Meeting status using match block #}
+{% match club_stats.0 %}
+{% when true %}
+<p style="color: green;">🟢 Join us today! {{ club_stats.1 }} · {{ club_stats.2 }} members and counting!</p>
+{% when false %}
+<p style="color: blue;">🔵 Next meeting: {{ club_stats.1 }} · {{ club_stats.2 }} members and counting!</p>
+{% endmatch %}
+</section>
+
+{# Featured flavors section #}
+<section>
+<h2>This Week's Featured Flavors</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+{% for ice_cream in ice_creams %}
+{% if ice_cream.available && ice_cream.popularity == 5 %}
+{% include "ice_cream_card.html" %}
+{% endif %}
+{% else %}
+<div class="card">We're preparing some special flavors for our next meeting!</div>
+{% endfor %}
+</div>
+</section>
+
+{# Recent reviews section #}
+<section style="margin-top:24px">
+<h2>What Members Are Saying</h2>
+<div class="card">
+{% if reviews.len() > 0 %}
+{% for review in reviews %}
+<div style="border-bottom: 1px solid #eee; padding: 8px 0;">
+<strong>{{ review.0 }}</strong> 
+{% for star in 1..=5 %}
+  {% if star <= review.1 %}⭐{% else %}☆{% endif %}
+{% endfor %}
+<br>
+<em>"{{ review.2 }}"</em>
+</div>
+{% endfor %}
+{% else %}
+<p style="color:var(--muted)">Be the first to share your thoughts at our next meeting!</p>
+{% endif %}
+</div>
+</section>
+
+{# Upcoming events #}
+<section style="margin-top:24px">
+<h2>Special Events</h2>
+<div class="card">
+<p>🍨 Sundae Workshop - Build your perfect sundae (Next Sunday)</p>
+<p>🌈 Rainbow Day - Extra sprinkles for everyone! (First Monday of each month)</p>
+</div>
+</section>
+{% endblock %}

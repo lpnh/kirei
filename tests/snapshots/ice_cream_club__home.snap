@@ -1,0 +1,86 @@
+---
+source: tests/ice_cream_club.rs
+description: "{% extends \"base.html\" %}\n\n{% block title %}Home - Ice Cream Social Club{% endblock %}\n\n{% block content %}\n<section class=\"card\" style=\"text-align:center;margin-bottom:18px\">\n<h2>Welcome to Our Social Club!</h2>\n\n{# Meeting status using match block #}\n{% match club_stats.0 %}\n{% when true %}\n<p style=\"color: green;\">🟢 Join us today! {{ club_stats.1 }} · {{ club_stats.2 }} members and counting!</p>\n{% when false %}\n<p style=\"color: blue;\">🔵 Next meeting: {{ club_stats.1 }} · {{ club_stats.2 }} members and counting!</p>\n{% endmatch %}\n</section>\n\n{# Featured flavors section #}\n<section>\n<h2>This Week's Featured Flavors</h2>\n<div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px\">\n{% for ice_cream in ice_creams %}\n{% if ice_cream.available && ice_cream.popularity == 5 %}\n{% include \"ice_cream_card.html\" %}\n{% endif %}\n{% else %}\n<div class=\"card\">We're preparing some special flavors for our next meeting!</div>\n{% endfor %}\n</div>\n</section>\n\n{# Recent reviews section #}\n<section style=\"margin-top:24px\">\n<h2>What Members Are Saying</h2>\n<div class=\"card\">\n{% if reviews.len() > 0 %}\n{% for review in reviews %}\n<div style=\"border-bottom: 1px solid #eee; padding: 8px 0;\">\n<strong>{{ review.0 }}</strong> \n{% for star in 1..=5 %}\n  {% if star <= review.1 %}⭐{% else %}☆{% endif %}\n{% endfor %}\n<br>\n<em>\"{{ review.2 }}\"</em>\n</div>\n{% endfor %}\n{% else %}\n<p style=\"color:var(--muted)\">Be the first to share your thoughts at our next meeting!</p>\n{% endif %}\n</div>\n</section>\n\n{# Upcoming events #}\n<section style=\"margin-top:24px\">\n<h2>Special Events</h2>\n<div class=\"card\">\n<p>🍨 Sundae Workshop - Build your perfect sundae (Next Sunday)</p>\n<p>🌈 Rainbow Day - Extra sprinkles for everyone! (First Monday of each month)</p>\n</div>\n</section>\n{% endblock %}\n"
+---
+{% extends "base.html" %}
+{% block title %}
+    Home - Ice Cream Social Club
+{% endblock %}
+{% block content %}
+    <section class="card" style="text-align:center;margin-bottom:18px">
+        <h2>Welcome to Our Social Club!</h2>
+        {# Meeting status using match block #}
+        {% match club_stats.0 %}
+            {% when true %}
+            <p style="color: green;">
+                🟢 Join us today!
+                {{ club_stats.1 }}
+                ·
+                {{ club_stats.2 }}
+                members and counting!
+            </p>
+            {% when false %}
+            <p style="color: blue;">
+                🔵 Next meeting:
+                {{ club_stats.1 }}
+                ·
+                {{ club_stats.2 }}
+                members and counting!
+            </p>
+        {% endmatch %}
+    </section>
+    {# Featured flavors section #}
+    <section>
+        <h2>This Week's Featured Flavors</h2>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+            {% for ice_cream in ice_creams %}
+                {% if ice_cream.available && ice_cream.popularity == 5 %}
+                    {% include "ice_cream_card.html" %}
+                {% endif %}
+            {% else %}
+                <div class="card">
+                    We're preparing some special flavors for our next meeting!
+                </div>
+            {% endfor %}
+        </div>
+    </section>
+    {# Recent reviews section #}
+    <section style="margin-top:24px">
+        <h2>What Members Are Saying</h2>
+        <div class="card">
+            {% if reviews.len() > 0 %}
+                {% for review in reviews %}
+                    <div style="border-bottom: 1px solid #eee; padding: 8px 0;">
+                        <strong>{{ review.0 }}</strong>
+                        {% for star in 1..=5 %}
+                            {% if star <= review.1 %}
+                                ⭐
+                            {% else %}
+                                ☆
+                            {% endif %}
+                        {% endfor %}
+                        <br>
+                        <em>"{{ review.2 }}"</em>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p style="color:var(--muted)">
+                    Be the first to share your thoughts at our next meeting!
+                </p>
+            {% endif %}
+        </div>
+    </section>
+    {# Upcoming events #}
+    <section style="margin-top:24px">
+        <h2>Special Events</h2>
+        <div class="card">
+            <p>
+                🍨 Sundae Workshop - Build your perfect sundae (Next Sunday)
+            </p>
+            <p>
+                🌈 Rainbow Day - Extra sprinkles for everyone! (First Monday of
+                each month)
+            </p>
+        </div>
+    </section>
+{% endblock %}
