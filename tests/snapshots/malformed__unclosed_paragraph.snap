@@ -1,5 +1,5 @@
 ---
 source: tests/malformed.rs
-expression: formatted_output
+description: "<p>Hello!\n"
 ---
 <p>Hello!

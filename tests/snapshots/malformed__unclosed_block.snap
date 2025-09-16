@@ -1,6 +1,6 @@
 ---
 source: tests/malformed.rs
-expression: formatted_output
+description: "{% block paragraph %}<p>A cool paragraph</p>\n"
 ---
 {% block paragraph %}
     <p>A cool paragraph</p>

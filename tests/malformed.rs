@@ -1,34 +1,16 @@
-use kirei::formatter::AskamaFormatter;
+mod helper;
 
 #[test]
-fn hello() {
-    let mut formatter = AskamaFormatter::default();
-    let input = r"<p>Hello!";
-
-    let formatted_output = formatter.format(input).expect("Formatting failed");
-
-    insta::assert_snapshot!(input);
-    insta::assert_snapshot!(formatted_output);
+fn unclosed_paragraph() {
+    format_and_snapshot!("malformed/unclosed_paragraph.html");
 }
 
 #[test]
-fn missing_div() {
-    let mut formatter = AskamaFormatter::default();
-    let input = r" <main> <div> <h2>Test</h2> <p> Where did that div go </p> </main>";
-
-    let formatted_output = formatter.format(input).expect("Formatting failed");
-
-    insta::assert_snapshot!(input);
-    insta::assert_snapshot!(formatted_output);
+fn unclosed_div() {
+    format_and_snapshot!("malformed/unclosed_div.html");
 }
 
 #[test]
-fn missing_endblock() {
-    let mut formatter = AskamaFormatter::default();
-    let input = r"{% block paragraph %}<p>A cool paragraph</p>";
-
-    let formatted_output = formatter.format(input).expect("Formatting failed");
-
-    insta::assert_snapshot!(input);
-    insta::assert_snapshot!(formatted_output);
+fn unclosed_block() {
+    format_and_snapshot!("malformed/unclosed_block.html");
 }

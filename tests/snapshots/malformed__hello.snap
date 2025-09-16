@@ -1,5 +1,0 @@
----
-source: tests/malformed.rs
-expression: input
----
-<p>Hello!
