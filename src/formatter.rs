@@ -5,8 +5,8 @@ use tree_sitter_html::LANGUAGE as HTML_LANGUAGE;
 use crate::{
     config::Config,
     extraction::extract_nodes,
-    layout_engine::{LayoutEngine, tokenize},
-    types::AskamaNode,
+    layout_engine::LayoutEngine,
+    types::{AskamaNode, tokenize},
 };
 
 pub struct AskamaFormatter {
@@ -73,7 +73,7 @@ impl AskamaFormatter {
 
     fn format_template_only(&self, html: &str, nodes: &[AskamaNode]) -> String {
         let mut engine = LayoutEngine::new(nodes, &self.config);
-        let tokens = tokenize(html);
+        let tokens = tokenize(html, nodes);
         engine.process_tokens(&tokens);
         engine.finish()
     }

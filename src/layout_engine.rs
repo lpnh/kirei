@@ -2,7 +2,10 @@ use std::fmt::Write;
 use textwrap::{Options, wrap};
 use tree_sitter::Node;
 
-use crate::{config::Config, types::*};
+use crate::{
+    config::Config,
+    types::{ASKAMA_TOKEN, AskamaNode, Block, BlockType, Token, tokenize},
+};
 
 pub(crate) struct LayoutEngine<'a> {
     nodes: &'a [AskamaNode],
@@ -32,14 +35,12 @@ impl<'a> LayoutEngine<'a> {
         let mut i = 0;
         while i < tokens.len() {
             match &tokens[i] {
-                Token::Placeholder(idx) => {
-                    if let Some(node) = self.nodes.get(*idx) {
-                        if let Some(skip) = self.try_special_patterns(node, &tokens[i..]) {
-                            i += skip;
-                            continue;
-                        }
-                        self.process_node(node);
+                Token::Node(node) => {
+                    if let Some(skip) = self.try_special_patterns(node, &tokens[i..]) {
+                        i += skip;
+                        continue;
                     }
+                    self.process_node(node);
                 }
                 Token::Text(text) => {
                     self.write_wrapped(text);
@@ -66,7 +67,7 @@ impl<'a> LayoutEngine<'a> {
             "text" | "entity" => {
                 let text = node.utf8_text(source)?;
                 let normalized_text = Self::normalize_text_whitespace(text);
-                let tokens = tokenize(&normalized_text);
+                let tokens = tokenize(&normalized_text, self.nodes);
                 self.process_tokens(&tokens);
             }
             _ => self.write_line(node.utf8_text(source)?),
@@ -125,8 +126,7 @@ impl<'a> LayoutEngine<'a> {
 
     fn try_empty_block_pair(&mut self, tokens: &[Token]) -> Option<usize> {
         if tokens.len() >= 2
-            && let (Token::Placeholder(idx1), Token::Placeholder(idx2)) = (&tokens[0], &tokens[1])
-            && let (Some(node1), Some(node2)) = (self.nodes.get(*idx1), self.nodes.get(*idx2))
+            && let (Token::Node(node1), Token::Node(node2)) = (&tokens[0], &tokens[1])
             && Self::is_empty_block_pair(node1, node2)
         {
             let open_fmt = Self::format_askama_node(node1, self.config);
@@ -149,26 +149,22 @@ impl<'a> LayoutEngine<'a> {
                     Token::Text(text) => {
                         inline_content.push_str(text);
                     }
-                    Token::Placeholder(idx) => {
-                        if let Some(inner_node) = self.nodes.get(*idx) {
-                            // Check if this is another when/endmatch block - if so, stop
-                            if let Some((Block::Inner, BlockType::Match)) =
-                                inner_node.get_block_info()
-                            {
-                                break;
-                            }
-                            if let Some((Block::Close, BlockType::Match)) =
-                                inner_node.get_block_info()
-                            {
-                                break;
-                            }
-                            if inner_node.is_expr() {
-                                let formatted_expr =
-                                    Self::format_askama_node(inner_node, self.config);
-                                inline_content.push_str(&formatted_expr);
-                            } else {
-                                break;
-                            }
+                    Token::Node(inner_node) => {
+                        // Check if this is another when/endmatch block - if so, stop
+                        if let Some((Block::Inner, BlockType::Match)) =
+                            inner_node.get_block_info()
+                        {
+                            break;
+                        }
+                        if let Some((Block::Close, BlockType::Match)) =
+                            inner_node.get_block_info()
+                        {
+                            break;
+                        }
+                        if inner_node.is_expr() {
+                            let formatted_expr =
+                                Self::format_askama_node(inner_node, self.config);
+                            inline_content.push_str(&formatted_expr);
                         } else {
                             break;
                         }
@@ -270,7 +266,7 @@ impl<'a> LayoutEngine<'a> {
                     let trimmed = line.trim();
                     if !trimmed.is_empty() {
                         // Process each line individually to handle Askama tokens
-                        let tokens = tokenize(line);
+                        let tokens = tokenize(line, self.nodes);
                         self.process_line_tokens_with_braces(&tokens);
                     } else {
                         // Preserve empty lines
@@ -294,11 +290,9 @@ impl<'a> LayoutEngine<'a> {
         // Build the complete line content first
         for token in tokens {
             match token {
-                Token::Placeholder(idx) => {
-                    if let Some(askama_node) = self.nodes.get(*idx) {
-                        let formatted = Self::format_askama_node(askama_node, self.config);
-                        line_content.push_str(&formatted);
-                    }
+                Token::Node(askama_node) => {
+                    let formatted = Self::format_askama_node(askama_node, self.config);
+                    line_content.push_str(&formatted);
                 }
                 Token::Text(text_content) => {
                     line_content.push_str(text_content);
@@ -593,54 +587,4 @@ impl<'a> LayoutEngine<'a> {
 
         result
     }
-}
-
-// === TOKEN PROCESSING ===
-
-#[derive(Debug, Clone)]
-pub(crate) enum Token {
-    // Replace Askama Nodes
-    Placeholder(usize),
-    // Raw text string not enclosed by any HTML tag
-    Text(String),
-}
-
-pub(crate) fn tokenize(input: &str) -> Vec<Token> {
-    let mut tokens = Vec::new();
-    let mut pos = 0;
-
-    while pos < input.len() {
-        if let Some(start) = input[pos..].find(ASKAMA_TOKEN) {
-            if start > 0 {
-                tokens.push(Token::Text(input[pos..pos + start].to_string()));
-                pos += start;
-            }
-
-            if let Some(end) = input[pos..].find(ASKAMA_END_TOKEN) {
-                let placeholder = &input[pos..pos + end + ASKAMA_END_TOKEN.len()];
-                if let Some(idx) = extract_placeholder_index(placeholder) {
-                    tokens.push(Token::Placeholder(idx));
-                }
-                pos += end + ASKAMA_END_TOKEN.len();
-            } else {
-                break;
-            }
-        } else {
-            tokens.push(Token::Text(input[pos..].to_string()));
-            break;
-        }
-    }
-    tokens
-}
-
-fn extract_placeholder_index(token: &str) -> Option<usize> {
-    [ASKAMA_CTRL_TOKEN, ASKAMA_EXPR_TOKEN, ASKAMA_COMMENT_TOKEN]
-        .iter()
-        .find_map(|&prefix| {
-            token
-                .strip_prefix(prefix)?
-                .strip_suffix(ASKAMA_END_TOKEN)?
-                .parse()
-                .ok()
-        })
 }
