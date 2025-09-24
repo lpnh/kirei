@@ -65,7 +65,8 @@ impl<'a> LayoutEngine<'a> {
             "script_element" | "style_element" => self.process_raw_text(node, source)?,
             "text" | "entity" => {
                 let text = node.utf8_text(source)?;
-                let tokens = tokenize(text);
+                let normalized_text = Self::normalize_text_whitespace(text);
+                let tokens = tokenize(&normalized_text);
                 self.process_tokens(&tokens);
             }
             _ => self.write_line(node.utf8_text(source)?),
@@ -588,6 +589,10 @@ impl<'a> LayoutEngine<'a> {
                 | "track"
                 | "wbr"
         ))
+    }
+
+    fn normalize_text_whitespace(text: &str) -> String {
+        text.split_whitespace().collect::<Vec<_>>().join(" ")
     }
 
     fn normalize_inline_text(content: &[&Node], source: &[u8]) -> String {
