@@ -23,6 +23,11 @@ fn tmpl_trailing_space() {
 }
 
 #[test]
+fn tmpl_blank_line() {
+    format_and_snapshot!("rules/whitespace/tmpl_blank_line.html");
+}
+
+#[test]
 fn tmpl_empty_comment() {
     format_and_snapshot!("rules/whitespace/tmpl_empty_comment.html");
 }

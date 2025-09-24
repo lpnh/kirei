@@ -85,11 +85,8 @@ impl<'a> LayoutEngine<'a> {
         // Process in reverse to avoid index shifting
         for (idx, node) in nodes.iter().enumerate().rev() {
             let placeholder = node.placeholder(idx);
-            if let Some(pos) = result.find(&placeholder) {
-                let indent = Self::detect_indent(&result, pos, config);
-                let formatted = Self::format_askama_node(node, indent, config);
-                result = result.replace(&placeholder, &formatted);
-            }
+            let formatted = Self::format_askama_node(node, config);
+            result = result.replace(&placeholder, &formatted);
         }
         result
     }
@@ -100,26 +97,8 @@ impl<'a> LayoutEngine<'a> {
         let (pre, post) = node.indent_delta();
         self.indent_level = (self.indent_level + pre).max(0);
 
-        // Preserve indentation for multiline comments
-        if let AskamaNode::Comment { inner, .. } = node
-            && inner.contains('\n')
-        {
-            let (open, close) = node.delimiters();
-            self.write_line(open);
-            self.indent_level += 1;
-            for line in inner.lines() {
-                if !line.trim().is_empty() {
-                    self.write_line(line.trim());
-                }
-            }
-            self.indent_level -= 1;
-            self.write_line(close);
-            self.indent_level = (self.indent_level + post).max(0);
-            return;
-        }
-
         // Regular formatting for other nodes
-        let formatted = Self::format_askama_node(node, self.indent_level as usize, self.config);
+        let formatted = Self::format_askama_node(node, self.config);
 
         if node.prefers_inline() && !self.at_line_start {
             self.write_inline(&formatted);
@@ -150,8 +129,8 @@ impl<'a> LayoutEngine<'a> {
             && let (Some(node1), Some(node2)) = (self.nodes.get(*idx1), self.nodes.get(*idx2))
             && Self::is_empty_block_pair(node1, node2)
         {
-            let open_fmt = Self::format_askama_node(node1, 0, self.config);
-            let close_fmt = Self::format_askama_node(node2, 0, self.config);
+            let open_fmt = Self::format_askama_node(node1, self.config);
+            let close_fmt = Self::format_askama_node(node2, self.config);
             self.write_line(&format!("{}{}", open_fmt, close_fmt));
             return Some(2);
         }
@@ -185,7 +164,7 @@ impl<'a> LayoutEngine<'a> {
                             }
                             if inner_node.is_expr() {
                                 let formatted_expr =
-                                    Self::format_askama_node(inner_node, 0, self.config);
+                                    Self::format_askama_node(inner_node, self.config);
                                 inline_content.push_str(&formatted_expr);
                             } else {
                                 break;
@@ -198,7 +177,7 @@ impl<'a> LayoutEngine<'a> {
                 tokens_consumed += 1;
             }
 
-            let formatted_when = Self::format_askama_node(node, 0, self.config);
+            let formatted_when = Self::format_askama_node(node, self.config);
             let combined_line = format!("{} {}", formatted_when, inline_content.trim());
 
             if !inline_content.trim().is_empty() {
@@ -317,11 +296,7 @@ impl<'a> LayoutEngine<'a> {
             match token {
                 Token::Placeholder(idx) => {
                     if let Some(askama_node) = self.nodes.get(*idx) {
-                        let formatted = Self::format_askama_node(
-                            askama_node,
-                            self.indent_level as usize,
-                            self.config,
-                        );
+                        let formatted = Self::format_askama_node(askama_node, self.config);
                         line_content.push_str(&formatted);
                     }
                 }
@@ -417,62 +392,50 @@ impl<'a> LayoutEngine<'a> {
 
     // === ASKAMA NODE FORMATTING (Static methods for reuse) ===
 
-    fn format_askama_node(node: &AskamaNode, indent: usize, config: &Config) -> String {
-        let (open, close) = node.delimiters();
-        let inner = node.inner();
+    fn format_askama_node(node: &AskamaNode, config: &Config) -> String {
+        // Normalize whitespace inside delimiters
+        let (open, close, inner) = Self::normalize_askama_syntax(node, config);
 
+        // If no inner content, return delimiters
         if inner.is_empty() {
             return format!("{}{}", open, close);
         }
 
-        // Check if we should format inline
-        let should_format_multiline = inner.contains('\n')
-            || match node {
-                AskamaNode::Comment { .. } if config.comment_threshold > 0 => {
-                    let total_len = open.len() + close.len() + inner.len() + 2;
-                    total_len > config.comment_threshold
+        let total_inline_len = open.len() + 1 + inner.len() + 1 + close.len();
+
+        if total_inline_len > config.max_line_length {
+            // Multiline format
+            let content_indent = " ".repeat(config.indent_size);
+
+            // Respect user's line breaks by processing each line separately
+            let available_width = config.max_line_length * 2;
+            let mut formatted_lines = Vec::new();
+
+            // Remove leading whitespace to avoid extra empty lines
+            let trimmed_inner = inner.trim_start();
+
+            for line in trimmed_inner.lines() {
+                let trimmed_line = line.trim();
+                if trimmed_line.is_empty() {
+                    // Preserve empty lines
+                    formatted_lines.push(String::new());
+                } else if trimmed_line.len() <= available_width {
+                    // Line fits, just add indentation
+                    formatted_lines.push(format!("{}{}", content_indent, trimmed_line));
+                } else {
+                    // Line too long, wrap it
+                    let wrapped = wrap(trimmed_line, Options::new(available_width));
+                    for wrapped_line in wrapped {
+                        formatted_lines.push(format!("{}{}", content_indent, wrapped_line));
+                    }
                 }
-                _ => false,
-            };
-
-        if !should_format_multiline {
-            return format!("{} {} {}", open, inner.trim(), close);
-        }
-
-        // Handle multiline formatting based on node type
-        match node {
-            AskamaNode::Control { .. } => {
-                todo!()
             }
-            AskamaNode::Expression { .. } => {
-                todo!()
-            }
-            AskamaNode::Comment { .. } => Self::format_multiline(node, indent, config),
-        }
-    }
 
-    fn format_multiline(node: &AskamaNode, indent: usize, config: &Config) -> String {
-        let base_indent = " ".repeat(indent * config.indent_size);
-
-        let (open, close) = node.delimiters();
-
-        let inner_indent = " ".repeat((indent + 1) * config.indent_size);
-        let inner = node.inner();
-        let formatted_content = if inner.contains('\n') {
-            inner
-                .lines()
-                .filter(|line| !line.trim().is_empty())
-                .map(|line| format!("{}{}", inner_indent, line.trim()))
-                .collect::<Vec<_>>()
-                .join("\n")
+            format!("{}\n{}\n{}", open, formatted_lines.join("\n"), close,)
         } else {
-            format!("{}{}", inner_indent, inner.trim())
-        };
-
-        format!(
-            "{}{}\n{}\n{}{}",
-            base_indent, open, formatted_content, base_indent, close,
-        )
+            // Inline format with spaces
+            format!("{} {} {}", open, inner, close)
+        }
     }
 
     // === WRITING INTERFACE ===
@@ -494,7 +457,7 @@ impl<'a> LayoutEngine<'a> {
 
             if !line.trim().is_empty() {
                 if self.at_line_start {
-                    write!(self.output, "{}{}", self.indent_str(), line.trim_start())
+                    write!(self.output, "{}{}", self.indent_str(), line)
                         .expect("Failed to write to output buffer");
                     self.at_line_start = false;
                 } else {
@@ -545,13 +508,6 @@ impl<'a> LayoutEngine<'a> {
 
     // === UTILITY FUNCTIONS ===
 
-    fn detect_indent(text: &str, pos: usize, config: &Config) -> usize {
-        let line_start = text[..pos].rfind('\n').map_or(0, |p| p + 1);
-        let line_part = &text[line_start..pos];
-        let leading_spaces = line_part.len() - line_part.trim_start().len();
-        leading_spaces / config.indent_size
-    }
-
     fn is_empty_block_pair(opening: &AskamaNode, closing: &AskamaNode) -> bool {
         matches!(
             (opening.get_block_info(), closing.get_block_info()),
@@ -593,6 +549,30 @@ impl<'a> LayoutEngine<'a> {
 
     fn normalize_text_whitespace(text: &str) -> String {
         text.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    fn normalize_askama_syntax(node: &AskamaNode, config: &Config) -> (String, String, String) {
+        let (raw_open, raw_close) = node.delimiters();
+        let raw_inner = node.inner();
+
+        // Normalize delimiters just in case
+        let open = raw_open.trim().to_string();
+        let close = raw_close.trim().to_string();
+
+        // Special treatment for comments
+        let inner = if node.is_comment() {
+            let normalized = raw_inner.split_whitespace().collect::<Vec<_>>().join(" ");
+            // Check if the normalized comment would fit the length..
+            if normalized.len() <= config.max_line_length {
+                normalized // ..use it or..
+            } else {
+                raw_inner.to_string() // ..preserve original
+            }
+        } else {
+            raw_inner.split_whitespace().collect::<Vec<_>>().join(" ")
+        };
+
+        (open, close, inner)
     }
 
     fn normalize_inline_text(content: &[&Node], source: &[u8]) -> String {

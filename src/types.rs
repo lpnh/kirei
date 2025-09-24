@@ -98,6 +98,10 @@ impl AskamaNode {
         matches!(self, Self::Expression { .. })
     }
 
+    pub(crate) fn is_comment(&self) -> bool {
+        matches!(self, Self::Comment { .. })
+    }
+
     pub(crate) fn get_block_info(&self) -> Option<(Block, BlockType)> {
         match self {
             Self::Control { block_info, .. } => *block_info,

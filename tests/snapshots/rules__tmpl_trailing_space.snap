@@ -4,6 +4,6 @@ description: "{%     if foo  ~%}   {{-    bar  -}}   {%   else if     another   
 ---
 {% if foo ~%}
     {{- bar -}}
-{% else if     another -%}
+{% else if another -%}
     nothing
 {%- endif %}

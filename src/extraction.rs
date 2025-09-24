@@ -84,14 +84,14 @@ fn extract_delimiters(node: Node, source: &str) -> Option<(Delimiters, String)> 
     let first = node.child(0)?;
     let last = node.child(node.child_count() - 1)?;
 
-    let open = first.utf8_text(source.as_bytes()).ok()?.trim().to_string();
-    let close = last.utf8_text(source.as_bytes()).ok()?.trim().to_string();
+    let open = first.utf8_text(source.as_bytes()).ok()?.to_string();
+    let close = last.utf8_text(source.as_bytes()).ok()?.to_string();
 
     let start = first.end_byte();
     let end = last.start_byte();
 
     let inner = if start < end {
-        source[start..end].trim().to_string()
+        source[start..end].to_string()
     } else {
         String::new()
     };

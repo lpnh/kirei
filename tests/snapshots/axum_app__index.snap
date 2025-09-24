@@ -4,7 +4,9 @@ description: "{% extends \"_layout.html\" %}\n{%- block title -%}\n{#-\n    In h
 ---
 {% extends "_layout.html" %}
 {%- block title -%}
-    {#- In here you can see how to use the language URL compment to select the text to display. -#}
+    {#-
+        In here you can see how to use the language URL compment to select the text to display.
+    -#}
     {%- match lang -%}
         {%- when Lang::en -%} Hello!
         {%- when Lang::de -%} Hallo!
@@ -28,6 +30,7 @@ description: "{% extends \"_layout.html\" %}\n{%- block title -%}\n{#-\n    In h
             {#-
                 If your text contains long lines, you may want to split them,
                 so you as a developer have an easier time reading them.
+
                 If you don't want to end up with a multitude of spaces in the
                 generated content, you can use empty comments as seen below: `#-~#`.
                 This would strip the space before the comment, and leave a newline
