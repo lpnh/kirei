@@ -27,6 +27,11 @@ fn tmpl_empty_comment() {
     format_and_snapshot!("rules/whitespace/tmpl_empty_comment.html");
 }
 
+#[test]
+fn tmpl_nested_comment() {
+    format_and_snapshot!("rules/whitespace/tmpl_nested_comment.html");
+}
+
 // === Delimiter Padding
 
 #[test]
