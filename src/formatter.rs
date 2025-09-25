@@ -56,11 +56,8 @@ impl AskamaFormatter {
         };
 
         // 4. Restore the original Askama code, but now formatted
-        Ok(LayoutEngine::restore_placeholders(
-            &formatted,
-            &nodes,
-            &self.config,
-        ))
+        let layout_engine = LayoutEngine::new(&nodes, &self.config);
+        Ok(layout_engine.restore_placeholders(&formatted))
     }
 
     fn is_template_only(&self, html: &str, nodes: &[AskamaNode]) -> bool {

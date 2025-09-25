@@ -76,17 +76,13 @@ impl<'a> LayoutEngine<'a> {
     }
 
     // Restore placeholders with formatted template content (for final output)
-    pub(crate) fn restore_placeholders(
-        html: &str,
-        nodes: &[AskamaNode],
-        config: &Config,
-    ) -> String {
+    pub(crate) fn restore_placeholders(&self, html: &str) -> String {
         let mut result = html.to_string();
 
         // Process in reverse to avoid index shifting
-        for (idx, node) in nodes.iter().enumerate().rev() {
+        for (idx, node) in self.nodes.iter().enumerate().rev() {
             let placeholder = node.placeholder(idx);
-            let formatted = Self::format_askama_node(node, config);
+            let formatted = self.format_askama_node(node);
             result = result.replace(&placeholder, &formatted);
         }
         result
@@ -99,7 +95,7 @@ impl<'a> LayoutEngine<'a> {
         self.indent_level = (self.indent_level + pre).max(0);
 
         // Regular formatting for other nodes
-        let formatted = Self::format_askama_node(node, self.config);
+        let formatted = self.format_askama_node(node);
 
         if node.prefers_inline() && !self.at_line_start {
             self.write_inline(&formatted);
@@ -129,8 +125,8 @@ impl<'a> LayoutEngine<'a> {
             && let (Token::Node(node1), Token::Node(node2)) = (&tokens[0], &tokens[1])
             && Self::is_empty_block_pair(node1, node2)
         {
-            let open_fmt = Self::format_askama_node(node1, self.config);
-            let close_fmt = Self::format_askama_node(node2, self.config);
+            let open_fmt = self.format_askama_node(node1);
+            let close_fmt = self.format_askama_node(node2);
             self.write_line(&format!("{}{}", open_fmt, close_fmt));
             return Some(2);
         }
@@ -160,7 +156,7 @@ impl<'a> LayoutEngine<'a> {
                             break;
                         }
                         if inner_node.is_expr() {
-                            let formatted_expr = Self::format_askama_node(inner_node, self.config);
+                            let formatted_expr = self.format_askama_node(inner_node);
                             inline_content.push_str(&formatted_expr);
                         } else {
                             break;
@@ -170,7 +166,7 @@ impl<'a> LayoutEngine<'a> {
                 tokens_consumed += 1;
             }
 
-            let formatted_when = Self::format_askama_node(node, self.config);
+            let formatted_when = self.format_askama_node(node);
             let combined_line = format!("{} {}", formatted_when, inline_content.trim());
 
             if !inline_content.trim().is_empty() {
@@ -288,7 +284,7 @@ impl<'a> LayoutEngine<'a> {
         for token in tokens {
             match token {
                 Token::Node(askama_node) => {
-                    let formatted = Self::format_askama_node(askama_node, self.config);
+                    let formatted = self.format_askama_node(askama_node);
                     line_content.push_str(&formatted);
                 }
                 Token::Text(text_content) => {
@@ -388,11 +384,11 @@ impl<'a> LayoutEngine<'a> {
         }
     }
 
-    // === ASKAMA NODE FORMATTING (Static methods for reuse) ===
+    // === ASKAMA NODE FORMATTING ===
 
-    fn format_askama_node(node: &AskamaNode, config: &Config) -> String {
+    fn format_askama_node(&self, node: &AskamaNode) -> String {
         // Normalize whitespace inside delimiters
-        let (open, close, inner) = Self::normalize_askama_node(node, config);
+        let (open, close, inner) = Self::normalize_askama_node(node, self.config);
 
         // If no inner content, return delimiters
         if inner.is_empty() {
@@ -401,12 +397,12 @@ impl<'a> LayoutEngine<'a> {
 
         let total_inline_len = open.len() + 1 + inner.len() + 1 + close.len();
 
-        if total_inline_len > config.max_line_length {
+        if total_inline_len > self.config.max_line_length {
             // Multiline format
-            let content_indent = " ".repeat(config.indent_size);
+            let content_indent = " ".repeat(self.config.indent_size);
 
             // Respect user's line breaks by processing each line separately
-            let available_width = config.max_line_length * 2;
+            let available_width = self.config.max_line_length * 2;
             let mut formatted_lines = Vec::new();
 
             // Remove leading whitespace to avoid extra empty lines
