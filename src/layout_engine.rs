@@ -26,10 +26,6 @@ impl<'a> LayoutEngine<'a> {
         }
     }
 
-    pub fn finish(self) -> String {
-        self.output.trim_end().to_string()
-    }
-
     // Main entry point for processing tokens (template syntax and raw text)
     pub(crate) fn process_tokens(&mut self, tokens: &[Token]) {
         let mut i = 0;
@@ -75,11 +71,11 @@ impl<'a> LayoutEngine<'a> {
         Ok(())
     }
 
-    // Restore placeholders with formatted template content (for final output)
-    pub(crate) fn restore_placeholders(&self, html: &str) -> String {
-        let mut result = html.to_string();
+    pub(crate) fn restore_placeholders(self) -> String {
+        // Chef's kiss
+        let mut result = self.output.trim_end().to_string();
 
-        // Process in reverse to avoid index shifting
+        // Restore any askama expression placeholder left behind
         for (idx, node) in self.nodes.iter().enumerate().rev() {
             let placeholder = node.placeholder(idx);
             let formatted = self.format_askama_node(node);
@@ -97,11 +93,7 @@ impl<'a> LayoutEngine<'a> {
         // Regular formatting for other nodes
         let formatted = self.format_askama_node(node);
 
-        if node.prefers_inline() && !self.at_line_start {
-            self.write_inline(&formatted);
-        } else {
-            self.write_line(&formatted);
-        }
+        self.write_line(&formatted);
 
         self.indent_level = (self.indent_level + post).max(0);
     }
@@ -489,11 +481,6 @@ impl<'a> LayoutEngine<'a> {
             self.at_line_start = true;
         }
         self.write(content, true);
-    }
-
-    // Write content without a newline at the end
-    fn write_inline(&mut self, content: &str) {
-        self.write(content, false);
     }
 
     fn indent_str(&self) -> String {

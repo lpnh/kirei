@@ -102,16 +102,6 @@ impl AskamaNode {
             _ => None,
         }
     }
-
-    pub(crate) fn prefers_inline(&self) -> bool {
-        matches!(
-            self.get_block_info(),
-            Some(
-                (Block::Open | Block::Close, BlockType::MacroCall)
-                    | (Block::Inner, BlockType::Match)
-            )
-        ) || matches!(self, AskamaNode::Expression { .. })
-    }
 }
 
 #[derive(Debug, Clone)]

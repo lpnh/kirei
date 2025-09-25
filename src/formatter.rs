@@ -48,16 +48,22 @@ impl AskamaFormatter {
         // nodes -> All nodes containing the Askama syntax that have been replaced
         let (html, nodes) = extract_nodes(source, &ast_tree.root_node())?;
 
-        // 3. Avoid giving the HTML parser a string with no HTML at all
-        let formatted = if self.is_template_only(&html, &nodes) {
-            self.format_template_only(&html, &nodes)
-        } else {
-            self.format_with_html(&html, &nodes)?
-        };
+        let mut engine = LayoutEngine::new(&nodes, &self.config);
 
-        // 4. Restore the original Askama code, but now formatted
-        let layout_engine = LayoutEngine::new(&nodes, &self.config);
-        Ok(layout_engine.restore_placeholders(&formatted))
+        // 3. Avoid giving the HTML parser a string with no HTML at all
+        if self.is_template_only(&html, &nodes) {
+            let tokens = tokenize(&html, &nodes);
+            engine.process_tokens(&tokens);
+        } else {
+            let tree = self
+                .html_parser
+                .parse(&html, None)
+                .ok_or("HTML parse failed")?;
+            engine.process_html(&tree.root_node(), html.as_bytes())?;
+        }
+
+        // 4. Return the formatted output
+        Ok(engine.restore_placeholders())
     }
 
     fn is_template_only(&self, html: &str, nodes: &[AskamaNode]) -> bool {
@@ -66,27 +72,5 @@ impl AskamaFormatter {
             stripped = stripped.replace(&node.placeholder(i), "");
         }
         stripped.trim().is_empty()
-    }
-
-    fn format_template_only(&self, html: &str, nodes: &[AskamaNode]) -> String {
-        let mut engine = LayoutEngine::new(nodes, &self.config);
-        let tokens = tokenize(html, nodes);
-        engine.process_tokens(&tokens);
-        engine.finish()
-    }
-
-    fn format_with_html(
-        &mut self,
-        html: &str,
-        nodes: &[AskamaNode],
-    ) -> Result<String, Box<dyn std::error::Error>> {
-        let tree = self
-            .html_parser
-            .parse(html, None)
-            .ok_or("HTML parse failed")?;
-
-        let mut engine = LayoutEngine::new(nodes, &self.config);
-        engine.process_html(&tree.root_node(), html.as_bytes())?;
-        Ok(engine.finish())
     }
 }
