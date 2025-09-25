@@ -66,7 +66,7 @@ impl<'a> LayoutEngine<'a> {
             "script_element" | "style_element" => self.process_raw_text(node, source)?,
             "text" | "entity" => {
                 let text = node.utf8_text(source)?;
-                let normalized_text = Self::normalize_text_whitespace(text);
+                let normalized_text = Self::normalize_whitespace(text);
                 let tokens = tokenize(&normalized_text, self.nodes);
                 self.process_tokens(&tokens);
             }
@@ -151,19 +151,16 @@ impl<'a> LayoutEngine<'a> {
                     }
                     Token::Node(inner_node) => {
                         // Check if this is another when/endmatch block - if so, stop
-                        if let Some((Block::Inner, BlockType::Match)) =
-                            inner_node.get_block_info()
+                        if let Some((Block::Inner, BlockType::Match)) = inner_node.get_block_info()
                         {
                             break;
                         }
-                        if let Some((Block::Close, BlockType::Match)) =
-                            inner_node.get_block_info()
+                        if let Some((Block::Close, BlockType::Match)) = inner_node.get_block_info()
                         {
                             break;
                         }
                         if inner_node.is_expr() {
-                            let formatted_expr =
-                                Self::format_askama_node(inner_node, self.config);
+                            let formatted_expr = Self::format_askama_node(inner_node, self.config);
                             inline_content.push_str(&formatted_expr);
                         } else {
                             break;
@@ -367,7 +364,14 @@ impl<'a> LayoutEngine<'a> {
             return None;
         }
 
-        let combined_text = Self::normalize_inline_text(content, source);
+        // Extract and combine text from all nodes, normalizing whitespace
+        let combined_text = content
+            .iter()
+            .filter_map(|node| node.utf8_text(source).ok())
+            .flat_map(|text| text.split_whitespace())
+            .collect::<Vec<_>>()
+            .join(" ");
+
         if combined_text.is_empty() {
             return None;
         }
@@ -388,7 +392,7 @@ impl<'a> LayoutEngine<'a> {
 
     fn format_askama_node(node: &AskamaNode, config: &Config) -> String {
         // Normalize whitespace inside delimiters
-        let (open, close, inner) = Self::normalize_askama_syntax(node, config);
+        let (open, close, inner) = Self::normalize_askama_node(node, config);
 
         // If no inner content, return delimiters
         if inner.is_empty() {
@@ -500,6 +504,40 @@ impl<'a> LayoutEngine<'a> {
         " ".repeat((self.indent_level as usize) * self.config.indent_size)
     }
 
+    // === WHITESPACE NORMALIZATION ===
+
+    fn normalize_askama_node(node: &AskamaNode, config: &Config) -> (String, String, String) {
+        let (raw_open, raw_close) = node.delimiters();
+        let raw_inner = node.inner();
+
+        // Normalize delimiters just in case
+        let open = raw_open.trim().to_string();
+        let close = raw_close.trim().to_string();
+
+        // Normalize inner content
+        let inner = if node.is_comment() {
+            // Special treatment for comments
+            Self::normalize_comment(raw_inner, config.max_line_length)
+        } else {
+            Self::normalize_whitespace(raw_inner)
+        };
+
+        (open, close, inner)
+    }
+
+    fn normalize_comment(text: &str, max_length: usize) -> String {
+        let normalized = Self::normalize_whitespace(text);
+        if normalized.len() <= max_length {
+            normalized
+        } else {
+            text.to_string()
+        }
+    }
+
+    fn normalize_whitespace(text: &str) -> String {
+        text.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
     // === UTILITY FUNCTIONS ===
 
     fn is_empty_block_pair(opening: &AskamaNode, closing: &AskamaNode) -> bool {
@@ -539,52 +577,5 @@ impl<'a> LayoutEngine<'a> {
                 | "track"
                 | "wbr"
         ))
-    }
-
-    fn normalize_text_whitespace(text: &str) -> String {
-        text.split_whitespace().collect::<Vec<_>>().join(" ")
-    }
-
-    fn normalize_askama_syntax(node: &AskamaNode, config: &Config) -> (String, String, String) {
-        let (raw_open, raw_close) = node.delimiters();
-        let raw_inner = node.inner();
-
-        // Normalize delimiters just in case
-        let open = raw_open.trim().to_string();
-        let close = raw_close.trim().to_string();
-
-        // Special treatment for comments
-        let inner = if node.is_comment() {
-            let normalized = raw_inner.split_whitespace().collect::<Vec<_>>().join(" ");
-            // Check if the normalized comment would fit the length..
-            if normalized.len() <= config.max_line_length {
-                normalized // ..use it or..
-            } else {
-                raw_inner.to_string() // ..preserve original
-            }
-        } else {
-            raw_inner.split_whitespace().collect::<Vec<_>>().join(" ")
-        };
-
-        (open, close, inner)
-    }
-
-    fn normalize_inline_text(content: &[&Node], source: &[u8]) -> String {
-        let mut result = String::new();
-        let mut first = true;
-
-        for node in content {
-            if let Ok(text) = node.utf8_text(source) {
-                for word in text.split_whitespace() {
-                    if !first {
-                        result.push(' ');
-                    }
-                    result.push_str(word);
-                    first = false;
-                }
-            }
-        }
-
-        result
     }
 }
