@@ -4,32 +4,32 @@ use crate::{
     askama::AskamaNode,
     config::Config,
     html::HtmlNode,
-    sakura_tree::{FormatStyle, NodeSource, SakuraTree},
+    sakura_tree::{BranchStyle, NodeSource, SakuraTree},
 };
 
 pub(crate) fn print(tree: &SakuraTree) -> String {
-    let mut output = String::new();
+    let mut inked_tree = String::new();
 
     for branch in tree.iter_branches() {
-        let branch_output = match branch.style {
-            FormatStyle::Inline => {
-                print_inline_branch(tree, branch.indent_level, &branch.leaf_indices)
+        let inked_branch = match branch.style {
+            BranchStyle::Inline => {
+                ink_inline_branch(tree, branch.indent_level, &branch.leaf_indices)
             }
-            FormatStyle::MultiLine => {
-                print_multiline_branch(tree, branch.indent_level, &branch.leaf_indices)
+            BranchStyle::MultiLine => {
+                ink_multiline_branch(tree, branch.indent_level, &branch.leaf_indices)
             }
-            FormatStyle::WrappedText => {
-                print_wrapped_text_branch(tree, branch.indent_level, &branch.leaf_indices)
+            BranchStyle::WrappedText => {
+                ink_wrapped_text_branch(tree, branch.indent_level, &branch.leaf_indices)
             }
-            FormatStyle::RawText => {
-                print_raw_text_branch(tree, branch.indent_level, &branch.leaf_indices)
+            BranchStyle::RawText => {
+                ink_raw_text_branch(tree, branch.indent_level, &branch.leaf_indices)
             }
         };
 
-        output.push_str(&branch_output);
+        inked_tree.push_str(&inked_branch);
     }
 
-    output
+    inked_tree
 }
 
 fn should_add_space_before_leaf(
@@ -129,7 +129,7 @@ fn should_add_space_before_leaf(
     }
 }
 
-fn print_inline_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize]) -> String {
+fn ink_inline_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize]) -> String {
     let indent_str = indent_for(&tree.config, indent_level);
     let mut line_content = String::new();
 
@@ -175,7 +175,7 @@ fn print_inline_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usi
     output
 }
 
-fn print_multiline_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize]) -> String {
+fn ink_multiline_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize]) -> String {
     let mut output = String::new();
 
     for &leaf_index in leaf_indices {
@@ -219,11 +219,7 @@ fn print_multiline_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[
     output
 }
 
-fn print_wrapped_text_branch(
-    tree: &SakuraTree,
-    indent_level: i32,
-    leaf_indices: &[usize],
-) -> String {
+fn ink_wrapped_text_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize]) -> String {
     let indent_str = indent_for(&tree.config, indent_level);
     let available_width = tree.config.max_line_length - indent_str.len();
 
@@ -299,7 +295,7 @@ fn print_wrapped_text_branch(
     output
 }
 
-fn print_raw_text_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize]) -> String {
+fn ink_raw_text_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize]) -> String {
     let mut output = String::new();
     let mut current_indent = indent_level;
 

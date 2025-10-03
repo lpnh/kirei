@@ -15,7 +15,7 @@ pub(crate) struct SakuraTree {
 #[derive(Debug, Clone)]
 pub(crate) struct LeafElementMetadata {
     pub(crate) chars_count: usize,
-    pub(crate) end_leaf_index: usize,
+    pub(crate) end_leaf: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -30,17 +30,17 @@ pub(crate) struct SakuraLeaf {
 
 #[derive(Debug, Clone)]
 pub(crate) struct TrunkRing {
-    pub(crate) shape: TrunkShape,
+    pub(crate) layer: TrunkLayer,
     pub(crate) total_chars: usize,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum TrunkShape {
+pub(crate) enum TrunkLayer {
     // Complete HTML element with start/end tags
     CompleteElement {
         chars_count: usize,
         start_leaf: usize,
-        children: Vec<TrunkRing>,
+        inner_rings: Vec<TrunkRing>,
         end_leaf: usize,
         is_semantic_inline: bool,
     },
@@ -52,14 +52,14 @@ pub(crate) enum TrunkShape {
     ScriptStyle {
         leaves: Vec<usize>,
     },
-    // Askama control block with matched open/close tags
+    // Askama control block with open/close tag indices
     ControlBlock {
         open_leaf: usize,
-        children: Vec<TrunkRing>,
+        inner_rings: Vec<TrunkRing>,
         close_leaf: usize,
     },
-    // Empty Askama control block (open/close and no content)
-    EmptyAskamaBlock {
+    // Empty Askama control block with open/close tag indices
+    EmptyControlBlock {
         open_leaf: usize,
         close_leaf: usize,
     },
@@ -74,7 +74,7 @@ pub(crate) struct SakuraBranch {
     // Indices of leaves that belong to this branch
     pub(crate) leaf_indices: Vec<usize>,
     // A formatting style hint for the entire branch
-    pub(crate) style: FormatStyle,
+    pub(crate) style: BranchStyle,
     // Indentation level for this branch
     pub(crate) indent_level: i32,
 }
@@ -86,7 +86,7 @@ pub(crate) enum NodeSource {
 }
 
 #[derive(Default, Debug, Clone, PartialEq)]
-pub(crate) enum FormatStyle {
+pub(crate) enum BranchStyle {
     #[default]
     Inline,
     MultiLine,
@@ -113,11 +113,8 @@ impl SakuraLeaf {
         }
     }
 
-    // Create a new unprocessed leaf from HTML text content
     pub(crate) fn from_html_text(text: &str) -> Self {
         let html_node = HtmlNode::Text(text.to_string());
-
-        // Normalize HTML text content
         let normalized_content = askama::normalize_whitespace(text);
         Self {
             content: normalized_content,
@@ -126,11 +123,8 @@ impl SakuraLeaf {
         }
     }
 
-    // Constructor for raw text content
     pub(crate) fn from_html_raw_text(text: &str) -> Self {
         let html_node = HtmlNode::RawText(text.to_string());
-
-        // Preserve original line structure for raw text - only normalize within lines
         let normalized_content = Self::normalize_raw_text_preserving_lines(text);
         Self {
             content: normalized_content,
@@ -167,7 +161,6 @@ impl SakuraLeaf {
     }
 
     // Normalize raw text content while preserving line structure
-    // Only normalizes whitespace within each line, preserves line breaks
     fn normalize_raw_text_preserving_lines(text: &str) -> String {
         let trimmed = text.trim_matches('\n');
         if trimmed.is_empty() {
@@ -205,7 +198,7 @@ impl SakuraLeaf {
 }
 
 impl SakuraBranch {
-    pub(crate) fn new(leaf_indices: Vec<usize>, style: FormatStyle, indent_level: i32) -> Self {
+    pub(crate) fn grow(leaf_indices: Vec<usize>, style: BranchStyle, indent_level: i32) -> Self {
         Self {
             leaf_indices,
             style,
@@ -229,10 +222,10 @@ impl SakuraTree {
             branches: Vec::new(),
         };
 
-        // Build index map to translate from html_nodes to leaf indices
+        // Html nodes to leaves index map
         let mut html_to_leaf_map: HashMap<usize, usize> = HashMap::new();
 
-        // Convert each HtmlNode to SakuraLeaf and replace placeholder
+        // Convert each HtmlNode to SakuraLeaf while replacing placeholders
         for (i, html_node) in html_nodes.iter().enumerate() {
             // Record the mapping before processing
             let leaf_index = tree.leaf_count();
@@ -249,30 +242,28 @@ impl SakuraTree {
                 ..
             }) = &leaf.source
             {
-                // Convert end_tag_html_index to end_leaf_index
-                if let Some(&end_leaf_index) =
-                    html_to_leaf_map.get(&html_metadata.end_tag_html_index)
-                {
+                // Convert html end_tag index to end_leaf index
+                if let Some(&end_leaf) = html_to_leaf_map.get(&html_metadata.end_tag_index) {
                     leaf.element_metadata = Some(LeafElementMetadata {
                         chars_count: html_metadata.chars_count,
-                        end_leaf_index,
+                        end_leaf,
                     });
                 }
             }
         }
 
-        tree.grow_trunk();
+        tree.grow_layers();
 
         tree
     }
 
-    pub(crate) fn push_leaf(&mut self, leaf: SakuraLeaf) {
+    pub(crate) fn grow_leaf(&mut self, leaf: SakuraLeaf) {
         self.leaves.push(leaf);
     }
-    pub(crate) fn new_layer(&mut self, ring: TrunkRing) {
+    pub(crate) fn grow_layer(&mut self, ring: TrunkRing) {
         self.trunk_rings.push(ring);
     }
-    pub(crate) fn push_branch(&mut self, branch: SakuraBranch) {
+    pub(crate) fn grow_branch(&mut self, branch: SakuraBranch) {
         self.branches.push(branch);
     }
     pub(crate) fn leaf_count(&self) -> usize {
@@ -284,7 +275,7 @@ impl SakuraTree {
     pub(crate) fn iter_leaves(&self) -> std::slice::Iter<'_, SakuraLeaf> {
         self.leaves.iter()
     }
-    pub(crate) fn trunk(&self) -> std::slice::Iter<'_, TrunkRing> {
+    pub(crate) fn iter_rings(&self) -> std::slice::Iter<'_, TrunkRing> {
         self.trunk_rings.iter()
     }
     pub(crate) fn iter_branches(&self) -> std::slice::Iter<'_, SakuraBranch> {
@@ -318,18 +309,17 @@ impl SakuraTree {
         false
     }
 
-    // Grow trunk
-    fn grow_trunk(&mut self) {
-        let trunk = self.grow_rings(0, self.leaf_count());
+    fn grow_layers(&mut self) {
+        let trunk_rings = self.grow_rings(0, self.leaf_count());
 
-        for ring in trunk {
-            self.new_layer(ring);
+        for ring in trunk_rings {
+            self.grow_layer(ring);
         }
     }
 
     // Grow concentric rings
     fn grow_rings(&self, start_index: usize, end_index: usize) -> Vec<TrunkRing> {
-        let mut trunk = Vec::new();
+        let mut trunk_rings = Vec::new();
         let mut index = start_index;
 
         while index < end_index {
@@ -347,7 +337,7 @@ impl SakuraTree {
                             if let Some((ring, next_index)) =
                                 self.try_when_clause_with_inline_content(index, end_index)
                             {
-                                trunk.push(ring);
+                                trunk_rings.push(ring);
                                 index = next_index;
                                 continue;
                             }
@@ -356,7 +346,7 @@ impl SakuraTree {
                             if let Some((ring, next_index)) =
                                 self.try_askama_block(index, askama_node, end_index)
                             {
-                                trunk.push(ring);
+                                trunk_rings.push(ring);
                                 index = next_index;
                                 continue;
                             }
@@ -365,16 +355,16 @@ impl SakuraTree {
                     // Try to build complete HTML elements
                     NodeSource::Html(HtmlNode::StartTag { .. }) => {
                         if let Some((ring, next_index)) = self.try_complete_element(index) {
-                            trunk.push(ring);
+                            trunk_rings.push(ring);
                             index = next_index;
                             continue;
                         }
                     }
                     // Standalone for void or self-closing elements
                     NodeSource::Html(HtmlNode::Void { .. } | HtmlNode::SelfClosingTag { .. }) => {
-                        let shape = TrunkShape::Standalone { leaf: index };
-                        let ring = TrunkRing::new(shape, self);
-                        trunk.push(ring);
+                        let layer = TrunkLayer::Standalone { leaf: index };
+                        let ring = TrunkRing::new(layer, self);
+                        trunk_rings.push(ring);
                         index += 1;
                         continue;
                     }
@@ -386,14 +376,14 @@ impl SakuraTree {
                             && let Some((ring, next_index)) =
                                 self.try_script_style(index, end_index)
                         {
-                            trunk.push(ring);
+                            trunk_rings.push(ring);
                             index = next_index;
                             continue;
                         }
 
                         // Otherwise try regular text sequence
                         if let Some((ring, next_index)) = self.try_text_sequence(index, end_index) {
-                            trunk.push(ring);
+                            trunk_rings.push(ring);
                             index = next_index;
                             continue;
                         }
@@ -403,25 +393,25 @@ impl SakuraTree {
             }
 
             // Fallback: Standalone
-            let shape = TrunkShape::Standalone { leaf: index };
-            let ring = TrunkRing::new(shape, self);
-            trunk.push(ring);
+            let layer = TrunkLayer::Standalone { leaf: index };
+            let ring = TrunkRing::new(layer, self);
+            trunk_rings.push(ring);
             index += 1;
         }
 
-        trunk
+        trunk_rings
     }
 
-    fn try_complete_element(&self, start_leaf_index: usize) -> Option<(TrunkRing, usize)> {
+    fn try_complete_element(&self, start_leaf: usize) -> Option<(TrunkRing, usize)> {
         // Get the leaf and extract metadata
-        let leaf = self.get_leaf(start_leaf_index)?;
+        let leaf = self.get_leaf(start_leaf)?;
         let metadata = leaf.element_metadata.as_ref()?;
 
-        let end_leaf_index = metadata.end_leaf_index;
+        let end_leaf = metadata.end_leaf;
         let chars_count = metadata.chars_count;
 
-        // Recursively build child trunks
-        let children = self.grow_rings(start_leaf_index + 1, end_leaf_index);
+        // Recursively grow inner rings
+        let inner_rings = self.grow_rings(start_leaf + 1, end_leaf);
 
         // Get inline status from the start tag
         let is_semantic_inline = match &leaf.source {
@@ -429,17 +419,17 @@ impl SakuraTree {
             NodeSource::Askama(_) => false,
         };
 
-        let shape = TrunkShape::CompleteElement {
+        let layer = TrunkLayer::CompleteElement {
             chars_count,
-            start_leaf: start_leaf_index,
-            children,
-            end_leaf: end_leaf_index,
+            start_leaf,
+            inner_rings,
+            end_leaf,
             is_semantic_inline,
         };
-        let ring = TrunkRing::new(shape, self);
+        let ring = TrunkRing::new(layer, self);
 
         // Next index for parent is after the end tag
-        Some((ring, end_leaf_index + 1))
+        Some((ring, end_leaf + 1))
     }
 
     fn try_askama_block(
@@ -463,32 +453,30 @@ impl SakuraTree {
                     // Check if this is another opening of the same type (nested block)
                     if tag.boundary() == askama::Boundary::Open && open_tag.same_kind(tag) {
                         depth += 1;
-                    }
-                    // Check if this is a closing block
-                    else if tag.boundary() == askama::Boundary::Close
+                    } else if tag.boundary() == askama::Boundary::Close
                         && open_tag.matches_close(tag)
                     {
                         if depth == 0 {
                             // Found our matching close at depth 0
-                            let close_leaf_index = current_index;
+                            let close_leaf = current_index;
 
-                            // Recursively build child trunks from content between open and close
-                            let children = self.grow_rings(start_index + 1, close_leaf_index);
+                            // Recursively grow inner rings for leaves between open and close indices
+                            let inner_rings = self.grow_rings(start_index + 1, close_leaf);
 
-                            let shape = if children.is_empty() {
-                                TrunkShape::EmptyAskamaBlock {
+                            let layer = if inner_rings.is_empty() {
+                                TrunkLayer::EmptyControlBlock {
                                     open_leaf: start_index,
-                                    close_leaf: close_leaf_index,
+                                    close_leaf,
                                 }
                             } else {
-                                TrunkShape::ControlBlock {
+                                TrunkLayer::ControlBlock {
                                     open_leaf: start_index,
-                                    children,
-                                    close_leaf: close_leaf_index,
+                                    inner_rings,
+                                    close_leaf,
                                 }
                             };
-                            let ring = TrunkRing::new(shape, self);
-                            return Some((ring, close_leaf_index + 1));
+                            let ring = TrunkRing::new(layer, self);
+                            return Some((ring, close_leaf + 1));
                         }
                         // This closes a nested block, decrement depth
                         depth -= 1;
@@ -502,11 +490,11 @@ impl SakuraTree {
     }
 
     // Find the end leaf index of a complete element
-    fn find_complete_element_end(&self, start_leaf_index: usize) -> Option<usize> {
-        self.get_leaf(start_leaf_index)?
+    fn find_complete_element_end(&self, start_leaf: usize) -> Option<usize> {
+        self.get_leaf(start_leaf)?
             .element_metadata
             .as_ref()
-            .map(|metadata| metadata.end_leaf_index)
+            .map(|metadata| metadata.end_leaf)
     }
 
     // Build a when clause with all its inline content (including complete inline elements)
@@ -537,12 +525,12 @@ impl SakuraTree {
             // For StartTags, include the complete element without splitting it
             if matches!(leaf.source, NodeSource::Html(HtmlNode::StartTag { .. })) {
                 // Try to find the complete element boundaries
-                if let Some(end_leaf_index) = self.find_complete_element_end(current_index) {
+                if let Some(end_leaf) = self.find_complete_element_end(current_index) {
                     // Include all leaves from current to end
-                    for idx in current_index..=end_leaf_index {
+                    for idx in current_index..=end_leaf {
                         candidate_leaves.push(idx);
                     }
-                    current_index = end_leaf_index + 1;
+                    current_index = end_leaf + 1;
                     continue;
                 }
             }
@@ -567,10 +555,10 @@ impl SakuraTree {
         };
 
         if final_leaves.len() > 1 {
-            let shape = TrunkShape::TextSequence {
+            let layer = TrunkLayer::TextSequence {
                 leaves: final_leaves,
             };
-            let ring = TrunkRing::new(shape, self);
+            let ring = TrunkRing::new(layer, self);
             return Some((ring, current_index));
         }
 
@@ -604,8 +592,8 @@ impl SakuraTree {
         // Return ScriptStyle for single leaf
         if !leaves.is_empty() {
             let next_index = leaves.last().copied().unwrap_or(start_index) + 1;
-            let shape = TrunkShape::ScriptStyle { leaves };
-            let ring = TrunkRing::new(shape, self);
+            let layer = TrunkLayer::ScriptStyle { leaves };
+            let ring = TrunkRing::new(layer, self);
             return Some((ring, next_index));
         }
 
@@ -652,10 +640,9 @@ impl SakuraTree {
             }
         }
 
-        // Only create text sequence if we have multiple leaves or significant content
         if leaves.len() > 1 {
-            let shape = TrunkShape::TextSequence { leaves };
-            let ring = TrunkRing::new(shape, self);
+            let layer = TrunkLayer::TextSequence { leaves };
+            let ring = TrunkRing::new(layer, self);
             return Some((ring, current_index));
         }
 
@@ -664,16 +651,16 @@ impl SakuraTree {
 }
 
 impl TrunkRing {
-    pub(crate) fn new(shape: TrunkShape, tree: &SakuraTree) -> Self {
-        let total_chars = match &shape {
-            TrunkShape::CompleteElement { chars_count, .. } => *chars_count,
-            _ => Self::calculate_total_chars(&shape, tree),
+    pub(crate) fn new(layer: TrunkLayer, tree: &SakuraTree) -> Self {
+        let total_chars = match &layer {
+            TrunkLayer::CompleteElement { chars_count, .. } => *chars_count,
+            _ => Self::calculate_total_chars(&layer, tree),
         };
-        Self { shape, total_chars }
+        Self { layer, total_chars }
     }
 
-    fn calculate_total_chars(shape: &TrunkShape, tree: &SakuraTree) -> usize {
-        let leaf_indices = shape.all_leaf_indices();
+    fn calculate_total_chars(layer: &TrunkLayer, tree: &SakuraTree) -> usize {
+        let leaf_indices = layer.all_leaf_indices();
         leaf_indices
             .iter()
             .filter_map(|&i| tree.get_leaf(i))
@@ -682,54 +669,53 @@ impl TrunkRing {
     }
 
     pub(crate) fn all_leaf_indices(&self) -> Vec<usize> {
-        self.shape.all_leaf_indices()
+        self.layer.all_leaf_indices()
     }
 
-    pub(crate) fn contains_block_children(&self) -> bool {
-        match &self.shape {
-            TrunkShape::CompleteElement { children, .. }
-            | TrunkShape::ControlBlock { children, .. } => {
-                children.iter().any(|child| {
-                    // Check if this child itself is a block-level element
-                    if let TrunkShape::CompleteElement {
+    pub(crate) fn has_non_semantic_inline_ring(&self) -> bool {
+        match &self.layer {
+            TrunkLayer::CompleteElement { inner_rings, .. } => {
+                inner_rings.iter().any(|ring| {
+                    // Check if this inner ring itself is semantic inline
+                    if let TrunkLayer::CompleteElement {
                         is_semantic_inline, ..
-                    } = &child.shape
+                    } = &ring.layer
                         && !is_semantic_inline
                     {
                         return true;
                     }
-                    // Recursively check child's children
-                    child.contains_block_children()
+                    // Recursively check inner rings
+                    ring.has_non_semantic_inline_ring()
                 })
             }
             _ => false,
         }
     }
 
-    pub(crate) fn has_control_blocks(&self) -> bool {
-        match &self.shape {
-            TrunkShape::CompleteElement { children, .. }
-            | TrunkShape::ControlBlock { children, .. } => children.iter().any(|child| {
-                matches!(&child.shape, TrunkShape::ControlBlock { .. })
-                    || child.has_control_blocks()
+    pub(crate) fn has_control_block_ring(&self) -> bool {
+        match &self.layer {
+            TrunkLayer::CompleteElement { inner_rings, .. }
+            | TrunkLayer::ControlBlock { inner_rings, .. } => inner_rings.iter().any(|ring| {
+                matches!(&ring.layer, TrunkLayer::ControlBlock { .. })
+                    || ring.has_control_block_ring()
             }),
             _ => false,
         }
     }
 }
 
-impl TrunkShape {
+impl TrunkLayer {
     pub(crate) fn all_leaf_indices(&self) -> Vec<usize> {
         match self {
-            TrunkShape::CompleteElement {
+            TrunkLayer::CompleteElement {
                 start_leaf,
-                children,
+                inner_rings,
                 end_leaf,
                 ..
             } => {
                 let mut indices = vec![*start_leaf];
-                for child in children {
-                    indices.extend(child.all_leaf_indices());
+                for ring in inner_rings {
+                    indices.extend(ring.all_leaf_indices());
                 }
                 // Avoid duplicates for void elements
                 if end_leaf != start_leaf {
@@ -737,30 +723,30 @@ impl TrunkShape {
                 }
                 indices
             }
-            TrunkShape::TextSequence { leaves } | TrunkShape::ScriptStyle { leaves } => {
+            TrunkLayer::TextSequence { leaves } | TrunkLayer::ScriptStyle { leaves } => {
                 leaves.clone()
             }
-            TrunkShape::ControlBlock {
+            TrunkLayer::ControlBlock {
                 open_leaf,
-                children,
+                inner_rings,
                 close_leaf,
                 ..
             } => {
                 let mut indices = vec![*open_leaf];
-                for child in children {
-                    indices.extend(child.all_leaf_indices());
+                for ring in inner_rings {
+                    indices.extend(ring.all_leaf_indices());
                 }
                 indices.push(*close_leaf);
                 indices
             }
-            TrunkShape::EmptyAskamaBlock {
+            TrunkLayer::EmptyControlBlock {
                 open_leaf,
                 close_leaf,
                 ..
             } => {
                 vec![*open_leaf, *close_leaf]
             }
-            TrunkShape::Standalone { leaf } => {
+            TrunkLayer::Standalone { leaf } => {
                 vec![*leaf]
             }
         }
@@ -776,7 +762,7 @@ fn process_html_node(html_node: &HtmlNode, tree: &mut SakuraTree, askama_nodes: 
         HtmlNode::RawText(text) => process_raw_text_node(text, tree, askama_nodes),
         HtmlNode::Entity(_) | HtmlNode::Comment(_) | HtmlNode::Doctype(_) => {
             // Simple nodes - direct conversion
-            tree.push_leaf(SakuraLeaf::from_html(html_node.clone()));
+            tree.grow_leaf(SakuraLeaf::from_html(html_node.clone()));
         }
         _ => process_element_node(html_node, tree, askama_nodes),
     }
@@ -786,7 +772,7 @@ fn process_text_node(text: &str, tree: &mut SakuraTree, askama_nodes: &[AskamaNo
     let placeholders = find_placeholders(text, askama_nodes);
 
     if placeholders.is_empty() {
-        tree.push_leaf(SakuraLeaf::from_html_text(text));
+        tree.grow_leaf(SakuraLeaf::from_html_text(text));
     } else {
         replace_placeholders_in_text(text, placeholders, tree);
     }
@@ -794,16 +780,16 @@ fn process_text_node(text: &str, tree: &mut SakuraTree, askama_nodes: &[AskamaNo
 
 fn process_raw_text_node(text: &str, tree: &mut SakuraTree, askama_nodes: &[AskamaNode]) {
     let processed = askama::replace_placeholder_in_raw_text(text, askama_nodes);
-    tree.push_leaf(SakuraLeaf::from_html_raw_text(&processed));
+    tree.grow_leaf(SakuraLeaf::from_html_raw_text(&processed));
 }
 
 fn process_element_node(html_node: &HtmlNode, tree: &mut SakuraTree, askama_nodes: &[AskamaNode]) {
     if should_add_spacing_after_when(tree) {
-        tree.push_leaf(SakuraLeaf::from_html_text_preserving_edges(" "));
+        tree.grow_leaf(SakuraLeaf::from_html_text_preserving_edges(" "));
     }
 
     let processed = html_node.clone().replace_placeholder(askama_nodes);
-    tree.push_leaf(SakuraLeaf::from_html(processed));
+    tree.grow_leaf(SakuraLeaf::from_html(processed));
 }
 
 fn find_placeholders(
@@ -841,12 +827,12 @@ fn replace_placeholders_in_text(
         if pos > last_end {
             let text_segment = &text[last_end..pos];
             let next_is_expr = askama_node.is_expr();
-            let leaf = create_text_leaf(text_segment, prev_was_expr_or_when, next_is_expr);
-            tree.push_leaf(leaf);
+            let leaf = new_text_leaf(text_segment, prev_was_expr_or_when, next_is_expr);
+            tree.grow_leaf(leaf);
         }
 
         // Add the Askama node
-        tree.push_leaf(SakuraLeaf::from_askama(&config, askama_node.clone()));
+        tree.grow_leaf(SakuraLeaf::from_askama(&config, askama_node.clone()));
 
         // Update flag for next segment
         prev_was_expr_or_when = askama_node.is_expr() || askama_node.is_when_clause();
@@ -856,13 +842,12 @@ fn replace_placeholders_in_text(
     // Add any remaining text after the last placeholder
     if last_end < text.len() {
         let remaining = &text[last_end..];
-        let leaf = create_text_leaf(remaining, prev_was_expr_or_when, false);
-        tree.push_leaf(leaf);
+        let leaf = new_text_leaf(remaining, prev_was_expr_or_when, false);
+        tree.grow_leaf(leaf);
     }
 }
 
-// Create appropriate text leaf based on context
-fn create_text_leaf(text: &str, after_expr_or_when: bool, before_expr: bool) -> SakuraLeaf {
+fn new_text_leaf(text: &str, after_expr_or_when: bool, before_expr: bool) -> SakuraLeaf {
     match (after_expr_or_when, before_expr) {
         // Between expressions or after when before expression: preserve both edges
         (true, true) => SakuraLeaf::from_html_text_preserving_edges(text),

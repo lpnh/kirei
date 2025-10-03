@@ -1,23 +1,22 @@
 use crate::{
     askama::{self, AskamaNode},
     html,
-    sakura_tree::{FormatStyle, NodeSource, SakuraBranch, SakuraTree, TrunkRing, TrunkShape},
+    sakura_tree::{BranchStyle, NodeSource, SakuraBranch, SakuraTree, TrunkLayer, TrunkRing},
 };
 
 pub(crate) fn wire(tree: &mut SakuraTree) {
-    // Build indentation map for proper formatting
     let indent_map = analyze_indentation_structure(tree);
 
     wire_branches(tree, &indent_map);
 }
 
-// This builds a map of leaf_index -> indent_level based on control blocks
+// Build indentation map for proper formatting
 fn analyze_indentation_structure(tree: &SakuraTree) -> Vec<i32> {
     let mut indent_map = vec![0; tree.leaf_count()];
     let mut current_indent = 0;
 
     for (i, leaf) in tree.iter_leaves().enumerate() {
-        // Check for HTML EndTags to decrease indent *before* assigning it
+        // Check for HTML EndTags to decrease indent before assigning it
         if let NodeSource::Html(html_node) = &leaf.source
             && html_node.is_closing_tag()
         {
@@ -35,8 +34,8 @@ fn analyze_indentation_structure(tree: &SakuraTree) -> Vec<i32> {
             indent_map[i] = current_indent;
         }
 
-        // Check for HTML StartTags to increase indent for *subsequent* nodes
-        // Only increase indent for StartTag (not Void or SelfClosingTag)
+        // Check for HTML StartTags to increase indent for subsequent nodes
+        // Only increase indent for StartTag (not Void, SelfClosingTag, etc.)
         if let NodeSource::Html(html_node) = &leaf.source
             && matches!(html_node, html::HtmlNode::StartTag { .. })
         {
@@ -47,128 +46,126 @@ fn analyze_indentation_structure(tree: &SakuraTree) -> Vec<i32> {
 }
 
 fn wire_branches(tree: &mut SakuraTree, indent_map: &[i32]) {
-    // Clone rings to avoid borrow checker issues
-    let trunk: Vec<TrunkRing> = tree.trunk().cloned().collect();
+    let trunk_rings: Vec<TrunkRing> = tree.iter_rings().cloned().collect();
 
-    for ring in &trunk {
-        wire_branches_from_trunk_rings(tree, ring, indent_map);
+    for ring in &trunk_rings {
+        wire_branch_recursive(tree, ring, indent_map);
     }
 }
 
-// Recursively create branches
-fn wire_branches_from_trunk_rings(tree: &mut SakuraTree, trunk: &TrunkRing, indent_map: &[i32]) {
-    let style = decide_format_style(tree, trunk);
+fn wire_branch_recursive(tree: &mut SakuraTree, trunk_ring: &TrunkRing, indent_map: &[i32]) {
+    let style = decide_branch_style(tree, trunk_ring);
 
-    if style == FormatStyle::MultiLine {
-        match &trunk.shape {
-            TrunkShape::CompleteElement {
+    if style == BranchStyle::MultiLine {
+        match &trunk_ring.layer {
+            TrunkLayer::CompleteElement {
                 start_leaf,
-                children,
+                inner_rings,
                 end_leaf,
                 ..
             } => {
-                // Create branch for opening tag
+                // Wire branch for opening tag
                 let open_indent = indent_map.get(*start_leaf).copied().unwrap_or(0);
                 let open_branch =
-                    SakuraBranch::new(vec![*start_leaf], FormatStyle::MultiLine, open_indent);
-                tree.push_branch(open_branch);
+                    SakuraBranch::grow(vec![*start_leaf], BranchStyle::MultiLine, open_indent);
+                tree.grow_branch(open_branch);
 
-                // Recursively process children
-                for child_trunk in children {
-                    wire_branches_from_trunk_rings(tree, child_trunk, indent_map);
+                // Recursively process inner rings
+                for ring in inner_rings {
+                    wire_branch_recursive(tree, ring, indent_map);
                 }
 
-                // Create branch for closing tag
+                // Wire branch for closing tag
                 let close_indent = indent_map.get(*end_leaf).copied().unwrap_or(0);
                 let close_branch =
-                    SakuraBranch::new(vec![*end_leaf], FormatStyle::MultiLine, close_indent);
-                tree.push_branch(close_branch);
+                    SakuraBranch::grow(vec![*end_leaf], BranchStyle::MultiLine, close_indent);
+                tree.grow_branch(close_branch);
             }
-            TrunkShape::ControlBlock {
+            TrunkLayer::ControlBlock {
                 open_leaf,
-                children,
+                inner_rings,
                 close_leaf,
                 ..
             } => {
-                // Create branch for opening control
+                // Wire branch for opening control
                 let open_indent = indent_map.get(*open_leaf).copied().unwrap_or(0);
                 let open_branch =
-                    SakuraBranch::new(vec![*open_leaf], FormatStyle::MultiLine, open_indent);
-                tree.push_branch(open_branch);
+                    SakuraBranch::grow(vec![*open_leaf], BranchStyle::MultiLine, open_indent);
+                tree.grow_branch(open_branch);
 
-                // Recursively process children
-                for child_trunk in children {
-                    wire_branches_from_trunk_rings(tree, child_trunk, indent_map);
+                // Recursively process inner rings
+                for trunk_ring in inner_rings {
+                    wire_branch_recursive(tree, trunk_ring, indent_map);
                 }
 
-                // Create branch for closing control
+                // Wire branch for closing control
                 let close_indent = indent_map.get(*close_leaf).copied().unwrap_or(0);
                 let close_branch =
-                    SakuraBranch::new(vec![*close_leaf], FormatStyle::MultiLine, close_indent);
-                tree.push_branch(close_branch);
+                    SakuraBranch::grow(vec![*close_leaf], BranchStyle::MultiLine, close_indent);
+                tree.grow_branch(close_branch);
             }
-            TrunkShape::EmptyAskamaBlock {
+            TrunkLayer::EmptyControlBlock {
                 open_leaf,
                 close_leaf,
             } => {
-                // Create branch for the opening block
+                // Wire branch for the opening block
                 let open_indent = indent_map.get(*open_leaf).copied().unwrap_or(0);
                 let open_branch =
-                    SakuraBranch::new(vec![*open_leaf], FormatStyle::MultiLine, open_indent);
-                tree.push_branch(open_branch);
+                    SakuraBranch::grow(vec![*open_leaf], BranchStyle::MultiLine, open_indent);
+                tree.grow_branch(open_branch);
 
-                // Create branch for the closing block
+                // Wire branch for the closing block
                 let close_indent = indent_map.get(*close_leaf).copied().unwrap_or(0);
                 let close_branch =
-                    SakuraBranch::new(vec![*close_leaf], FormatStyle::MultiLine, close_indent);
-                tree.push_branch(close_branch);
+                    SakuraBranch::grow(vec![*close_leaf], BranchStyle::MultiLine, close_indent);
+                tree.grow_branch(close_branch);
             }
             _ => {
-                // For non-container, create single branch
-                let branch = create_branch_from_trunk(tree, trunk, indent_map);
-                tree.push_branch(branch);
+                // For non-container, wire single branch
+                let branch = wire_single_branch(tree, trunk_ring, indent_map);
+                tree.grow_branch(branch);
             }
         }
     } else {
-        // Inline: create single branch
-        let branch = create_branch_from_trunk(tree, trunk, indent_map);
-        tree.push_branch(branch);
+        // Inline: wire single branch
+        let branch = wire_single_branch(tree, trunk_ring, indent_map);
+        tree.grow_branch(branch);
     }
 }
 
-fn create_branch_from_trunk(
+fn wire_single_branch(
     tree: &SakuraTree,
-    trunk: &TrunkRing,
+    trunk_ring: &TrunkRing,
     indent_map: &[i32],
 ) -> SakuraBranch {
-    let leaf_indices = trunk.all_leaf_indices();
-    let base_indent = leaf_indices
+    let leaf_indices = trunk_ring.all_leaf_indices();
+    let indent_level = leaf_indices
         .first()
         .and_then(|&idx| indent_map.get(idx))
         .copied()
         .unwrap_or(0);
 
-    let style = decide_format_style(tree, trunk);
+    let style = decide_branch_style(tree, trunk_ring);
 
-    SakuraBranch::new(leaf_indices, style, base_indent)
+    SakuraBranch::grow(leaf_indices, style, indent_level)
 }
 
-fn decide_format_style(tree: &SakuraTree, trunk: &TrunkRing) -> FormatStyle {
-    match &trunk.shape {
+fn decide_branch_style(tree: &SakuraTree, trunk_ring: &TrunkRing) -> BranchStyle {
+    match &trunk_ring.layer {
         // Inline if fits, otherwise multiline
-        TrunkShape::EmptyAskamaBlock { .. } | TrunkShape::Standalone { .. } => {
-            if trunk.total_chars <= tree.config.max_line_length {
-                FormatStyle::Inline
+        TrunkLayer::EmptyControlBlock { .. } | TrunkLayer::Standalone { .. } => {
+            if trunk_ring.total_chars <= tree.config.max_line_length {
+                BranchStyle::Inline
             } else {
-                FormatStyle::MultiLine
+                BranchStyle::MultiLine
             }
         }
 
         // ScriptStyle  always use RawText style
-        TrunkShape::ScriptStyle { .. } => FormatStyle::RawText,
+        TrunkLayer::ScriptStyle { .. } => BranchStyle::RawText,
 
         // Text sequences are inline if they fit
-        TrunkShape::TextSequence { leaves } => {
+        TrunkLayer::TextSequence { leaves } => {
             // Check if this sequence starts with a when clause
             let starts_with_when = leaves
                 .first()
@@ -179,15 +176,15 @@ fn decide_format_style(tree: &SakuraTree, trunk: &TrunkRing) -> FormatStyle {
 
             if starts_with_when {
                 // When clauses with their content should stay inline
-                FormatStyle::Inline
-            } else if trunk.total_chars <= tree.config.max_line_length {
-                FormatStyle::Inline
+                BranchStyle::Inline
+            } else if trunk_ring.total_chars <= tree.config.max_line_length {
+                BranchStyle::Inline
             } else {
-                FormatStyle::WrappedText
+                BranchStyle::WrappedText
             }
         }
 
-        TrunkShape::CompleteElement {
+        TrunkLayer::CompleteElement {
             is_semantic_inline,
             start_leaf,
             ..
@@ -197,32 +194,32 @@ fn decide_format_style(tree: &SakuraTree, trunk: &TrunkRing) -> FormatStyle {
                 && let NodeSource::Html(html_node) = &leaf.source
                 && html_node.is_style_or_script_element()
             {
-                return FormatStyle::MultiLine;
+                return BranchStyle::MultiLine;
             }
 
             // Check structure constraints
-            let fits_in_line = trunk.total_chars <= tree.config.max_line_length;
-            let has_control_blocks = trunk.has_control_blocks();
-            let has_block_children = trunk.contains_block_children();
+            let fits_in_line = trunk_ring.total_chars <= tree.config.max_line_length;
+            let has_control_block = trunk_ring.has_control_block_ring();
+            let has_non_inline_ring = trunk_ring.has_non_semantic_inline_ring();
 
             if *is_semantic_inline {
                 // Inline elements: inline if they fit
                 if fits_in_line {
-                    FormatStyle::Inline
+                    BranchStyle::Inline
                 } else {
-                    FormatStyle::MultiLine
+                    BranchStyle::MultiLine
                 }
             } else {
                 // Block elements: inline only if simple and fits
-                if fits_in_line && !has_control_blocks && !has_block_children {
-                    FormatStyle::Inline
+                if fits_in_line && !has_control_block && !has_non_inline_ring {
+                    BranchStyle::Inline
                 } else {
-                    FormatStyle::MultiLine
+                    BranchStyle::MultiLine
                 }
             }
         }
 
         // Askama control blocks: always block format
-        TrunkShape::ControlBlock { .. } => FormatStyle::MultiLine,
+        TrunkLayer::ControlBlock { .. } => BranchStyle::MultiLine,
     }
 }

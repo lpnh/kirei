@@ -40,8 +40,10 @@ pub(crate) struct Attribute {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ElementMetadata {
+    // The total characters of the entire element
     pub(crate) chars_count: usize,
-    pub(crate) end_tag_html_index: usize,
+    // The index of the end_tag node of this element
+    pub(crate) end_tag_index: usize,
 }
 
 impl Attribute {
@@ -502,7 +504,7 @@ fn parse_html_node_recursive(
             {
                 *element_metadata = Some(ElementMetadata {
                     chars_count: total_child_chars,
-                    end_tag_html_index: end_tag_index,
+                    end_tag_index,
                 });
             }
             current_chars_count = total_child_chars;
