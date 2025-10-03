@@ -672,32 +672,20 @@ impl TrunkRing {
         self.layer.all_leaf_indices()
     }
 
-    pub(crate) fn has_non_semantic_inline_ring(&self) -> bool {
-        match &self.layer {
-            TrunkLayer::CompleteElement { inner_rings, .. } => {
-                inner_rings.iter().any(|ring| {
-                    // Check if this inner ring itself is semantic inline
-                    if let TrunkLayer::CompleteElement {
-                        is_semantic_inline, ..
-                    } = &ring.layer
-                        && !is_semantic_inline
-                    {
-                        return true;
-                    }
-                    // Recursively check inner rings
-                    ring.has_non_semantic_inline_ring()
-                })
-            }
-            _ => false,
-        }
-    }
-
-    pub(crate) fn has_control_block_ring(&self) -> bool {
+    // Check if the inner rings contain any semantic multi-line content
+    pub(crate) fn inner_has_multi_line_content(&self) -> bool {
         match &self.layer {
             TrunkLayer::CompleteElement { inner_rings, .. }
             | TrunkLayer::ControlBlock { inner_rings, .. } => inner_rings.iter().any(|ring| {
-                matches!(&ring.layer, TrunkLayer::ControlBlock { .. })
-                    || ring.has_control_block_ring()
+                match &ring.layer {
+                    // Look for non-semantic inline elements
+                    TrunkLayer::CompleteElement {
+                        is_semantic_inline, ..
+                    } => !is_semantic_inline || ring.inner_has_multi_line_content(),
+                    // Control blocks are always multi-line
+                    TrunkLayer::ControlBlock { .. } => true,
+                    _ => ring.inner_has_multi_line_content(),
+                }
             }),
             _ => false,
         }

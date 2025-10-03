@@ -199,23 +199,12 @@ fn decide_branch_style(tree: &SakuraTree, trunk_ring: &TrunkRing) -> BranchStyle
 
             // Check structure constraints
             let fits_in_line = trunk_ring.total_chars <= tree.config.max_line_length;
-            let has_control_block = trunk_ring.has_control_block_ring();
-            let has_non_inline_ring = trunk_ring.has_non_semantic_inline_ring();
+            let has_multi_line_content = trunk_ring.inner_has_multi_line_content();
 
-            if *is_semantic_inline {
-                // Inline elements: inline if they fit
-                if fits_in_line {
-                    BranchStyle::Inline
-                } else {
-                    BranchStyle::MultiLine
-                }
+            if fits_in_line && (*is_semantic_inline || !has_multi_line_content) {
+                BranchStyle::Inline
             } else {
-                // Block elements: inline only if simple and fits
-                if fits_in_line && !has_control_block && !has_non_inline_ring {
-                    BranchStyle::Inline
-                } else {
-                    BranchStyle::MultiLine
-                }
+                BranchStyle::MultiLine
             }
         }
 
