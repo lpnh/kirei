@@ -4,23 +4,23 @@ use clap::Parser;
 #[command(name = "kirei", about, version)]
 #[command(arg_required_else_help = true)]
 pub(crate) struct Args {
-    // Path of file to format
+    /// Path of file to format
     #[arg(value_name = "PATH", help_heading = "Input")]
     pub(crate) input: String,
 
-    // Check if files are formatted
+    /// Check if files are formatted
     #[arg(short = 'c', long = "check")]
     pub(crate) check: bool,
 
-    // Edit files in-place (overwrite with formatted output)
+    /// Edit files in-place (overwrite with formatted output)
     #[arg(short = 'w', long = "write")]
     pub(crate) write: bool,
 
-    // Print the names of files that would be changed
+    /// Print the names of files that would be changed
     #[arg(short = 'l', long = "list-different")]
     pub(crate) list_different: bool,
 
-    // When reading from stdin, use this as the filepath
+    /// When reading from stdin, use this as the filepath
     #[arg(
         long = "stdin-filepath",
         value_name = "PATH",
