@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn run(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     let (input, maybe_filepath) = get_input_and_filepath(args)?;
     let mut kirei = AskamaFormatter::default();
-    let raw_formatted = kirei.format(&input)?;
+    let raw_formatted = kirei.format(&input);
 
     // Provide end of line by default
     let formatted = if raw_formatted.ends_with('\n') {

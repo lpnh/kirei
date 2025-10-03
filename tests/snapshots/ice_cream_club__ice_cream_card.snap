@@ -19,10 +19,14 @@ description: "{#\nIce cream card component - supports various display modes\nVar
 <div class="card" style="{{ card_style }}">
     {# First choice badge #}
     {% if show_first_choice %}
-        <div style="background: gold; color: #333; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-bottom: 8px; display: inline-block;">🥇 First Choice</div>
+        <div style="background: gold; color: #333; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-bottom: 8px; display: inline-block;">
+            🥇 First Choice
+        </div>
     {% endif %}
     {# Emoji with optional styling #}
-    <div style="text-align:center;font-size:2em;{{ emoji_style }}">{{ ice_cream.emoji }}</div>
+    <div style="text-align:center;font-size:2em;{{ emoji_style }}">
+        {{ ice_cream.emoji }}
+    </div>
     {# Name and popularity badge #}
     <h3 style="margin:8px 0">
         {{ ice_cream.name }}

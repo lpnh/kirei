@@ -5,8 +5,8 @@ description: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
         <title>
             {% block title %}
                 Ice Cream Social Club
@@ -38,14 +38,9 @@ description: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8
             <a href="/flavors" class="btn ghost">Flavors</a>
             <a href="/club" class="btn ghost">Club</a>
         </nav>
-        <main>
-            {% block content %}{% endblock %}
-        </main>
+        <main>{% block content %}{% endblock %}</main>
         <footer style="text-align:center;margin-top:36px;color:var(--muted)">
-            <small>
-                © 2025 Ice Cream Social Club · Sharing smiles one scoop at
-                a time
-            </small>
+            <small>© 2025 Ice Cream Social Club · Sharing smiles one scoop at a time</small>
         </footer>
     </body>
 </html>

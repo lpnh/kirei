@@ -1,6 +1,6 @@
 ---
 source: tests/ice_cream_club.rs
-description: "{% extends \"base.html\" %}\n\n{% block title %}Club - Ice Cream Social Club{% endblock %}\n\n{% block content %}\n  <h2>Meet Our Members</h2>\n\n  <div class=\"card\">\n    <p>We're ice cream lovers who think the best conversations happen over a scoop (or two!).</p>\n  </div>\n\n  <div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:18px\">\n    {% for member in members %}\n      <div class=\"card\">\n        <h3>{{ member.name }}</h3>\n        <p>Favorite: {{ member.favorite_flavor }}</p>\n        <p>Member since: {{ member.member_since }}</p>\n      </div>\n    {% endfor %}\n  </div>\n\n  <div class=\"card\" style=\"margin-top:18px\">\n    <h3>Join Our Next Social</h3>\n    <p>We meet every Sunday at the club center. New faces are always welcome!</p>\n    <p>Bring your sweet tooth, your stories, and your love for frozen delights.</p>\n  </div>\n{% endblock %}\n"
+description: "{% extends \"base.html\" %}\n\n{% block title %}Club - Ice Cream Social Club{% endblock %}\n\n{% block content %}\n<h2>Meet Our Members</h2>\n\n<div class=\"card\">\n<p>We're ice cream lovers who think the best conversations happen over a scoop (or two!).</p>\n</div>\n\n<div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:18px\">\n{% for member in members %}\n<div class=\"card\">\n<h3>{{ member.name }}</h3>\n<p>Favorite: {{ member.favorite_flavor }}</p>\n<p>Member since: {{ member.member_since }}</p>\n</div>\n{% endfor %}\n</div>\n\n<div class=\"card\" style=\"margin-top:18px\">\n<h3>Join Our Next Social</h3>\n<p>We meet every Sunday at the club center. New faces are always welcome!</p>\n<p>Bring your sweet tooth, your stories, and your love for frozen delights.</p>\n</div>\n{% endblock %}\n"
 ---
 {% extends "base.html" %}
 {% block title %}
@@ -19,22 +19,13 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}Club - Ice Cream S
             <div class="card">
                 <h3>{{ member.name }}</h3>
                 <p>Favorite: {{ member.favorite_flavor }}</p>
-                <p>
-                    Member since:
-                    {{ member.member_since }}
-                </p>
+                <p>Member since: {{ member.member_since }}</p>
             </div>
         {% endfor %}
     </div>
     <div class="card" style="margin-top:18px">
         <h3>Join Our Next Social</h3>
-        <p>
-            We meet every Sunday at the club center. New faces are always
-            welcome!
-        </p>
-        <p>
-            Bring your sweet tooth, your stories, and your love for frozen
-            delights.
-        </p>
+        <p>We meet every Sunday at the club center. New faces are always welcome!</p>
+        <p>Bring your sweet tooth, your stories, and your love for frozen delights.</p>
     </div>
 {% endblock %}

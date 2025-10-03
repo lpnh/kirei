@@ -5,7 +5,6 @@ description: "<div>Text<div>More text</div><img src=\"image.jpg\" >Some text<br 
 <div>
     Text
     <div>More text</div>
-    <img src="image.jpg" >
-        Some text
-    <br />
+    <img src="image.jpg" />
+    Some text<br />
 </div>

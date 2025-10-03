@@ -21,16 +21,12 @@ description: "{% extends \"_layout.html\" %}\n{%- block title -%}\n{#-\n    In h
             {%- when Lang::fr -%} Bonjour!
         {%- endmatch -%}
     </h1>
-    <form
-    method="GET"
-    action="/{{ lang }}/greet-me.html"
-    autocomplete="off"
-    >
+    <form method="GET" action="/{{ lang }}/greet-me.html" autocomplete="off">
         <p>
             {#-
                 If your text contains long lines, you may want to split them,
                 so you as a developer have an easier time reading them.
-
+            
                 If you don't want to end up with a multitude of spaces in the
                 generated content, you can use empty comments as seen below: `#-~#`.
                 This would strip the space before the comment, and leave a newline
@@ -38,19 +34,13 @@ description: "{% extends \"_layout.html\" %}\n{%- block title -%}\n{#-\n    In h
                 so that single space remains.
             -#}
             {%- match lang -%}
-                {%- when Lang::en -%} I would like to say
-                <em>hello</em>
-                .
+                {%- when Lang::en -%} I would like to say <em>hello</em>.
                 {#-~#}
                 Would you please tell me your name?
-                {%- when Lang::de -%} Ich möchte dir gerne
-                <em>hallo</em>
-                sagen.
+                {%- when Lang::de -%} Ich möchte dir gerne <em>hallo</em> sagen.
                 {#-~#}
                 Bitte nenne mir doch deinen Namen!
-                {%- when Lang::fr -%} Je voudrais vous dire
-                <em>bonjour</em>
-                .
+                {%- when Lang::fr -%} Je voudrais vous dire <em>bonjour</em>.
                 {#-~#}
                 Pourriez-vous me donner votre nom ?
             {%- endmatch -%}
@@ -62,14 +52,7 @@ description: "{% extends \"_layout.html\" %}\n{%- block title -%}\n{#-\n    In h
                     {%- when Lang::de -%} Ich heiße
                     {%- when Lang::fr -%} Je m'appelle
                 {%- endmatch -%}
-                :
-                <input
-                type="text"
-                value="{{ name }}"
-                name="name"
-                required
-                style="width: 10em"
-                />
+                :<input type="text" value="{{ name }}" name="name" required style="width: 10em" />
             </label>
         </p>
         <p>

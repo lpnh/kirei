@@ -5,15 +5,15 @@ description: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"U
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        <meta charset="UTF-8">
+        <meta charset="UTF-8" />
         <title>Formatter Test Page</title>
     </head>
     <body>
         <!-- link -->
         <a href="https://example.com">Visit us</a>
         <!-- image -->
-        <img src="image.jpg" alt="A test image">
-            <!-- list -->
+        <img src="image.jpg" alt="A test image" />
+        <!-- list -->
         <ul>
             <li>Item 1</li>
             <li>Item 2</li>
@@ -21,16 +21,12 @@ description: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"U
         <!-- form -->
         <form action="/submit" method="post">
             <label for="name">Name:</label>
-            <input type="text" id="name">
+            <input type="text" id="name" />
         </form>
         <!-- bold -->
         <div>
             <h1>Main Heading</h1>
-            <p>
-                Some content with
-                <strong>bold text</strong>
-                .
-            </p>
+            <p>Some content with <strong>bold text</strong>.</p>
         </div>
         <!-- table -->
         <table border="1">
@@ -50,9 +46,7 @@ description: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"U
             <header>
                 <nav>
                     <ul>
-                        <li>
-                            <a href="/">Home</a>
-                        </li>
+                        <li><a href="/">Home</a></li>
                     </ul>
                 </nav>
             </header>

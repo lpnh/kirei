@@ -2,4 +2,4 @@
 source: tests/html.rs
 description: "<img src=\"image.jpg\" alt=\"A test image\">\n"
 ---
-<img src="image.jpg" alt="A test image">
+<img src="image.jpg" alt="A test image" />

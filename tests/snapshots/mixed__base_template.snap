@@ -7,8 +7,7 @@ description: "<!DOCTYPE html><html lang=\"en\"><head><title>{% block title %}{{ 
     <head>
         <title>
             {% block title %}
-                {{ title }}
-                - My Site
+                {{ title }} - My Site
             {% endblock %}
         </title>
         {% block head %}{% endblock %}
