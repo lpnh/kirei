@@ -5,7 +5,7 @@
 Askama formatter
 
 > **Note:** kirei is currently experimental and under active development.
-> Things are subject to change as we polish it up.
+> Expect things to change as we carefully prune all these trees.
 
 ## Usage
 
