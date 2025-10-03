@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use clap::Parser;
 use std::io::{self, Read};
 
@@ -6,15 +7,15 @@ use cli::Args;
 
 use kirei::AskamaFormatter;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<()> {
     let args = Args::parse();
     run(&args)
 }
 
-fn run(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
+fn run(args: &Args) -> Result<()> {
     let (input, maybe_filepath) = get_input_and_filepath(args)?;
     let mut kirei = AskamaFormatter::default();
-    let raw_formatted = kirei.format(&input);
+    let raw_formatted = kirei.format(&input)?;
 
     // Provide end of line by default
     let formatted = if raw_formatted.ends_with('\n') {
@@ -55,17 +56,18 @@ fn run(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn get_input_and_filepath(
-    args: &Args,
-) -> Result<(String, Option<String>), Box<dyn std::error::Error>> {
+fn get_input_and_filepath(args: &Args) -> Result<(String, Option<String>)> {
     if args.input != "-" {
-        let content = std::fs::read_to_string(&args.input)?;
+        let content = std::fs::read_to_string(&args.input)
+            .with_context(|| format!("Failed to read file '{}'", args.input))?;
         return Ok((content, Some(args.input.clone())));
     }
 
     // Reading from stdin
     let mut buffer = String::new();
-    io::stdin().read_to_string(&mut buffer)?;
+    io::stdin()
+        .read_to_string(&mut buffer)
+        .context("Failed to read from stdin")?;
 
     let filepath = args.stdin_filepath.clone();
     Ok((buffer, filepath))

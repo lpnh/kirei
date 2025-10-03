@@ -1,3 +1,4 @@
+use anyhow::Result;
 use tree_sitter::Node;
 
 use crate::config::Config;
@@ -181,10 +182,7 @@ impl AskamaNode {
     }
 }
 
-pub(crate) fn extract_nodes(
-    source: &str,
-    root: &Node,
-) -> Result<(String, Vec<AskamaNode>), Box<dyn std::error::Error>> {
+pub(crate) fn extract_nodes(source: &str, root: &Node) -> Result<(String, Vec<AskamaNode>)> {
     let mut html = String::new();
     let mut nodes = Vec::new();
     let mut pos = 0;

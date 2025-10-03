@@ -14,6 +14,7 @@ autoexamples = false
 include = ["src/*", "tests/*.rs"]
 
 [dependencies]
+anyhow = "1.0.100"
 clap = { version = "4.5.48", features = ["derive"] }
 textwrap = "0.16.2"
 tree-sitter = "0.25.10"

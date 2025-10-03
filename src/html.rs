@@ -1,3 +1,4 @@
+use anyhow::Result;
 use tree_sitter::Node;
 
 use crate::askama::{self, AskamaNode};
@@ -284,20 +285,14 @@ impl HtmlNode {
     }
 }
 
-pub(crate) fn parse_html_tree(
-    root_node: &Node,
-    source: &[u8],
-) -> Result<Vec<HtmlNode>, Box<dyn std::error::Error>> {
+pub(crate) fn parse_html_tree(root_node: &Node, source: &[u8]) -> Result<Vec<HtmlNode>> {
     let mut html_nodes = Vec::new();
     // The top-level call now returns a count, which we can ignore.
-    let _ = parse_html_node_recursive(root_node, source, &mut html_nodes)?;
+    let _ = parse_html_node_recursive(root_node, source, &mut html_nodes, 0)?;
     Ok(html_nodes)
 }
 
-fn parse_html_node(
-    node: &Node,
-    source: &[u8],
-) -> Result<Option<HtmlNode>, Box<dyn std::error::Error>> {
+fn parse_html_node(node: &Node, source: &[u8]) -> Result<Option<HtmlNode>> {
     match node.kind() {
         "start_tag" => Ok(Some(parse_start_tag(node, source))),
         "end_tag" => Ok(Some(parse_end_tag(node, source))),
@@ -363,34 +358,22 @@ fn parse_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
     HtmlNode::EndTag { name: tag_name }
 }
 
-fn parse_text_content(
-    node: &Node,
-    source: &[u8],
-) -> Result<Option<HtmlNode>, Box<dyn std::error::Error>> {
+fn parse_text_content(node: &Node, source: &[u8]) -> Result<Option<HtmlNode>> {
     let text = node.utf8_text(source)?;
     Ok(Some(HtmlNode::Text(text.to_string())))
 }
 
-fn parse_entity(
-    node: &Node,
-    source: &[u8],
-) -> Result<Option<HtmlNode>, Box<dyn std::error::Error>> {
+fn parse_entity(node: &Node, source: &[u8]) -> Result<Option<HtmlNode>> {
     let text = node.utf8_text(source)?;
     Ok(Some(HtmlNode::Entity(text.to_string())))
 }
 
-fn parse_comment(
-    node: &Node,
-    source: &[u8],
-) -> Result<Option<HtmlNode>, Box<dyn std::error::Error>> {
+fn parse_comment(node: &Node, source: &[u8]) -> Result<Option<HtmlNode>> {
     let text = node.utf8_text(source)?;
     Ok(Some(HtmlNode::Comment(text.to_string())))
 }
 
-fn parse_doctype(
-    node: &Node,
-    source: &[u8],
-) -> Result<Option<HtmlNode>, Box<dyn std::error::Error>> {
+fn parse_doctype(node: &Node, source: &[u8]) -> Result<Option<HtmlNode>> {
     let text = node.utf8_text(source)?;
     Ok(Some(HtmlNode::Doctype(text.to_string())))
 }
@@ -434,13 +417,20 @@ fn parse_html_node_recursive(
     node: &Node,
     source: &[u8],
     html_nodes: &mut Vec<HtmlNode>,
-) -> Result<usize, Box<dyn std::error::Error>> {
+    depth: usize,
+) -> Result<usize> {
+    // Prevent stack overflow on deeply nested HTML
+    if depth > 500 {
+        anyhow::bail!("nesting too deep");
+    }
+
     let mut current_chars_count = 0;
 
     match node.kind() {
         "document" | "script_element" | "style_element" => {
             for child in node.children(&mut node.walk()) {
-                current_chars_count += parse_html_node_recursive(&child, source, html_nodes)?;
+                current_chars_count +=
+                    parse_html_node_recursive(&child, source, html_nodes, depth + 1)?;
             }
         }
         "start_tag" | "end_tag" | "self_closing_tag" | "doctype" | "comment" => {
@@ -469,7 +459,8 @@ fn parse_html_node_recursive(
             let mut total_child_chars = 0;
 
             for child in node.children(&mut node.walk()) {
-                total_child_chars += parse_html_node_recursive(&child, source, html_nodes)?;
+                total_child_chars +=
+                    parse_html_node_recursive(&child, source, html_nodes, depth + 1)?;
             }
 
             let is_void_or_self_closing = html_nodes
@@ -521,7 +512,8 @@ fn parse_html_node_recursive(
             if node.child_count() > 0 {
                 // Recurse and aggregate char counts from children if any
                 for child in node.children(&mut node.walk()) {
-                    current_chars_count += parse_html_node_recursive(&child, source, html_nodes)?;
+                    current_chars_count +=
+                        parse_html_node_recursive(&child, source, html_nodes, depth + 1)?;
                 }
             } else {
                 // Fallback to HtmlNode::Text
