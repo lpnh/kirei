@@ -436,7 +436,7 @@ fn parse_html_node_recursive(
     let mut current_chars_count = 0;
 
     match node.kind() {
-        "document" | "fragment" => {
+        "document" | "script_element" | "style_element" => {
             for child in node.children(&mut node.walk()) {
                 current_chars_count += parse_html_node_recursive(&child, source, html_nodes)?;
             }
@@ -515,13 +515,14 @@ fn parse_html_node_recursive(
             }
         }
         _ => {
-            // For unhandled nodes, recurse and aggregate char counts from children.
+            // For nodes representing a syntax error...
             if node.child_count() > 0 {
+                // Recurse and aggregate char counts from children if any
                 for child in node.children(&mut node.walk()) {
                     current_chars_count += parse_html_node_recursive(&child, source, html_nodes)?;
                 }
             } else {
-                // Fallback for unknown leaf nodes
+                // Fallback to HtmlNode::Text
                 let text = node.utf8_text(source)?;
                 if !text.trim().is_empty() {
                     current_chars_count = text.chars().count();
