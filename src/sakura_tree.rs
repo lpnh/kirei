@@ -438,54 +438,54 @@ impl SakuraTree {
         askama_node: &AskamaNode,
         end_index: usize,
     ) -> Option<(TrunkRing, usize)> {
-        if let Some(open_tag) = askama_node.get_ctrl_tag()
-            && open_tag.boundary() == askama::Boundary::Open
-        {
-            // Look for matching close block, tracking nesting depth
-            let mut current_index = start_index + 1;
-            let mut depth = 0;
-
-            while current_index < end_index {
-                if let Some(leaf) = self.get_leaf(current_index)
-                    && let NodeSource::Askama(node) = &leaf.source
-                    && let Some(tag) = node.get_ctrl_tag()
-                {
-                    // Check if this is another opening of the same type (nested block)
-                    if tag.boundary() == askama::Boundary::Open && open_tag.same_kind(tag) {
-                        depth += 1;
-                    } else if tag.boundary() == askama::Boundary::Close
-                        && open_tag.matches_close(tag)
-                    {
-                        if depth == 0 {
-                            // Found our matching close at depth 0
-                            let close_leaf = current_index;
-
-                            // Recursively grow inner rings for leaves between open and close indices
-                            let inner_rings = self.grow_rings(start_index + 1, close_leaf);
-
-                            let layer = if inner_rings.is_empty() {
-                                TrunkLayer::EmptyControlBlock {
-                                    open_leaf: start_index,
-                                    close_leaf,
-                                }
-                            } else {
-                                TrunkLayer::ControlBlock {
-                                    open_leaf: start_index,
-                                    inner_rings,
-                                    close_leaf,
-                                }
-                            };
-                            let ring = TrunkRing::new(layer, self);
-                            return Some((ring, close_leaf + 1));
-                        }
-                        // This closes a nested block, decrement depth
-                        depth -= 1;
-                    }
-                }
-                current_index += 1;
-            }
+        // Must have an opening control tag
+        let open_tag = askama_node.get_ctrl_tag()?;
+        if open_tag.boundary() != askama::Boundary::Open {
+            return None;
         }
+        // Look for matching close block, tracking nesting depth
+        let mut current_index = start_index + 1;
+        let mut depth: u32 = 0;
 
+        while current_index < end_index && depth < 200 {
+            let leaf = self.get_leaf(current_index)?;
+
+            if let NodeSource::Askama(node) = &leaf.source
+                && let Some(tag) = node.get_ctrl_tag()
+            {
+                // Check if this is another opening of the same type (nested block)
+                if tag.boundary() == askama::Boundary::Open && open_tag.same_kind(tag) {
+                    depth += 1;
+                } else if tag.boundary() == askama::Boundary::Close && open_tag.matches_close(tag) {
+                    if depth == 0 {
+                        // Found our matching close at depth 0
+                        let close_leaf = current_index;
+
+                        // Recursively grow inner rings for leaves between open and close indices
+                        let inner_rings = self.grow_rings(start_index + 1, close_leaf);
+
+                        let layer = if inner_rings.is_empty() {
+                            TrunkLayer::EmptyControlBlock {
+                                open_leaf: start_index,
+                                close_leaf,
+                            }
+                        } else {
+                            TrunkLayer::ControlBlock {
+                                open_leaf: start_index,
+                                inner_rings,
+                                close_leaf,
+                            }
+                        };
+                        let ring = TrunkRing::new(layer, self);
+                        return Some((ring, close_leaf + 1));
+                    }
+                    // This closes a nested block, decrement depth
+                    depth = depth.saturating_sub(1);
+                }
+            }
+            current_index += 1;
+        }
+        // Didn't find a matching close tag
         None
     }
 

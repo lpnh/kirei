@@ -420,7 +420,7 @@ fn parse_html_node_recursive(
     depth: usize,
 ) -> Result<usize> {
     // Prevent stack overflow on deeply nested HTML
-    if depth > 500 {
+    if depth > 200 {
         anyhow::bail!("nesting too deep");
     }
 
