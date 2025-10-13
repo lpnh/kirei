@@ -277,7 +277,7 @@ fn parse_html_node(node: &Node, source: &[u8]) -> Result<Option<HtmlNode>> {
     match node.kind() {
         "start_tag" => Ok(Some(parse_start_tag(node, source))),
         "end_tag" => Ok(Some(parse_end_tag(node, source))),
-        "self_closing_tag" => Ok(parse_self_closing_tag(node, source)),
+        "self_closing_tag" => Ok(Some(parse_self_closing_tag(node, source))),
         "text" => parse_text_content(node, source),
         "entity" => parse_entity(node, source),
         "comment" => parse_comment(node, source),
@@ -312,7 +312,7 @@ fn parse_start_tag(node: &Node, source: &[u8]) -> HtmlNode {
     }
 }
 
-fn parse_self_closing_tag(node: &Node, source: &[u8]) -> Option<HtmlNode> {
+fn parse_self_closing_tag(node: &Node, source: &[u8]) -> HtmlNode {
     let tag_name = node
         .children(&mut node.walk())
         .find(|c| c.kind() == "tag_name")
@@ -322,10 +322,10 @@ fn parse_self_closing_tag(node: &Node, source: &[u8]) -> Option<HtmlNode> {
 
     let attributes = extract_attributes(node, source);
 
-    Some(HtmlNode::SelfClosingTag {
+    HtmlNode::SelfClosingTag {
         name: tag_name,
         attributes,
-    })
+    }
 }
 
 fn parse_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
