@@ -310,10 +310,7 @@ fn should_add_space_before_leaf(
     let prev_content = content_normalized(prev);
 
     // Don't add space if either content is empty (nothing to separate)
-    // Exception: when clauses should add space even if followed by empty content (???)
-    let prev_is_when_clause =
-        matches!(&prev.source, NodeSource::Askama(node) if node.is_when_clause());
-    if (current_content.is_empty() && !prev_is_when_clause) || prev_content.is_empty() {
+    if current_content.is_empty() || prev_content.is_empty() {
         return false;
     }
 
@@ -348,6 +345,12 @@ fn should_add_space_before_leaf(
 
         // Text followed by HTML start tag
         (NodeSource::Html(HtmlNode::Text(_)), NodeSource::Html(HtmlNode::StartTag { .. })) => true,
+
+        // When clause followed by HTML start tag
+        (NodeSource::Askama(prev_askama), NodeSource::Html(HtmlNode::StartTag { .. })) => {
+            prev_askama.is_when_clause()
+        }
+
         _ => false,
     }
 }

@@ -115,9 +115,8 @@ impl SakuraLeaf {
 
     pub(crate) fn from_html_text(text: &str) -> Self {
         let html_node = HtmlNode::Text(text.to_string());
-        let normalized_content = askama::normalize_whitespace(text);
         Self {
-            content: normalized_content,
+            content: text.to_string(),
             source: NodeSource::Html(html_node),
             element_metadata: None,
         }
@@ -128,33 +127,6 @@ impl SakuraLeaf {
         let normalized_content = Self::normalize_raw_text_preserving_lines(text);
         Self {
             content: normalized_content,
-            source: NodeSource::Html(html_node),
-            element_metadata: None,
-        }
-    }
-
-    pub(crate) fn from_html_text_preserving_edges(text: &str) -> Self {
-        let html_node = HtmlNode::Text(text.to_string());
-        Self {
-            content: text.to_string(),
-            source: NodeSource::Html(html_node),
-            element_metadata: None,
-        }
-    }
-
-    pub(crate) fn from_template_text(text: &str) -> Self {
-        let html_node = HtmlNode::Text(text.to_string());
-        Self {
-            content: text.to_string(),
-            source: NodeSource::Html(html_node),
-            element_metadata: None,
-        }
-    }
-
-    pub(crate) fn from_text_preserving_leading_only(text: &str) -> Self {
-        let html_node = HtmlNode::Text(text.to_string());
-        Self {
-            content: text.to_string(),
             source: NodeSource::Html(html_node),
             element_metadata: None,
         }
@@ -686,10 +658,6 @@ fn process_raw_text_node(text: &str, tree: &mut SakuraTree, askama_nodes: &[Aska
 }
 
 fn process_element_node(html_node: &HtmlNode, tree: &mut SakuraTree, askama_nodes: &[AskamaNode]) {
-    if should_add_spacing_after_when(tree) {
-        tree.grow_leaf(SakuraLeaf::from_html_text_preserving_edges(" "));
-    }
-
     let processed = html_node.clone().replace_placeholder(askama_nodes);
     tree.grow_leaf(SakuraLeaf::from_html(processed));
 }
@@ -750,22 +718,7 @@ fn replace_placeholders_in_text(
 }
 
 fn new_text_leaf(text: &str, after_expr_or_when: bool, before_expr: bool) -> SakuraLeaf {
-    if after_expr_or_when && before_expr {
-        // Between expressions or after when before expression: preserve both edges
-        SakuraLeaf::from_html_text_preserving_edges(text)
-    } else if after_expr_or_when {
-        // After expression/when but not before expression: preserve leading only
-        SakuraLeaf::from_text_preserving_leading_only(text)
-    } else {
-        // Default
-        SakuraLeaf::from_template_text(text)
-    }
-}
-
-// Check if spacing should be added after a when clause
-fn should_add_spacing_after_when(tree: &SakuraTree) -> bool {
-    tree.leaves
-        .last()
-        .and_then(|leaf| leaf.maybe_askama_node())
-        .is_some_and(AskamaNode::is_when_clause)
+    // TODO: how do not waste this metadata?
+    let _ = (after_expr_or_when, before_expr);
+    SakuraLeaf::from_html_text(text)
 }
