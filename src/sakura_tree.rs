@@ -3,6 +3,7 @@ use crate::{
     config::Config,
     html::HtmlNode,
 };
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub(crate) struct SakuraTree {
@@ -10,6 +11,13 @@ pub(crate) struct SakuraTree {
     pub(crate) leaves: Vec<SakuraLeaf>,
     pub(crate) trunk_rings: Vec<TrunkRing>,
     pub(crate) branches: Vec<SakuraBranch>,
+    pub(crate) twigs: HashMap<usize, Twig>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct Twig {
+    pub(crate) end_leaf: usize,
+    pub(crate) chars_count: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -18,20 +26,12 @@ pub(crate) struct SakuraLeaf {
     pub(crate) source: NodeSource,
     // The rendered content for this leaf
     pub(crate) content: String,
-    // Element metadata (only for StartTag nodes with matching end tags)
-    pub(crate) element_metadata: Option<LeafElementMetadata>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum NodeSource {
     Askama(AskamaNode),
     Html(HtmlNode),
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct LeafElementMetadata {
-    pub(crate) chars_count: usize,
-    pub(crate) end_leaf: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -99,7 +99,6 @@ impl SakuraLeaf {
         Self {
             content,
             source: NodeSource::Askama(askama_node),
-            element_metadata: None,
         }
     }
 
@@ -108,7 +107,6 @@ impl SakuraLeaf {
         Self {
             content,
             source: NodeSource::Html(html_node),
-            element_metadata: None,
         }
     }
 
@@ -117,7 +115,6 @@ impl SakuraLeaf {
         Self {
             content: text.to_string(),
             source: NodeSource::Html(html_node),
-            element_metadata: None,
         }
     }
 
@@ -127,7 +124,6 @@ impl SakuraLeaf {
         Self {
             content: normalized_content,
             source: NodeSource::Html(html_node),
-            element_metadata: None,
         }
     }
 
@@ -171,8 +167,6 @@ impl SakuraBranch {
     }
 }
 
-use std::collections::HashMap;
-
 impl SakuraTree {
     pub(crate) fn grow(
         askama_nodes: &[AskamaNode],
@@ -184,6 +178,7 @@ impl SakuraTree {
             leaves: Vec::new(),
             trunk_rings: Vec::new(),
             branches: Vec::new(),
+            twigs: HashMap::new(),
         };
 
         // Html nodes to leaves index map
@@ -199,8 +194,8 @@ impl SakuraTree {
             process_html_node(html_node, &mut tree, askama_nodes);
         }
 
-        // Convert metadata from html indices to leaf indices
-        for leaf in &mut tree.leaves {
+        // Convert metadata from html indices to leaf indices and store as twigs
+        for (leaf_idx, leaf) in tree.leaves.iter().enumerate() {
             if let NodeSource::Html(HtmlNode::StartTag {
                 element_metadata: Some(html_metadata),
                 ..
@@ -208,10 +203,13 @@ impl SakuraTree {
             {
                 // Convert html end_tag index to end_leaf index
                 if let Some(&end_leaf) = html_to_leaf_map.get(&html_metadata.end_tag_index) {
-                    leaf.element_metadata = Some(LeafElementMetadata {
-                        chars_count: html_metadata.chars_count,
-                        end_leaf,
-                    });
+                    tree.twigs.insert(
+                        leaf_idx,
+                        Twig {
+                            chars_count: html_metadata.chars_count,
+                            end_leaf,
+                        },
+                    );
                 }
             }
         }
@@ -336,17 +334,16 @@ impl SakuraTree {
     }
 
     fn try_complete_element(&self, start_leaf: usize) -> Option<(TrunkRing, usize)> {
-        // Get the leaf and extract metadata
-        let leaf = self.get_leaf(start_leaf)?;
-        let metadata = leaf.element_metadata.as_ref()?;
-
-        let end_leaf = metadata.end_leaf;
-        let chars_count = metadata.chars_count;
+        // Get the twig for this element
+        let twig = self.twigs.get(&start_leaf)?;
+        let end_leaf = twig.end_leaf;
+        let chars_count = twig.chars_count;
 
         // Recursively grow inner rings
         let inner_rings = self.grow_rings(start_leaf + 1, end_leaf);
 
         // Get inline status from the start tag
+        let leaf = self.get_leaf(start_leaf)?;
         let is_semantic_inline = match &leaf.source {
             NodeSource::Html(html_node) => html_node.is_inline_level(),
             NodeSource::Askama(_) => false,
@@ -424,10 +421,7 @@ impl SakuraTree {
 
     // Find the end leaf index of a complete element
     fn find_complete_element_end(&self, start_leaf: usize) -> Option<usize> {
-        self.get_leaf(start_leaf)?
-            .element_metadata
-            .as_ref()
-            .map(|metadata| metadata.end_leaf)
+        self.twigs.get(&start_leaf).map(|twig| twig.end_leaf)
     }
 
     // Build a when clause with all its inline content (including complete inline elements)
@@ -689,35 +683,23 @@ fn replace_placeholders_in_text(
 ) {
     let config = tree.config.clone();
     let mut last_end = 0;
-    let mut prev_was_expr_or_when = false;
 
     for (pos, (placeholder, askama_node)) in placeholders {
         // Add text before this placeholder
         if pos > last_end {
             let text_segment = &text[last_end..pos];
-            let next_is_expr = askama_node.is_expr();
-            let leaf = new_text_leaf(text_segment, prev_was_expr_or_when, next_is_expr);
-            tree.grow_leaf(leaf);
+            tree.grow_leaf(SakuraLeaf::from_html_text(text_segment));
         }
 
         // Add the Askama node
         tree.grow_leaf(SakuraLeaf::from_askama(&config, askama_node.clone()));
 
-        // Update flag for next segment
-        prev_was_expr_or_when = askama_node.is_expr() || askama_node.is_when_clause();
         last_end = pos + placeholder.len();
     }
 
     // Add any remaining text after the last placeholder
     if last_end < text.len() {
         let remaining = &text[last_end..];
-        let leaf = new_text_leaf(remaining, prev_was_expr_or_when, false);
-        tree.grow_leaf(leaf);
+        tree.grow_leaf(SakuraLeaf::from_html_text(remaining));
     }
-}
-
-fn new_text_leaf(text: &str, after_expr_or_when: bool, before_expr: bool) -> SakuraLeaf {
-    // TODO: how do not waste this metadata?
-    let _ = (after_expr_or_when, before_expr);
-    SakuraLeaf::from_html_text(text)
 }
