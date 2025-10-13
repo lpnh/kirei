@@ -90,8 +90,8 @@ pub(crate) enum BranchStyle {
     #[default]
     Inline,
     MultiLine,
-    WrappedText,
-    RawText,
+    Wrapped,
+    Raw,
 }
 
 impl SakuraLeaf {

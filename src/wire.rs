@@ -146,8 +146,7 @@ fn decide_branch_style(tree: &SakuraTree, trunk_ring: &TrunkRing) -> BranchStyle
             }
         }
 
-        // ScriptStyle always use RawText style
-        TrunkLayer::ScriptStyle { .. } => BranchStyle::RawText,
+        TrunkLayer::ScriptStyle { .. } => BranchStyle::Raw,
 
         // Text sequences are inline if they fit
         TrunkLayer::TextSequence { leaves } => {
@@ -165,7 +164,7 @@ fn decide_branch_style(tree: &SakuraTree, trunk_ring: &TrunkRing) -> BranchStyle
             } else if trunk_ring.total_chars <= tree.config.max_line_length {
                 BranchStyle::Inline
             } else {
-                BranchStyle::WrappedText
+                BranchStyle::Wrapped
             }
         }
 
@@ -183,7 +182,6 @@ fn decide_branch_style(tree: &SakuraTree, trunk_ring: &TrunkRing) -> BranchStyle
             }
         }
 
-        // Askama control blocks: always block format
         TrunkLayer::ControlBlock { .. } => BranchStyle::MultiLine,
     }
 }
