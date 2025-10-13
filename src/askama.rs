@@ -175,10 +175,7 @@ impl AskamaNode {
 
     // Check if this is a when clause that should preserve leading spaces in following text
     pub(crate) fn is_when_clause(&self) -> bool {
-        matches!(
-            self.get_ctrl_tag(),
-            Some(ControlTag::Match(Boundary::Inner))
-        )
+        matches!(self.get_ctrl_tag(), Some(ControlTag::When(_)))
     }
 }
 

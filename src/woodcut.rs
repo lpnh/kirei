@@ -302,72 +302,53 @@ fn should_add_space_before_leaf(
 
     let prev_leaf = prev_branch_index.and_then(|&idx| tree.get_leaf(idx));
 
-    if let (Some(current), Some(prev)) = (current_leaf, prev_leaf) {
-        let current_content = content_normalized(current);
-        let prev_content = content_normalized(prev);
+    let (Some(current), Some(prev)) = (current_leaf, prev_leaf) else {
+        return false;
+    };
 
-        // Don't add space if the current leaf already starts with space
-        if current_content.starts_with(' ') {
-            return false;
+    let current_content = content_normalized(current);
+    let prev_content = content_normalized(prev);
+
+    // Don't add space if either content is empty (nothing to separate)
+    // Exception: when clauses should add space even if followed by empty content (???)
+    let prev_is_when_clause =
+        matches!(&prev.source, NodeSource::Askama(node) if node.is_when_clause());
+    if (current_content.is_empty() && !prev_is_when_clause) || prev_content.is_empty() {
+        return false;
+    }
+
+    // The whitespace is already present
+    if current_content.starts_with(' ') || prev_content.ends_with(' ') {
+        return false;
+    }
+
+    // Add space between specific node type combinations
+    match (&prev.source, &current.source) {
+        // Entity followed by text, text followed by entity
+        (NodeSource::Html(HtmlNode::Entity(_)), NodeSource::Html(HtmlNode::Text(_)))
+        | (NodeSource::Html(HtmlNode::Text(_)), NodeSource::Html(HtmlNode::Entity(_))) => true,
+
+        // Askama expression followed by text (!punctuation)
+        (NodeSource::Askama(prev_askama), NodeSource::Html(HtmlNode::Text(_))) => {
+            !prev_askama.is_expr()
+                || !current
+                    .content
+                    .starts_with(|c: char| c.is_ascii_punctuation())
         }
 
-        // Don't add space if previous leaf ends with space
-        if prev_content.ends_with(' ') {
-            return false;
+        // Text (!punctuation) followed by Askama expression
+        (NodeSource::Html(HtmlNode::Text(_)), NodeSource::Askama(current_askama)) => {
+            current_askama.is_expr() && !prev.content.ends_with(|c: char| c.is_ascii_punctuation())
         }
 
-        // Add space between specific node type combinations
-        match (&prev.source, &current.source) {
-            // Entity followed by text, text followed by entity
-            (NodeSource::Html(HtmlNode::Entity(_)), NodeSource::Html(HtmlNode::Text(_)))
-            | (NodeSource::Html(HtmlNode::Text(_)), NodeSource::Html(HtmlNode::Entity(_))) => true,
-            // Askama expression or when clause followed by text (preserve leading)
-            (NodeSource::Askama(prev_askama), NodeSource::Html(HtmlNode::Text(_))) => {
-                if prev_askama.is_expr() {
-                    // Don't add space if text starts with punctuation
-                    let starts_with_punct = current
-                        .content
-                        .chars()
-                        .next()
-                        .is_some_and(|c| c.is_ascii_punctuation());
-                    !starts_with_punct
-                } else {
-                    !prev_askama.is_when_clause()
-                }
-            }
-            // Text followed by Askama expression - add space (preserve trailing)
-            (NodeSource::Html(HtmlNode::Text(_)), NodeSource::Askama(current_askama)) => {
-                if current_askama.is_expr() {
-                    // Don't add space if text ends with punctuation
-                    let ends_with_punct = prev
-                        .content
-                        .chars()
-                        .last()
-                        .is_some_and(|c| c.is_ascii_punctuation());
-                    !ends_with_punct
-                } else {
-                    false
-                }
-            }
-            // Askama when clause followed by HTML element
-            (NodeSource::Askama(prev_askama), NodeSource::Html(HtmlNode::StartTag { .. })) => {
-                !prev_askama.is_when_clause()
-            }
-            // HTML end tag followed by text that starts with a letter
-            (NodeSource::Html(HtmlNode::EndTag { .. }), NodeSource::Html(HtmlNode::Text(_))) => {
-                current_content
-                    .chars()
-                    .next()
-                    .is_some_and(char::is_alphabetic)
-            }
-            // Text followed by HTML start tag
-            (NodeSource::Html(HtmlNode::Text(_)), NodeSource::Html(HtmlNode::StartTag { .. })) => {
-                !prev_content.ends_with(' ')
-            }
-            _ => false,
+        // HTML end tag followed by text that starts with a letter
+        (NodeSource::Html(HtmlNode::EndTag { .. }), NodeSource::Html(HtmlNode::Text(_))) => {
+            current_content.starts_with(char::is_alphabetic)
         }
-    } else {
-        false
+
+        // Text followed by HTML start tag
+        (NodeSource::Html(HtmlNode::Text(_)), NodeSource::Html(HtmlNode::StartTag { .. })) => true,
+        _ => false,
     }
 }
 
