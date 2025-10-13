@@ -4,7 +4,7 @@ use crate::{
     askama::AskamaNode,
     config::Config,
     html::HtmlNode,
-    sakura_tree::{BranchStyle, NodeSource, SakuraTree},
+    sakura_tree::{BranchStyle, NodeSource, SakuraLeaf, SakuraTree},
 };
 
 pub(crate) fn print(tree: &SakuraTree) -> String {
@@ -30,103 +30,6 @@ pub(crate) fn print(tree: &SakuraTree) -> String {
     inked_tree
 }
 
-fn should_add_space_before_leaf(
-    tree: &SakuraTree,
-    current_leaf_index: usize,
-    branch_indices: &[usize],
-    position_in_branch: usize,
-) -> bool {
-    // Get the current leaf and the previous leaf in the branch
-    let current_leaf = tree.get_leaf(current_leaf_index);
-    let prev_branch_index = if position_in_branch > 0 {
-        branch_indices.get(position_in_branch - 1)
-    } else {
-        None
-    };
-
-    let prev_leaf = prev_branch_index.and_then(|&idx| tree.get_leaf(idx));
-
-    if let (Some(current), Some(prev)) = (current_leaf, prev_leaf) {
-        let current_content = if current.is_html_text() {
-            normalize_text_content(&current.content)
-        } else {
-            current.content.clone()
-        };
-        let prev_content = if prev.is_html_text() {
-            normalize_text_content(&prev.content)
-        } else {
-            prev.content.clone()
-        };
-
-        // Don't add space if the current leaf already starts with space
-        if current_content.starts_with(' ') {
-            return false;
-        }
-
-        // Don't add space if previous leaf ends with space
-        if prev_content.ends_with(' ') {
-            return false;
-        }
-
-        // Add space between specific node type combinations
-        match (&prev.source, &current.source) {
-            // Entity followed by Text OR Text followed by Entity - add space
-            (NodeSource::Html(HtmlNode::Entity(_)), NodeSource::Html(HtmlNode::Text(_)))
-            | (NodeSource::Html(HtmlNode::Text(_)), NodeSource::Html(HtmlNode::Entity(_))) => true,
-            // Askama expression followed by text - add space (preserve leading)
-            (NodeSource::Askama(prev_askama), NodeSource::Html(HtmlNode::Text(_))) => {
-                if prev_askama.is_expr() {
-                    // Don't add space if text starts with punctuation
-                    let starts_with_punct = current
-                        .content
-                        .chars()
-                        .next()
-                        .is_some_and(|c| c.is_ascii_punctuation());
-                    !starts_with_punct
-                } else {
-                    // Control block
-                    prev_askama.get_ctrl_tag().is_some()
-                }
-            }
-            // Text followed by Askama expression - add space (preserve trailing)
-            (NodeSource::Html(HtmlNode::Text(_)), NodeSource::Askama(current_askama)) => {
-                if current_askama.is_expr() {
-                    // Don't add space if text ends with punctuation
-                    let ends_with_punct = prev
-                        .content
-                        .chars()
-                        .last()
-                        .is_some_and(|c| c.is_ascii_punctuation());
-                    !ends_with_punct
-                } else {
-                    false
-                }
-            }
-            // Askama control block followed by HTML element - add space
-            (
-                NodeSource::Askama(prev_askama),
-                NodeSource::Html(HtmlNode::StartTag { .. } | HtmlNode::Void { .. }),
-            ) => prev_askama.get_ctrl_tag().is_some(),
-            // HTML end tag or Void element followed by text that starts with a letter - add space
-            (
-                NodeSource::Html(HtmlNode::EndTag { .. } | HtmlNode::Void { .. }),
-                NodeSource::Html(HtmlNode::Text(_)),
-            ) => current_content
-                .chars()
-                .next()
-                .is_some_and(char::is_alphabetic),
-            // Text followed by HTML start tag or void element - add space (like "a<a>" -> "a <a>")
-            (
-                NodeSource::Html(HtmlNode::Text(_)),
-                NodeSource::Html(HtmlNode::StartTag { .. } | HtmlNode::Void { .. }),
-            ) => !prev_content.ends_with(' '),
-            _ => false,
-        }
-    } else {
-        false
-    }
-}
-
 fn ink_inline_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize]) -> String {
     let indent_str = indent_for(&tree.config, indent_level);
     let mut line_content = String::new();
@@ -141,11 +44,7 @@ fn ink_inline_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize
 
     for (i, &leaf_index) in leaf_indices.iter().enumerate() {
         if let Some(leaf) = tree.get_leaf(leaf_index) {
-            let content = if leaf.is_html_text() {
-                normalize_text_content(&leaf.content)
-            } else {
-                leaf.content.clone()
-            };
+            let content = content_normalized(leaf);
 
             // Add space between leaves when needed for proper formatting
             if i > 0 && should_add_space_before_leaf(tree, leaf_index, leaf_indices, i) {
@@ -178,11 +77,7 @@ fn ink_multiline_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[us
 
     for &leaf_index in leaf_indices {
         if let Some(leaf) = tree.get_leaf(leaf_index) {
-            let content = if leaf.is_html_text() {
-                normalize_text_content(&leaf.content)
-            } else {
-                leaf.content.clone()
-            };
+            let content = content_normalized(leaf);
 
             if !content.trim().is_empty() {
                 let indent_str = indent_for(&tree.config, indent_level);
@@ -226,11 +121,7 @@ fn ink_wrapped_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usiz
 
     for (i, &leaf_index) in leaf_indices.iter().enumerate() {
         if let Some(leaf) = tree.get_leaf(leaf_index) {
-            let content = if leaf.is_html_text() {
-                normalize_text_content(&leaf.content)
-            } else {
-                leaf.content.clone()
-            };
+            let content = content_normalized(leaf);
 
             // Check if we need space before this leaf
             let needs_space =
@@ -371,19 +262,12 @@ fn ink_raw_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize]) 
     output
 }
 
-fn wrap_inline_content(config: &Config, content: &str, indent_level: i32) -> String {
-    let prefix = indent_for(config, indent_level);
-    let available_width = config.max_line_length;
-
-    let options = Options::new(available_width)
-        .initial_indent(&prefix)
-        .subsequent_indent(&prefix);
-
-    wrap(content, &options).join("\n")
-}
-
-fn indent_for(config: &Config, indent_level: i32) -> String {
-    " ".repeat(indent_level as usize * config.indent_size)
+fn content_normalized(leaf: &SakuraLeaf) -> String {
+    if leaf.is_html_text() {
+        normalize_text_content(&leaf.content)
+    } else {
+        leaf.content.clone()
+    }
 }
 
 fn normalize_text_content(text: &str) -> String {
@@ -400,4 +284,108 @@ fn normalize_text_content(text: &str) -> String {
     let internal = text.split_whitespace().collect::<Vec<_>>().join(" ");
 
     format!("{}{}", internal, trailing)
+}
+
+fn should_add_space_before_leaf(
+    tree: &SakuraTree,
+    current_leaf_index: usize,
+    branch_indices: &[usize],
+    position_in_branch: usize,
+) -> bool {
+    // Get the current leaf and the previous leaf in the branch
+    let current_leaf = tree.get_leaf(current_leaf_index);
+    let prev_branch_index = if position_in_branch > 0 {
+        branch_indices.get(position_in_branch - 1)
+    } else {
+        None
+    };
+
+    let prev_leaf = prev_branch_index.and_then(|&idx| tree.get_leaf(idx));
+
+    if let (Some(current), Some(prev)) = (current_leaf, prev_leaf) {
+        let current_content = content_normalized(current);
+        let prev_content = content_normalized(prev);
+
+        // Don't add space if the current leaf already starts with space
+        if current_content.starts_with(' ') {
+            return false;
+        }
+
+        // Don't add space if previous leaf ends with space
+        if prev_content.ends_with(' ') {
+            return false;
+        }
+
+        // Add space between specific node type combinations
+        match (&prev.source, &current.source) {
+            // Entity followed by Text OR Text followed by Entity - add space
+            (NodeSource::Html(HtmlNode::Entity(_)), NodeSource::Html(HtmlNode::Text(_)))
+            | (NodeSource::Html(HtmlNode::Text(_)), NodeSource::Html(HtmlNode::Entity(_))) => true,
+            // Askama expression followed by text - add space (preserve leading)
+            (NodeSource::Askama(prev_askama), NodeSource::Html(HtmlNode::Text(_))) => {
+                if prev_askama.is_expr() {
+                    // Don't add space if text starts with punctuation
+                    let starts_with_punct = current
+                        .content
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_punctuation());
+                    !starts_with_punct
+                } else {
+                    // Control block
+                    prev_askama.get_ctrl_tag().is_some()
+                }
+            }
+            // Text followed by Askama expression - add space (preserve trailing)
+            (NodeSource::Html(HtmlNode::Text(_)), NodeSource::Askama(current_askama)) => {
+                if current_askama.is_expr() {
+                    // Don't add space if text ends with punctuation
+                    let ends_with_punct = prev
+                        .content
+                        .chars()
+                        .last()
+                        .is_some_and(|c| c.is_ascii_punctuation());
+                    !ends_with_punct
+                } else {
+                    false
+                }
+            }
+            // Askama control block followed by HTML element - add space
+            (
+                NodeSource::Askama(prev_askama),
+                NodeSource::Html(HtmlNode::StartTag { .. } | HtmlNode::Void { .. }),
+            ) => prev_askama.get_ctrl_tag().is_some(),
+            // HTML end tag or Void element followed by text that starts with a letter - add space
+            (
+                NodeSource::Html(HtmlNode::EndTag { .. } | HtmlNode::Void { .. }),
+                NodeSource::Html(HtmlNode::Text(_)),
+            ) => current_content
+                .chars()
+                .next()
+                .is_some_and(char::is_alphabetic),
+            // Text followed by HTML start tag or void element - add space (like "a<a>" -> "a <a>")
+            (
+                NodeSource::Html(HtmlNode::Text(_)),
+                NodeSource::Html(HtmlNode::StartTag { .. } | HtmlNode::Void { .. }),
+            ) => !prev_content.ends_with(' '),
+            _ => false,
+        }
+    } else {
+        false
+    }
+}
+
+fn wrap_inline_content(config: &Config, content: &str, indent_level: i32) -> String {
+    let prefix = indent_for(config, indent_level);
+    let available_width = config.max_line_length;
+
+    let options = Options::new(available_width)
+        .initial_indent(&prefix)
+        .subsequent_indent(&prefix);
+
+    wrap(content, &options).join("\n")
+}
+
+fn indent_for(config: &Config, indent_level: i32) -> String {
+    " ".repeat(indent_level as usize * config.indent_size)
 }
