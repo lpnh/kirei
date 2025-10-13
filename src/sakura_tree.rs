@@ -1,9 +1,10 @@
+use std::collections::{BTreeMap, HashMap};
+
 use crate::{
     askama::{self, AskamaNode},
     config::Config,
     html::HtmlNode,
 };
-use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub(crate) struct SakuraTree {
@@ -127,7 +128,6 @@ impl SakuraLeaf {
         }
     }
 
-    // Normalize raw text content while preserving line structure
     fn normalize_raw_text_preserving_lines(text: &str) -> String {
         let trimmed = text.trim_matches('\n');
         if trimmed.is_empty() {
@@ -181,7 +181,6 @@ impl SakuraTree {
             twigs: HashMap::new(),
         };
 
-        // Html nodes to leaves index map
         let mut html_to_leaf_map: HashMap<usize, usize> = HashMap::new();
 
         // Convert each HtmlNode to SakuraLeaf while replacing placeholders
@@ -619,9 +618,6 @@ impl TrunkLayer {
         }
     }
 }
-
-// Html processing
-use std::collections::BTreeMap;
 
 fn process_html_node(html_node: &HtmlNode, tree: &mut SakuraTree, askama_nodes: &[AskamaNode]) {
     match html_node {

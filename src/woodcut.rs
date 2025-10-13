@@ -345,9 +345,12 @@ fn should_add_space_before_leaf(
 
     // Add space between specific node type combinations
     match (&prev.source, &current.source) {
-        // Entity followed by text, text followed by entity
-        (NodeSource::Html(HtmlNode::Entity(_)), NodeSource::Html(HtmlNode::Text(_)))
-        | (NodeSource::Html(HtmlNode::Text(_)), NodeSource::Html(HtmlNode::Entity(_))) => true,
+        // Text followed by HTML start tag or entity, entity followed by text
+        (
+            NodeSource::Html(HtmlNode::Text(_)),
+            NodeSource::Html(HtmlNode::Entity(_) | HtmlNode::StartTag { .. }),
+        )
+        | (NodeSource::Html(HtmlNode::Entity(_)), NodeSource::Html(HtmlNode::Text(_))) => true,
 
         // Askama expression followed by text (!punctuation)
         (NodeSource::Askama(prev_askama), NodeSource::Html(HtmlNode::Text(_))) => {
@@ -366,9 +369,6 @@ fn should_add_space_before_leaf(
         (NodeSource::Html(HtmlNode::EndTag { .. }), NodeSource::Html(HtmlNode::Text(_))) => {
             current_content.starts_with(char::is_alphabetic)
         }
-
-        // Text followed by HTML start tag
-        (NodeSource::Html(HtmlNode::Text(_)), NodeSource::Html(HtmlNode::StartTag { .. })) => true,
 
         // When clause followed by HTML start tag
         (NodeSource::Askama(prev_askama), NodeSource::Html(HtmlNode::StartTag { .. })) => {
