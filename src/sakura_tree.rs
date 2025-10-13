@@ -13,12 +13,6 @@ pub(crate) struct SakuraTree {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct LeafElementMetadata {
-    pub(crate) chars_count: usize,
-    pub(crate) end_leaf: usize,
-}
-
-#[derive(Debug, Clone)]
 pub(crate) struct SakuraLeaf {
     // The source of this leaf (Askama or HTML)
     pub(crate) source: NodeSource,
@@ -26,6 +20,18 @@ pub(crate) struct SakuraLeaf {
     pub(crate) content: String,
     // Element metadata (only for StartTag nodes with matching end tags)
     pub(crate) element_metadata: Option<LeafElementMetadata>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum NodeSource {
+    Askama(AskamaNode),
+    Html(HtmlNode),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct LeafElementMetadata {
+    pub(crate) chars_count: usize,
+    pub(crate) end_leaf: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -48,9 +54,9 @@ pub(crate) enum TrunkLayer {
     TextSequence {
         leaves: Vec<usize>,
     },
-    // Raw text (inside style/script tags)
+    // Raw text (inside style/script elements)
     ScriptStyle {
-        leaves: Vec<usize>,
+        leaf: usize,
     },
     // Askama control block with open/close tag indices
     ControlBlock {
@@ -77,12 +83,6 @@ pub(crate) struct SakuraBranch {
     pub(crate) style: BranchStyle,
     // Indentation level for this branch
     pub(crate) indent_level: i32,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) enum NodeSource {
-    Askama(AskamaNode),
-    Html(HtmlNode),
 }
 
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -336,9 +336,7 @@ impl SakuraTree {
                     }
                     // Raw text (script/style content)
                     NodeSource::Html(HtmlNode::RawText(_)) => {
-                        let layer = TrunkLayer::ScriptStyle {
-                            leaves: vec![index],
-                        };
+                        let layer = TrunkLayer::ScriptStyle { leaf: index };
                         let ring = TrunkRing::new(layer, self);
                         trunk_rings.push(ring);
                         index += 1;
@@ -600,10 +598,8 @@ impl TrunkRing {
                     TrunkLayer::CompleteElement {
                         is_semantic_inline, ..
                     } => !is_semantic_inline || ring.inner_has_multi_line_content(),
-                    // Control blocks are always multi-line
-                    TrunkLayer::ControlBlock { .. } => true,
-                    // Script/style elements are always multi-line
-                    TrunkLayer::ScriptStyle { .. } => true,
+                    // Control blocks and script/style elements are always multi-line
+                    TrunkLayer::ControlBlock { .. } | TrunkLayer::ScriptStyle { .. } => true,
                     _ => ring.inner_has_multi_line_content(),
                 }
             }),
@@ -631,9 +627,7 @@ impl TrunkLayer {
                 }
                 indices
             }
-            TrunkLayer::TextSequence { leaves } | TrunkLayer::ScriptStyle { leaves } => {
-                leaves.clone()
-            }
+            TrunkLayer::TextSequence { leaves } => leaves.clone(),
             TrunkLayer::ControlBlock {
                 open_leaf,
                 inner_rings,
@@ -654,7 +648,7 @@ impl TrunkLayer {
             } => {
                 vec![*open_leaf, *close_leaf]
             }
-            TrunkLayer::Standalone { leaf } => {
+            TrunkLayer::ScriptStyle { leaf } | TrunkLayer::Standalone { leaf } => {
                 vec![*leaf]
             }
         }

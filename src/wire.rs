@@ -146,7 +146,7 @@ fn decide_branch_style(tree: &SakuraTree, trunk_ring: &TrunkRing) -> BranchStyle
             }
         }
 
-        // ScriptStyle  always use RawText style
+        // ScriptStyle always use RawText style
         TrunkLayer::ScriptStyle { .. } => BranchStyle::RawText,
 
         // Text sequences are inline if they fit
@@ -170,8 +170,7 @@ fn decide_branch_style(tree: &SakuraTree, trunk_ring: &TrunkRing) -> BranchStyle
         }
 
         TrunkLayer::CompleteElement {
-            is_semantic_inline,
-            ..
+            is_semantic_inline, ..
         } => {
             // Check structure constraints
             let fits_in_line = trunk_ring.total_chars <= tree.config.max_line_length;
