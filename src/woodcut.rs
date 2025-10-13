@@ -318,10 +318,10 @@ fn should_add_space_before_leaf(
 
         // Add space between specific node type combinations
         match (&prev.source, &current.source) {
-            // Entity followed by Text OR Text followed by Entity - add space
+            // Entity followed by text, text followed by entity
             (NodeSource::Html(HtmlNode::Entity(_)), NodeSource::Html(HtmlNode::Text(_)))
             | (NodeSource::Html(HtmlNode::Text(_)), NodeSource::Html(HtmlNode::Entity(_))) => true,
-            // Askama expression followed by text - add space (preserve leading)
+            // Askama expression or when clause followed by text (preserve leading)
             (NodeSource::Askama(prev_askama), NodeSource::Html(HtmlNode::Text(_))) => {
                 if prev_askama.is_expr() {
                     // Don't add space if text starts with punctuation
@@ -332,8 +332,7 @@ fn should_add_space_before_leaf(
                         .is_some_and(|c| c.is_ascii_punctuation());
                     !starts_with_punct
                 } else {
-                    // Control block
-                    prev_askama.get_ctrl_tag().is_some()
+                    !prev_askama.is_when_clause()
                 }
             }
             // Text followed by Askama expression - add space (preserve trailing)
@@ -350,24 +349,21 @@ fn should_add_space_before_leaf(
                     false
                 }
             }
-            // Askama control block followed by HTML element - add space
-            (
-                NodeSource::Askama(prev_askama),
-                NodeSource::Html(HtmlNode::StartTag { .. } | HtmlNode::Void { .. }),
-            ) => prev_askama.get_ctrl_tag().is_some(),
-            // HTML end tag or Void element followed by text that starts with a letter - add space
-            (
-                NodeSource::Html(HtmlNode::EndTag { .. } | HtmlNode::Void { .. }),
-                NodeSource::Html(HtmlNode::Text(_)),
-            ) => current_content
-                .chars()
-                .next()
-                .is_some_and(char::is_alphabetic),
-            // Text followed by HTML start tag or void element - add space (like "a<a>" -> "a <a>")
-            (
-                NodeSource::Html(HtmlNode::Text(_)),
-                NodeSource::Html(HtmlNode::StartTag { .. } | HtmlNode::Void { .. }),
-            ) => !prev_content.ends_with(' '),
+            // Askama when clause followed by HTML element
+            (NodeSource::Askama(prev_askama), NodeSource::Html(HtmlNode::StartTag { .. })) => {
+                !prev_askama.is_when_clause()
+            }
+            // HTML end tag followed by text that starts with a letter
+            (NodeSource::Html(HtmlNode::EndTag { .. }), NodeSource::Html(HtmlNode::Text(_))) => {
+                current_content
+                    .chars()
+                    .next()
+                    .is_some_and(char::is_alphabetic)
+            }
+            // Text followed by HTML start tag
+            (NodeSource::Html(HtmlNode::Text(_)), NodeSource::Html(HtmlNode::StartTag { .. })) => {
+                !prev_content.ends_with(' ')
+            }
             _ => false,
         }
     } else {

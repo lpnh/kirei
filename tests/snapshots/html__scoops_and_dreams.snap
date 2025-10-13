@@ -316,7 +316,7 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 </figure>
                 <!-- Self-closing tags with various formats -->
                 <p>
-                    Flavor 1 <br /> Flavor 2 with space<br />
+                    Flavor 1<br />Flavor 2 with space<br />
                     Flavor 3 with self-closing
                     <br />Flavor 4 compact
                 </p>
@@ -361,7 +361,7 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
             <address>
                 <strong>Scoops& Dreams</strong>
                 <br />
-                456 Frozen Lane <br /> Sweet City, SC 67890 <br />
+                456 Frozen Lane<br />Sweet City, SC 67890<br />
                 <a href="tel:+1-555-SCOOPS" style="color: #87CEEB;">
                 📞 1-555-SCOOPS
                 </a><br />
