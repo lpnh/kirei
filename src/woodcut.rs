@@ -5,7 +5,7 @@ use crate::{
     askama::AskamaNode,
     config::Config,
     html::HtmlNode,
-    sakura_tree::{BranchStyle, Root, SakuraLeaf, SakuraTree},
+    sakura_tree::{BranchStyle, Leaf, Root, SakuraTree},
 };
 
 pub(crate) fn print(tree: &SakuraTree) -> String {
@@ -285,7 +285,7 @@ fn ink_raw_branch(
     }
 }
 
-fn content_normalized(leaf: &SakuraLeaf) -> Cow<'_, str> {
+fn content_normalized(leaf: &Leaf) -> Cow<'_, str> {
     if leaf.is_html_text() {
         Cow::Owned(normalize_text_content(&leaf.content))
     } else {
