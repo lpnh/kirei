@@ -24,13 +24,13 @@ pub(crate) struct Twig {
 #[derive(Debug, Clone)]
 pub(crate) struct SakuraLeaf {
     // The source of this leaf (Askama or HTML)
-    pub(crate) source: NodeSource,
+    pub(crate) root: Root,
     // The rendered content for this leaf
     pub(crate) content: String,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum NodeSource {
+pub(crate) enum Root {
     Askama(AskamaNode),
     Html(HtmlNode),
 }
@@ -99,7 +99,7 @@ impl SakuraLeaf {
         let content = askama::format_askama_node(config, &askama_node);
         Self {
             content,
-            source: NodeSource::Askama(askama_node),
+            root: Root::Askama(askama_node),
         }
     }
 
@@ -107,7 +107,7 @@ impl SakuraLeaf {
         let content = html_node.to_string();
         Self {
             content,
-            source: NodeSource::Html(html_node),
+            root: Root::Html(html_node),
         }
     }
 
@@ -115,7 +115,7 @@ impl SakuraLeaf {
         let html_node = HtmlNode::Text(text.to_string());
         Self {
             content: text.to_string(),
-            source: NodeSource::Html(html_node),
+            root: Root::Html(html_node),
         }
     }
 
@@ -124,7 +124,7 @@ impl SakuraLeaf {
         let normalized_content = Self::normalize_raw_text_preserving_lines(text);
         Self {
             content: normalized_content,
-            source: NodeSource::Html(html_node),
+            root: Root::Html(html_node),
         }
     }
 
@@ -141,18 +141,18 @@ impl SakuraLeaf {
     }
 
     pub(crate) fn is_html_text(&self) -> bool {
-        matches!(self.source, NodeSource::Html(HtmlNode::Text(_)))
+        matches!(self.root, Root::Html(HtmlNode::Text(_)))
     }
     pub(crate) fn is_html_entity(&self) -> bool {
-        matches!(self.source, NodeSource::Html(HtmlNode::Entity(_)))
+        matches!(self.root, Root::Html(HtmlNode::Entity(_)))
     }
     pub(crate) fn chars_count(&self) -> usize {
         self.content.chars().count()
     }
     pub(crate) fn maybe_askama_node(&self) -> Option<&AskamaNode> {
-        match &self.source {
-            NodeSource::Askama(node) => Some(node),
-            NodeSource::Html(_) => None,
+        match &self.root {
+            Root::Askama(node) => Some(node),
+            Root::Html(_) => None,
         }
     }
 }
@@ -195,10 +195,10 @@ impl SakuraTree {
 
         // Convert metadata from html indices to leaf indices and store as twigs
         for (leaf_idx, leaf) in tree.leaves.iter().enumerate() {
-            if let NodeSource::Html(HtmlNode::StartTag {
+            if let Root::Html(HtmlNode::StartTag {
                 element_metadata: Some(html_metadata),
                 ..
-            }) = &leaf.source
+            }) = &leaf.root
             {
                 // Convert html end_tag index to end_leaf index
                 if let Some(&end_leaf) = html_to_leaf_map.get(&html_metadata.end_tag_index) {
@@ -258,9 +258,9 @@ impl SakuraTree {
 
         while index < end_index {
             if let Some(leaf) = self.get_leaf(index) {
-                match &leaf.source {
+                match &leaf.root {
                     // Try to build when clause (they need to claim their inline content)
-                    NodeSource::Askama(askama_node) if !askama_node.is_expr() => {
+                    Root::Askama(askama_node) if !askama_node.is_expr() => {
                         // Check if this is a "when" clause (inner match block)
                         // These should be inline with their content
                         if let Some(tag) = askama_node.get_ctrl_tag()
@@ -287,7 +287,7 @@ impl SakuraTree {
                         }
                     }
                     // Try to build complete HTML elements
-                    NodeSource::Html(HtmlNode::StartTag { .. }) => {
+                    Root::Html(HtmlNode::StartTag { .. }) => {
                         if let Some((ring, next_index)) = self.try_complete_element(index) {
                             trunk_rings.push(ring);
                             index = next_index;
@@ -295,7 +295,7 @@ impl SakuraTree {
                         }
                     }
                     // Standalone for void or self-closing elements
-                    NodeSource::Html(HtmlNode::Void { .. } | HtmlNode::SelfClosingTag { .. }) => {
+                    Root::Html(HtmlNode::Void { .. } | HtmlNode::SelfClosingTag { .. }) => {
                         let layer = TrunkLayer::Standalone { leaf: index };
                         let ring = TrunkRing::new(layer, self);
                         trunk_rings.push(ring);
@@ -303,7 +303,7 @@ impl SakuraTree {
                         continue;
                     }
                     // Raw text (script/style content)
-                    NodeSource::Html(HtmlNode::RawText(_)) => {
+                    Root::Html(HtmlNode::RawText(_)) => {
                         let layer = TrunkLayer::ScriptStyle { leaf: index };
                         let ring = TrunkRing::new(layer, self);
                         trunk_rings.push(ring);
@@ -311,14 +311,14 @@ impl SakuraTree {
                         continue;
                     }
                     // Try to build text sequences
-                    NodeSource::Html(HtmlNode::Text(_)) | NodeSource::Askama(_) => {
+                    Root::Html(HtmlNode::Text(_)) | Root::Askama(_) => {
                         if let Some((ring, next_index)) = self.try_text_sequence(index, end_index) {
                             trunk_rings.push(ring);
                             index = next_index;
                             continue;
                         }
                     }
-                    NodeSource::Html(_) => {}
+                    Root::Html(_) => {}
                 }
             }
 
@@ -343,9 +343,9 @@ impl SakuraTree {
 
         // Get inline status from the start tag
         let leaf = self.get_leaf(start_leaf)?;
-        let is_semantic_inline = match &leaf.source {
-            NodeSource::Html(html_node) => html_node.is_inline_level(),
-            NodeSource::Askama(_) => false,
+        let is_semantic_inline = match &leaf.root {
+            Root::Html(html_node) => html_node.is_inline_level(),
+            Root::Askama(_) => false,
         };
 
         let layer = TrunkLayer::CompleteElement {
@@ -379,7 +379,7 @@ impl SakuraTree {
         while current_index < end_index && depth < 200 {
             let leaf = self.get_leaf(current_index)?;
 
-            if let NodeSource::Askama(node) = &leaf.source
+            if let Root::Askama(node) = &leaf.root
                 && let Some(tag) = node.get_ctrl_tag()
             {
                 // Check if this is another opening of the same type (nested block)
@@ -443,13 +443,12 @@ impl SakuraTree {
             };
 
             // Break immediately on Askama control blocks or comments
-            if matches!(&leaf.source, NodeSource::Askama(node) if node.is_ctrl() || node.is_comment())
-            {
+            if matches!(&leaf.root, Root::Askama(node) if node.is_ctrl() || node.is_comment()) {
                 break;
             }
 
             // For StartTags, include the complete element without splitting it
-            if matches!(leaf.source, NodeSource::Html(HtmlNode::StartTag { .. })) {
+            if matches!(leaf.root, Root::Html(HtmlNode::StartTag { .. })) {
                 // Try to find the complete element boundaries
                 if let Some(end_leaf) = self.find_complete_element_end(current_index) {
                     // Include all leaves from current to end
@@ -505,11 +504,11 @@ impl SakuraTree {
                 break;
             };
 
-            let can_include = match &leaf.source {
-                NodeSource::Html(HtmlNode::Text(_)) => !leaf.content.trim().is_empty(),
-                NodeSource::Html(HtmlNode::Entity(_)) => true,
-                NodeSource::Askama(node) => node.is_expr(),
-                NodeSource::Html(html_node) => html_node.is_inline_level(),
+            let can_include = match &leaf.root {
+                Root::Html(HtmlNode::Text(_)) => !leaf.content.trim().is_empty(),
+                Root::Html(HtmlNode::Entity(_)) => true,
+                Root::Askama(node) => node.is_expr(),
+                Root::Html(html_node) => html_node.is_inline_level(),
             };
 
             if can_include {

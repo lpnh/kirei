@@ -5,7 +5,7 @@ use crate::{
     askama::AskamaNode,
     config::Config,
     html::HtmlNode,
-    sakura_tree::{BranchStyle, NodeSource, SakuraLeaf, SakuraTree},
+    sakura_tree::{BranchStyle, Root, SakuraLeaf, SakuraTree},
 };
 
 pub(crate) fn print(tree: &SakuraTree) -> String {
@@ -157,8 +157,7 @@ fn ink_wrapped_branch(
 
             // If would exceed AND current leaf is a StartTag, break before it
             if would_exceed && !current_line.is_empty() {
-                let is_start_tag =
-                    matches!(&leaf.source, NodeSource::Html(HtmlNode::StartTag { .. }));
+                let is_start_tag = matches!(&leaf.root, Root::Html(HtmlNode::StartTag { .. }));
 
                 if is_start_tag {
                     // Start new line before this StartTag
@@ -344,16 +343,16 @@ fn should_add_space_before_leaf(
     }
 
     // Add space between specific node type combinations
-    match (&prev.source, &current.source) {
+    match (&prev.root, &current.root) {
         // Text followed by HTML start tag or entity, entity followed by text
         (
-            NodeSource::Html(HtmlNode::Text(_)),
-            NodeSource::Html(HtmlNode::Entity(_) | HtmlNode::StartTag { .. }),
+            Root::Html(HtmlNode::Text(_)),
+            Root::Html(HtmlNode::Entity(_) | HtmlNode::StartTag { .. }),
         )
-        | (NodeSource::Html(HtmlNode::Entity(_)), NodeSource::Html(HtmlNode::Text(_))) => true,
+        | (Root::Html(HtmlNode::Entity(_)), Root::Html(HtmlNode::Text(_))) => true,
 
         // Askama expression followed by text (!punctuation)
-        (NodeSource::Askama(prev_askama), NodeSource::Html(HtmlNode::Text(_))) => {
+        (Root::Askama(prev_askama), Root::Html(HtmlNode::Text(_))) => {
             !prev_askama.is_expr()
                 || !current
                     .content
@@ -361,17 +360,17 @@ fn should_add_space_before_leaf(
         }
 
         // Text (!punctuation) followed by Askama expression
-        (NodeSource::Html(HtmlNode::Text(_)), NodeSource::Askama(current_askama)) => {
+        (Root::Html(HtmlNode::Text(_)), Root::Askama(current_askama)) => {
             current_askama.is_expr() && !prev.content.ends_with(|c: char| c.is_ascii_punctuation())
         }
 
         // HTML end tag followed by text that starts with a letter
-        (NodeSource::Html(HtmlNode::EndTag { .. }), NodeSource::Html(HtmlNode::Text(_))) => {
+        (Root::Html(HtmlNode::EndTag { .. }), Root::Html(HtmlNode::Text(_))) => {
             current_content.starts_with(char::is_alphabetic)
         }
 
         // When clause followed by HTML start tag
-        (NodeSource::Askama(prev_askama), NodeSource::Html(HtmlNode::StartTag { .. })) => {
+        (Root::Askama(prev_askama), Root::Html(HtmlNode::StartTag { .. })) => {
             prev_askama.is_when_clause()
         }
 

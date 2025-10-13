@@ -1,7 +1,7 @@
 use crate::{
     askama::{self, AskamaNode},
     html,
-    sakura_tree::{BranchStyle, NodeSource, SakuraBranch, SakuraTree, TrunkLayer, TrunkRing},
+    sakura_tree::{BranchStyle, Root, SakuraBranch, SakuraTree, TrunkLayer, TrunkRing},
 };
 
 pub(crate) fn wire(tree: &mut SakuraTree) {
@@ -17,7 +17,7 @@ fn analyze_indentation_structure(tree: &SakuraTree) -> Vec<i32> {
 
     for (i, leaf) in tree.iter_leaves().enumerate() {
         // Check for HTML EndTags to decrease indent before assigning it
-        if let NodeSource::Html(html_node) = &leaf.source
+        if let Root::Html(html_node) = &leaf.root
             && html_node.is_closing_tag()
         {
             current_indent = (current_indent - 1).max(0);
@@ -36,7 +36,7 @@ fn analyze_indentation_structure(tree: &SakuraTree) -> Vec<i32> {
 
         // Check for HTML StartTags to increase indent for subsequent nodes
         // Only increase indent for StartTag (not Void, SelfClosingTag, etc.)
-        if let NodeSource::Html(html_node) = &leaf.source
+        if let Root::Html(html_node) = &leaf.root
             && matches!(html_node, html::HtmlNode::StartTag { .. })
         {
             current_indent += 1;
