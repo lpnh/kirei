@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use textwrap::{Options, wrap};
 
 use crate::{
@@ -8,29 +9,48 @@ use crate::{
 };
 
 pub(crate) fn print(tree: &SakuraTree) -> String {
-    let mut inked_tree = String::new();
+    let estimated_inked_tree_size = tree.iter_leaves().map(|l| l.content.len()).sum::<usize>()
+        + tree.leaf_count() * (tree.config.indent_size * 4);
+    let mut inked_tree = String::with_capacity(estimated_inked_tree_size);
 
     for branch in tree.iter_branches() {
-        let inked_branch = match branch.style {
-            BranchStyle::Inline => {
-                ink_inline_branch(tree, branch.indent_level, &branch.leaf_indices)
-            }
-            BranchStyle::MultiLine => {
-                ink_multiline_branch(tree, branch.indent_level, &branch.leaf_indices)
-            }
-            BranchStyle::Wrapped => {
-                ink_wrapped_branch(tree, branch.indent_level, &branch.leaf_indices)
-            }
-            BranchStyle::Raw => ink_raw_branch(tree, branch.indent_level, &branch.leaf_indices),
-        };
-
-        inked_tree.push_str(&inked_branch);
+        match branch.style {
+            BranchStyle::Inline => ink_inline_branch(
+                &mut inked_tree,
+                tree,
+                branch.indent_level,
+                &branch.leaf_indices,
+            ),
+            BranchStyle::MultiLine => ink_multiline_branch(
+                &mut inked_tree,
+                tree,
+                branch.indent_level,
+                &branch.leaf_indices,
+            ),
+            BranchStyle::Wrapped => ink_wrapped_branch(
+                &mut inked_tree,
+                tree,
+                branch.indent_level,
+                &branch.leaf_indices,
+            ),
+            BranchStyle::Raw => ink_raw_branch(
+                &mut inked_tree,
+                tree,
+                branch.indent_level,
+                &branch.leaf_indices,
+            ),
+        }
     }
 
     inked_tree
 }
 
-fn ink_inline_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize]) -> String {
+fn ink_inline_branch(
+    inked_tree: &mut String,
+    tree: &SakuraTree,
+    indent_level: i32,
+    leaf_indices: &[usize],
+) {
     let indent_str = indent_for(&tree.config, indent_level);
     let mut line_content = String::new();
 
@@ -54,27 +74,28 @@ fn ink_inline_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize
         }
     }
 
-    let mut output = String::new();
     if !line_content.trim().is_empty() {
         // Handle multi-line content ONLY for comments - indent each line
         if is_comment_only && line_content.contains('\n') {
             for line in line_content.lines() {
-                output.push_str(&indent_str);
-                output.push_str(line.trim_end());
-                output.push('\n');
+                inked_tree.push_str(&indent_str);
+                inked_tree.push_str(line.trim_end());
+                inked_tree.push('\n');
             }
         } else {
-            output.push_str(&indent_str);
-            output.push_str(line_content.trim_end());
-            output.push('\n');
+            inked_tree.push_str(&indent_str);
+            inked_tree.push_str(line_content.trim_end());
+            inked_tree.push('\n');
         }
     }
-    output
 }
 
-fn ink_multiline_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize]) -> String {
-    let mut output = String::new();
-
+fn ink_multiline_branch(
+    inked_tree: &mut String,
+    tree: &SakuraTree,
+    indent_level: i32,
+    leaf_indices: &[usize],
+) {
     for &leaf_index in leaf_indices {
         if let Some(leaf) = tree.get_leaf(leaf_index) {
             let content = content_normalized(leaf);
@@ -85,7 +106,7 @@ fn ink_multiline_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[us
                 if leaf.is_html_text() || leaf.is_html_entity() {
                     // Only wrap pure text content
                     let wrapped_content = wrap_inline_content(&tree.config, &content, indent_level);
-                    output.push_str(&wrapped_content);
+                    inked_tree.push_str(&wrapped_content);
                 } else {
                     // HTML tags and Askama expressions - handle multiline content properly
                     if content.contains('\n') {
@@ -93,26 +114,29 @@ fn ink_multiline_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[us
                         let lines: Vec<&str> = content.lines().collect();
                         for (i, line) in lines.iter().enumerate() {
                             if i > 0 {
-                                output.push('\n');
+                                inked_tree.push('\n');
                             }
-                            output.push_str(&indent_str);
-                            output.push_str(line.trim_end());
+                            inked_tree.push_str(&indent_str);
+                            inked_tree.push_str(line.trim_end());
                         }
                     } else {
                         // Single line content
-                        output.push_str(&indent_str);
-                        output.push_str(content.trim_end());
+                        inked_tree.push_str(&indent_str);
+                        inked_tree.push_str(content.trim_end());
                     }
                 }
-                output.push('\n');
+                inked_tree.push('\n');
             }
         }
     }
-
-    output
 }
 
-fn ink_wrapped_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize]) -> String {
+fn ink_wrapped_branch(
+    inked_tree: &mut String,
+    tree: &SakuraTree,
+    indent_level: i32,
+    leaf_indices: &[usize],
+) {
     let indent_str = indent_for(&tree.config, indent_level);
     let available_width = tree.config.max_line_length - indent_str.len();
 
@@ -173,19 +197,21 @@ fn ink_wrapped_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usiz
     }
 
     // Output all lines with proper indentation
-    let mut output = String::new();
     for line in lines {
         if !line.trim().is_empty() {
-            output.push_str(&indent_str);
-            output.push_str(&line);
-            output.push('\n');
+            inked_tree.push_str(&indent_str);
+            inked_tree.push_str(&line);
+            inked_tree.push('\n');
         }
     }
-    output
 }
 
-fn ink_raw_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize]) -> String {
-    let mut output = String::new();
+fn ink_raw_branch(
+    inked_tree: &mut String,
+    tree: &SakuraTree,
+    indent_level: i32,
+    leaf_indices: &[usize],
+) {
     let mut current_indent = indent_level;
 
     for &leaf_index in leaf_indices {
@@ -199,7 +225,7 @@ fn ink_raw_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize]) 
                 for line in content.lines() {
                     if line.trim().is_empty() {
                         // Preserve empty lines
-                        output.push('\n');
+                        inked_tree.push('\n');
                     } else {
                         let trimmed = line.trim();
 
@@ -211,9 +237,9 @@ fn ink_raw_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize]) 
 
                         // Write the line with current indent level
                         let indent_str = indent_for(&tree.config, current_indent);
-                        output.push_str(&indent_str);
-                        output.push_str(trimmed);
-                        output.push('\n');
+                        inked_tree.push_str(&indent_str);
+                        inked_tree.push_str(trimmed);
+                        inked_tree.push('\n');
 
                         // After writing, if line ends with '{', increase indent for next lines
                         if trimmed.ends_with('{') {
@@ -254,19 +280,17 @@ fn ink_raw_branch(tree: &SakuraTree, indent_level: i32, leaf_indices: &[usize]) 
                 }
             } else if content.is_empty() {
                 // Preserve empty lines
-                output.push('\n');
+                inked_tree.push('\n');
             }
         }
     }
-
-    output
 }
 
-fn content_normalized(leaf: &SakuraLeaf) -> String {
+fn content_normalized(leaf: &SakuraLeaf) -> Cow<'_, str> {
     if leaf.is_html_text() {
-        normalize_text_content(&leaf.content)
+        Cow::Owned(normalize_text_content(&leaf.content))
     } else {
-        leaf.content.clone()
+        Cow::Borrowed(&leaf.content)
     }
 }
 

@@ -85,9 +85,8 @@ pub(crate) struct SakuraBranch {
     pub(crate) indent_level: i32,
 }
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum BranchStyle {
-    #[default]
     Inline,
     MultiLine,
     Wrapped,
