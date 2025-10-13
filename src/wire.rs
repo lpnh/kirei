@@ -64,22 +64,7 @@ fn wire_branch_recursive(tree: &mut SakuraTree, trunk_ring: &TrunkRing, indent_m
                 end_leaf,
                 ..
             } => {
-                // Wire branch for opening tag
-                let open_indent = indent_map.get(*start_leaf).copied().unwrap_or(0);
-                let open_branch =
-                    SakuraBranch::grow(vec![*start_leaf], BranchStyle::MultiLine, open_indent);
-                tree.grow_branch(open_branch);
-
-                // Recursively process inner rings
-                for ring in inner_rings {
-                    wire_branch_recursive(tree, ring, indent_map);
-                }
-
-                // Wire branch for closing tag
-                let close_indent = indent_map.get(*end_leaf).copied().unwrap_or(0);
-                let close_branch =
-                    SakuraBranch::grow(vec![*end_leaf], BranchStyle::MultiLine, close_indent);
-                tree.grow_branch(close_branch);
+                wire_multiple_branches(tree, *start_leaf, inner_rings, *end_leaf, indent_map);
             }
             TrunkLayer::ControlBlock {
                 open_leaf,
@@ -87,50 +72,50 @@ fn wire_branch_recursive(tree: &mut SakuraTree, trunk_ring: &TrunkRing, indent_m
                 close_leaf,
                 ..
             } => {
-                // Wire branch for opening control
-                let open_indent = indent_map.get(*open_leaf).copied().unwrap_or(0);
-                let open_branch =
-                    SakuraBranch::grow(vec![*open_leaf], BranchStyle::MultiLine, open_indent);
-                tree.grow_branch(open_branch);
-
-                // Recursively process inner rings
-                for trunk_ring in inner_rings {
-                    wire_branch_recursive(tree, trunk_ring, indent_map);
-                }
-
-                // Wire branch for closing control
-                let close_indent = indent_map.get(*close_leaf).copied().unwrap_or(0);
-                let close_branch =
-                    SakuraBranch::grow(vec![*close_leaf], BranchStyle::MultiLine, close_indent);
-                tree.grow_branch(close_branch);
+                wire_multiple_branches(tree, *open_leaf, inner_rings, *close_leaf, indent_map);
             }
             TrunkLayer::EmptyControlBlock {
                 open_leaf,
                 close_leaf,
             } => {
-                // Wire branch for the opening block
-                let open_indent = indent_map.get(*open_leaf).copied().unwrap_or(0);
-                let open_branch =
-                    SakuraBranch::grow(vec![*open_leaf], BranchStyle::MultiLine, open_indent);
-                tree.grow_branch(open_branch);
-
-                // Wire branch for the closing block
-                let close_indent = indent_map.get(*close_leaf).copied().unwrap_or(0);
-                let close_branch =
-                    SakuraBranch::grow(vec![*close_leaf], BranchStyle::MultiLine, close_indent);
-                tree.grow_branch(close_branch);
+                wire_multiple_branches(tree, *open_leaf, &[], *close_leaf, indent_map);
             }
             _ => {
-                // For non-container, wire single branch
-                let branch = wire_single_branch(tree, trunk_ring, indent_map);
-                tree.grow_branch(branch);
+                tree.grow_branch(wire_single_branch(tree, trunk_ring, indent_map));
             }
         }
     } else {
-        // Inline: wire single branch
-        let branch = wire_single_branch(tree, trunk_ring, indent_map);
-        tree.grow_branch(branch);
+        tree.grow_branch(wire_single_branch(tree, trunk_ring, indent_map));
     }
+}
+
+fn wire_multiple_branches(
+    tree: &mut SakuraTree,
+    open_leaf: usize,
+    inner_rings: &[TrunkRing],
+    close_leaf: usize,
+    indent_map: &[i32],
+) {
+    // Wire first branch (opening element/control tag)
+    let open_indent = indent_map.get(open_leaf).copied().unwrap_or(0);
+    tree.grow_branch(SakuraBranch::grow(
+        vec![open_leaf],
+        BranchStyle::MultiLine,
+        open_indent,
+    ));
+
+    // Recursively process inner rings
+    for ring in inner_rings {
+        wire_branch_recursive(tree, ring, indent_map);
+    }
+
+    // Wire last branch (closing element/control tag)
+    let close_indent = indent_map.get(close_leaf).copied().unwrap_or(0);
+    tree.grow_branch(SakuraBranch::grow(
+        vec![close_leaf],
+        BranchStyle::MultiLine,
+        close_indent,
+    ));
 }
 
 fn wire_single_branch(
@@ -186,17 +171,8 @@ fn decide_branch_style(tree: &SakuraTree, trunk_ring: &TrunkRing) -> BranchStyle
 
         TrunkLayer::CompleteElement {
             is_semantic_inline,
-            start_leaf,
             ..
         } => {
-            // Check if this is style/script element
-            if let Some(leaf) = tree.get_leaf(*start_leaf)
-                && let NodeSource::Html(html_node) = &leaf.source
-                && html_node.is_style_or_script_element()
-            {
-                return BranchStyle::MultiLine;
-            }
-
             // Check structure constraints
             let fits_in_line = trunk_ring.total_chars <= tree.config.max_line_length;
             let has_multi_line_content = trunk_ring.inner_has_multi_line_content();

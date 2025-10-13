@@ -173,18 +173,11 @@ impl SakuraLeaf {
             .join("\n")
     }
 
-    pub(crate) fn is_askama(&self) -> bool {
-        matches!(self.source, NodeSource::Askama(_))
-    }
     pub(crate) fn is_html_text(&self) -> bool {
         matches!(self.source, NodeSource::Html(HtmlNode::Text(_)))
     }
-    pub(crate) fn is_html_raw_text(&self) -> bool {
-        matches!(self.source, NodeSource::Html(HtmlNode::RawText(_)))
-    }
     pub(crate) fn is_html_entity(&self) -> bool {
-        let is_it = matches!(self.source, NodeSource::Html(HtmlNode::Entity(_)));
-        is_it
+        matches!(self.source, NodeSource::Html(HtmlNode::Entity(_)))
     }
     pub(crate) fn chars_count(&self) -> usize {
         self.content.chars().count()
@@ -282,33 +275,6 @@ impl SakuraTree {
         self.branches.iter()
     }
 
-    // Check if a leaf index is within a script or style element context
-    pub(crate) fn is_script_or_style_context(&self, index: usize) -> bool {
-        // First check if this leaf itself is raw text
-        if let Some(leaf) = self.get_leaf(index)
-            && leaf.is_html_raw_text()
-        {
-            return true;
-        }
-
-        // Look for <style> or <script> start tag before this index
-        for i in (0..index).rev() {
-            if let Some(leaf) = self.get_leaf(i)
-                && let NodeSource::Html(html_node) = &leaf.source
-            {
-                if html_node.is_opening_tag() && html_node.is_style_or_script_element() {
-                    return true;
-                }
-
-                if html_node.is_closing_tag() && html_node.is_style_or_script_element() {
-                    return false;
-                }
-            }
-        }
-
-        false
-    }
-
     fn grow_layers(&mut self) {
         let trunk_rings = self.grow_rings(0, self.leaf_count());
 
@@ -368,20 +334,18 @@ impl SakuraTree {
                         index += 1;
                         continue;
                     }
+                    // Raw text (script/style content)
+                    NodeSource::Html(HtmlNode::RawText(_)) => {
+                        let layer = TrunkLayer::ScriptStyle {
+                            leaves: vec![index],
+                        };
+                        let ring = TrunkRing::new(layer, self);
+                        trunk_rings.push(ring);
+                        index += 1;
+                        continue;
+                    }
                     // Try to build text sequences
-                    NodeSource::Html(HtmlNode::Text(_) | HtmlNode::RawText(_))
-                    | NodeSource::Askama(_) => {
-                        // First check if we're in script/style context (RawText)
-                        if self.is_script_or_style_context(index)
-                            && let Some((ring, next_index)) =
-                                self.try_script_style(index, end_index)
-                        {
-                            trunk_rings.push(ring);
-                            index = next_index;
-                            continue;
-                        }
-
-                        // Otherwise try regular text sequence
+                    NodeSource::Html(HtmlNode::Text(_)) | NodeSource::Askama(_) => {
                         if let Some((ring, next_index)) = self.try_text_sequence(index, end_index) {
                             trunk_rings.push(ring);
                             index = next_index;
@@ -565,41 +529,6 @@ impl SakuraTree {
         None
     }
 
-    // Build a raw text sequence (for style/script content) using Wire's logic
-    fn try_script_style(&self, start_index: usize, end_index: usize) -> Option<(TrunkRing, usize)> {
-        let mut leaves = vec![start_index];
-
-        // Look ahead for consecutive raw text content (including Askama expressions within)
-        for i in (start_index + 1)..end_index {
-            if let Some(leaf) = self.get_leaf(i) {
-                let is_raw_text = self.is_script_or_style_context(i);
-                let is_text_or_expr = match &leaf.source {
-                    NodeSource::Html(html_node) => html_node.is_text_like(),
-                    NodeSource::Askama(askama_node) => askama_node.is_expr(),
-                };
-
-                // Include both text content and Askama expressions in raw text context
-                if is_raw_text && is_text_or_expr {
-                    leaves.push(i);
-                } else {
-                    break;
-                }
-            } else {
-                break;
-            }
-        }
-
-        // Return ScriptStyle for single leaf
-        if !leaves.is_empty() {
-            let next_index = leaves.last().copied().unwrap_or(start_index) + 1;
-            let layer = TrunkLayer::ScriptStyle { leaves };
-            let ring = TrunkRing::new(layer, self);
-            return Some((ring, next_index));
-        }
-
-        None
-    }
-
     fn try_text_sequence(
         &self,
         start_index: usize,
@@ -610,31 +539,20 @@ impl SakuraTree {
         // Collect text content and expressions that can be grouped
         let mut current_index = start_index + 1;
         while current_index < end_index {
-            if let Some(leaf) = self.get_leaf(current_index) {
-                let can_include = match &leaf.source {
-                    NodeSource::Html(HtmlNode::Text(_)) => !leaf.content.trim().is_empty(),
-                    NodeSource::Html(HtmlNode::Entity(_)) => true,
-                    NodeSource::Askama(node) => {
-                        // Include expressions always
-                        if node.is_expr() {
-                            true
-                        } else if node.is_when_clause() {
-                            // Never include when clauses in text sequences
-                            false
-                        } else {
-                            // Stop at other control blocks
-                            false
-                        }
-                    }
-                    NodeSource::Html(html_node) => html_node.is_inline_level(),
-                };
+            let Some(leaf) = self.get_leaf(current_index) else {
+                break;
+            };
 
-                if can_include {
-                    leaves.push(current_index);
-                    current_index += 1;
-                } else {
-                    break;
-                }
+            let can_include = match &leaf.source {
+                NodeSource::Html(HtmlNode::Text(_)) => !leaf.content.trim().is_empty(),
+                NodeSource::Html(HtmlNode::Entity(_)) => true,
+                NodeSource::Askama(node) => node.is_expr(),
+                NodeSource::Html(html_node) => html_node.is_inline_level(),
+            };
+
+            if can_include {
+                leaves.push(current_index);
+                current_index += 1;
             } else {
                 break;
             }
@@ -684,6 +602,8 @@ impl TrunkRing {
                     } => !is_semantic_inline || ring.inner_has_multi_line_content(),
                     // Control blocks are always multi-line
                     TrunkLayer::ControlBlock { .. } => true,
+                    // Script/style elements are always multi-line
+                    TrunkLayer::ScriptStyle { .. } => true,
                     _ => ring.inner_has_multi_line_content(),
                 }
             }),
@@ -836,13 +756,15 @@ fn replace_placeholders_in_text(
 }
 
 fn new_text_leaf(text: &str, after_expr_or_when: bool, before_expr: bool) -> SakuraLeaf {
-    match (after_expr_or_when, before_expr) {
+    if after_expr_or_when && before_expr {
         // Between expressions or after when before expression: preserve both edges
-        (true, true) => SakuraLeaf::from_html_text_preserving_edges(text),
+        SakuraLeaf::from_html_text_preserving_edges(text)
+    } else if after_expr_or_when {
         // After expression/when but not before expression: preserve leading only
-        (true, false) => SakuraLeaf::from_text_preserving_leading_only(text),
+        SakuraLeaf::from_text_preserving_leading_only(text)
+    } else {
         // Default
-        _ => SakuraLeaf::from_template_text(text),
+        SakuraLeaf::from_template_text(text)
     }
 }
 
@@ -850,12 +772,6 @@ fn new_text_leaf(text: &str, after_expr_or_when: bool, before_expr: bool) -> Sak
 fn should_add_spacing_after_when(tree: &SakuraTree) -> bool {
     tree.leaves
         .last()
-        .and_then(|leaf| {
-            if leaf.is_askama() {
-                leaf.maybe_askama_node()
-            } else {
-                None
-            }
-        })
+        .and_then(|leaf| leaf.maybe_askama_node())
         .is_some_and(AskamaNode::is_when_clause)
 }

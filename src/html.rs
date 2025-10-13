@@ -176,25 +176,6 @@ impl HtmlNode {
         })
     }
 
-    // Check if this is a style or script element (contains raw_text node)
-    pub(crate) fn is_style_or_script_element(&self) -> bool {
-        self.get_tag_name()
-            .is_some_and(|name| matches!(name.to_lowercase().as_str(), "style" | "script"))
-    }
-
-    // Check if this is a text-like node
-    pub(crate) fn is_text_like(&self) -> bool {
-        matches!(self, Self::Text(_) | Self::Entity(_))
-    }
-
-    // Check if this is an opening tag
-    pub(crate) fn is_opening_tag(&self) -> bool {
-        matches!(
-            self,
-            Self::StartTag { .. } | Self::Void { .. } | Self::SelfClosingTag { .. }
-        )
-    }
-
     // Check if this is a closing tag
     pub(crate) fn is_closing_tag(&self) -> bool {
         matches!(self, Self::EndTag { .. } | Self::ErroneousEndTag { .. })
