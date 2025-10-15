@@ -16,16 +16,16 @@ pub(crate) fn print(tree: &SakuraTree) -> String {
     for branch in &tree.branches {
         match branch.style {
             BranchStyle::Inline => {
-                ink_inline_branch(&mut inked_tree, tree, branch.indent, &branch.leaves)
+                ink_inline_branch(&mut inked_tree, tree, branch.indent, &branch.leaves);
             }
             BranchStyle::MultiLine => {
-                ink_multiline_branch(&mut inked_tree, tree, branch.indent, &branch.leaves)
+                ink_multiline_branch(&mut inked_tree, tree, branch.indent, &branch.leaves);
             }
             BranchStyle::Wrapped => {
-                ink_wrapped_branch(&mut inked_tree, tree, branch.indent, &branch.leaves)
+                ink_wrapped_branch(&mut inked_tree, tree, branch.indent, &branch.leaves);
             }
             BranchStyle::Raw => {
-                ink_raw_branch(&mut inked_tree, tree, branch.indent, &branch.leaves)
+                ink_raw_branch(&mut inked_tree, tree, branch.indent, &branch.leaves);
             }
         }
     }
@@ -238,8 +238,7 @@ fn ink_raw_branch(inked_tree: &mut String, tree: &SakuraTree, indent: i32, leave
                                 } else {
                                     decrease
                                 };
-                                curr_indent =
-                                    curr_indent.saturating_sub(actual_decrease as i32);
+                                curr_indent = curr_indent.saturating_sub(actual_decrease as i32);
                             }
                         }
                     }

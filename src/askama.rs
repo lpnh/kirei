@@ -71,7 +71,7 @@ impl ControlTag {
     }
 
     // Check if this opening tag matches with a closing tag
-    pub(crate) fn matches_close(self, close: ControlTag) -> bool {
+    pub(crate) fn matches_close(self, close: Self) -> bool {
         matches!(
             (self, close),
             (Self::Block(_), Self::Endblock(_))
@@ -86,7 +86,7 @@ impl ControlTag {
     }
 
     // Check if two tags are the same kind (both If, both For, etc.)
-    pub(crate) fn same_kind(self, other: ControlTag) -> bool {
+    pub(crate) fn same_kind(self, other: Self) -> bool {
         std::mem::discriminant(&self) == std::mem::discriminant(&other)
     }
 }

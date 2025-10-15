@@ -585,7 +585,7 @@ impl Ring {
 impl Layer {
     pub(crate) fn all_leaf_indices(&self) -> Vec<usize> {
         match self {
-            Layer::CompleteElement {
+            Self::CompleteElement {
                 start_leaf,
                 inner_rings,
                 end_leaf,
@@ -594,8 +594,8 @@ impl Layer {
                 .chain(inner_rings.iter().flat_map(Ring::all_leaf_indices))
                 .chain((*end_leaf != *start_leaf).then_some(*end_leaf)) // Avoid duplicates for void elements
                 .collect(),
-            Layer::TextSequence { leaves } => leaves.clone(),
-            Layer::ControlBlock {
+            Self::TextSequence { leaves } => leaves.clone(),
+            Self::ControlBlock {
                 open_leaf,
                 inner_rings,
                 close_leaf,
@@ -604,12 +604,12 @@ impl Layer {
                 .chain(inner_rings.iter().flat_map(Ring::all_leaf_indices))
                 .chain(once(*close_leaf))
                 .collect(),
-            Layer::EmptyControlBlock {
+            Self::EmptyControlBlock {
                 open_leaf,
                 close_leaf,
                 ..
             } => vec![*open_leaf, *close_leaf],
-            Layer::ScriptStyle { leaf } | Layer::Standalone { leaf } => vec![*leaf],
+            Self::ScriptStyle { leaf } | Self::Standalone { leaf } => vec![*leaf],
         }
     }
 }
