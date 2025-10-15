@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
+use std::iter::once;
 
 use crate::{
     askama::{self, AskamaNode},
@@ -190,7 +191,7 @@ impl SakuraTree {
             html_to_leaf_map.insert(i, leaf_index);
 
             // Dispatch based on node type
-            process_html_node(html_node, &mut tree, askama_nodes);
+            tree.process_html_node(html_node, askama_nodes);
         }
 
         // Convert metadata from html indices to leaf indices and store as twigs
@@ -217,7 +218,6 @@ impl SakuraTree {
 
         tree
     }
-
 
     fn grow_layers(&mut self) {
         let rings = self.grow_rings(0, self.leaves.len());
@@ -391,11 +391,6 @@ impl SakuraTree {
         None
     }
 
-    // Find the end leaf index of a complete element
-    fn find_complete_element_end(&self, start_leaf: usize) -> Option<usize> {
-        self.twigs.get(&start_leaf).map(|twig| twig.end_leaf)
-    }
-
     // Build a when clause with all its inline content (including complete inline elements)
     // All or nothing: either all content fits (up to 2x max line length), or the when clause stays alone
     fn try_when_clause_with_inline_content(
@@ -423,7 +418,8 @@ impl SakuraTree {
             // For StartTags, include the complete element without splitting it
             if matches!(leaf.root, Root::Html(HtmlNode::StartTag { .. })) {
                 // Try to find the complete element boundaries
-                if let Some(end_leaf) = self.find_complete_element_end(current_index) {
+                if let Some(twig) = self.twigs.get(&current_index) {
+                    let end_leaf = twig.end_leaf;
                     // Include all leaves from current to end
                     for idx in current_index..=end_leaf {
                         candidate_leaves.push(idx);
@@ -496,6 +492,80 @@ impl SakuraTree {
 
         None
     }
+
+    fn process_html_node(&mut self, html_node: &HtmlNode, askama_nodes: &[AskamaNode]) {
+        match html_node {
+            HtmlNode::Text(text) => {
+                let placeholders = Self::find_placeholders(text, askama_nodes);
+                if placeholders.is_empty() {
+                    self.leaves.push(Leaf::from_html_text(text));
+                } else {
+                    self.replace_placeholders_in_text(text, placeholders);
+                }
+            }
+            HtmlNode::RawText(text) => {
+                let processed = askama::replace_placeholder_in_raw_text(text, askama_nodes);
+                self.leaves.push(Leaf::from_html_raw_text(&processed));
+            }
+            HtmlNode::Entity(_) | HtmlNode::Comment(_) | HtmlNode::Doctype(_) => {
+                self.leaves.push(Leaf::from_html(html_node.clone()));
+            }
+            _ => {
+                let processed = html_node.clone().replace_placeholder(askama_nodes);
+                self.leaves.push(Leaf::from_html(processed));
+            }
+        }
+    }
+
+    fn find_placeholders(
+        text: &str,
+        askama_nodes: &[AskamaNode],
+    ) -> BTreeMap<usize, (String, AskamaNode)> {
+        let mut placeholders = BTreeMap::new();
+
+        for (idx, askama_node) in askama_nodes.iter().enumerate() {
+            let placeholder = askama_node.placeholder(idx);
+
+            // Find all occurrences of this placeholder
+            let mut search_pos = 0;
+            while let Some(pos) = text[search_pos..].find(&placeholder) {
+                let absolute_pos = search_pos + pos;
+                placeholders.insert(absolute_pos, (placeholder.clone(), askama_node.clone()));
+                search_pos = absolute_pos + placeholder.len();
+            }
+        }
+
+        placeholders
+    }
+
+    fn replace_placeholders_in_text(
+        &mut self,
+        text: &str,
+        placeholders: BTreeMap<usize, (String, AskamaNode)>,
+    ) {
+        let config = self.config.clone();
+        let mut last_end = 0;
+
+        for (pos, (placeholder, askama_node)) in placeholders {
+            // Add text before this placeholder
+            if pos > last_end {
+                let text_segment = &text[last_end..pos];
+                self.leaves.push(Leaf::from_html_text(text_segment));
+            }
+
+            // Add the Askama node
+            self.leaves
+                .push(Leaf::from_askama(&config, askama_node.clone()));
+
+            last_end = pos + placeholder.len();
+        }
+
+        // Add any remaining text after the last placeholder
+        if last_end < text.len() {
+            let remaining = &text[last_end..];
+            self.leaves.push(Leaf::from_html_text(remaining));
+        }
+    }
 }
 
 impl Ring {
@@ -548,122 +618,26 @@ impl Layer {
                 inner_rings,
                 end_leaf,
                 ..
-            } => {
-                let mut indices = vec![*start_leaf];
-                for ring in inner_rings {
-                    indices.extend(ring.all_leaf_indices());
-                }
-                // Avoid duplicates for void elements
-                if end_leaf != start_leaf {
-                    indices.push(*end_leaf);
-                }
-                indices
-            }
+            } => once(*start_leaf)
+                .chain(inner_rings.iter().flat_map(Ring::all_leaf_indices))
+                .chain((*end_leaf != *start_leaf).then_some(*end_leaf)) // Avoid duplicates for void elements
+                .collect(),
             Layer::TextSequence { leaves } => leaves.clone(),
             Layer::ControlBlock {
                 open_leaf,
                 inner_rings,
                 close_leaf,
                 ..
-            } => {
-                let mut indices = vec![*open_leaf];
-                for ring in inner_rings {
-                    indices.extend(ring.all_leaf_indices());
-                }
-                indices.push(*close_leaf);
-                indices
-            }
+            } => once(*open_leaf)
+                .chain(inner_rings.iter().flat_map(Ring::all_leaf_indices))
+                .chain(once(*close_leaf))
+                .collect(),
             Layer::EmptyControlBlock {
                 open_leaf,
                 close_leaf,
                 ..
-            } => {
-                vec![*open_leaf, *close_leaf]
-            }
-            Layer::ScriptStyle { leaf } | Layer::Standalone { leaf } => {
-                vec![*leaf]
-            }
+            } => vec![*open_leaf, *close_leaf],
+            Layer::ScriptStyle { leaf } | Layer::Standalone { leaf } => vec![*leaf],
         }
-    }
-}
-
-fn process_html_node(html_node: &HtmlNode, tree: &mut SakuraTree, askama_nodes: &[AskamaNode]) {
-    match html_node {
-        HtmlNode::Text(text) => process_text_node(text, tree, askama_nodes),
-        HtmlNode::RawText(text) => process_raw_text_node(text, tree, askama_nodes),
-        HtmlNode::Entity(_) | HtmlNode::Comment(_) | HtmlNode::Doctype(_) => {
-            // Simple nodes - direct conversion
-            tree.leaves.push(Leaf::from_html(html_node.clone()));
-        }
-        _ => process_element_node(html_node, tree, askama_nodes),
-    }
-}
-
-fn process_text_node(text: &str, tree: &mut SakuraTree, askama_nodes: &[AskamaNode]) {
-    let placeholders = find_placeholders(text, askama_nodes);
-
-    if placeholders.is_empty() {
-        tree.leaves.push(Leaf::from_html_text(text));
-    } else {
-        replace_placeholders_in_text(text, placeholders, tree);
-    }
-}
-
-fn process_raw_text_node(text: &str, tree: &mut SakuraTree, askama_nodes: &[AskamaNode]) {
-    let processed = askama::replace_placeholder_in_raw_text(text, askama_nodes);
-    tree.leaves.push(Leaf::from_html_raw_text(&processed));
-}
-
-fn process_element_node(html_node: &HtmlNode, tree: &mut SakuraTree, askama_nodes: &[AskamaNode]) {
-    let processed = html_node.clone().replace_placeholder(askama_nodes);
-    tree.leaves.push(Leaf::from_html(processed));
-}
-
-fn find_placeholders(
-    text: &str,
-    askama_nodes: &[AskamaNode],
-) -> BTreeMap<usize, (String, AskamaNode)> {
-    let mut placeholders = BTreeMap::new();
-
-    for (idx, askama_node) in askama_nodes.iter().enumerate() {
-        let placeholder = askama_node.placeholder(idx);
-
-        // Find all occurrences of this placeholder
-        let mut search_pos = 0;
-        while let Some(pos) = text[search_pos..].find(&placeholder) {
-            let absolute_pos = search_pos + pos;
-            placeholders.insert(absolute_pos, (placeholder.clone(), askama_node.clone()));
-            search_pos = absolute_pos + placeholder.len();
-        }
-    }
-
-    placeholders
-}
-
-fn replace_placeholders_in_text(
-    text: &str,
-    placeholders: BTreeMap<usize, (String, AskamaNode)>,
-    tree: &mut SakuraTree,
-) {
-    let config = tree.config.clone();
-    let mut last_end = 0;
-
-    for (pos, (placeholder, askama_node)) in placeholders {
-        // Add text before this placeholder
-        if pos > last_end {
-            let text_segment = &text[last_end..pos];
-            tree.leaves.push(Leaf::from_html_text(text_segment));
-        }
-
-        // Add the Askama node
-        tree.leaves.push(Leaf::from_askama(&config, askama_node.clone()));
-
-        last_end = pos + placeholder.len();
-    }
-
-    // Add any remaining text after the last placeholder
-    if last_end < text.len() {
-        let remaining = &text[last_end..];
-        tree.leaves.push(Leaf::from_html_text(remaining));
     }
 }
