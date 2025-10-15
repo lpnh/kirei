@@ -2,7 +2,6 @@ use std::borrow::Cow;
 use textwrap::{Options, wrap};
 
 use crate::{
-    askama::AskamaNode,
     config::Config,
     html::HtmlNode,
     sakura_tree::{BranchStyle, Leaf, Root, SakuraTree},
@@ -37,14 +36,6 @@ fn ink_inline_branch(inked_tree: &mut String, tree: &SakuraTree, indent: i32, le
     let indent_str = indent_for(&tree.config, indent);
     let mut line_content = String::new();
 
-    // Check if this branch contains only a comment
-    let is_comment_only = leaves.len() == 1
-        && leaves
-            .first()
-            .and_then(|&idx| tree.leaves.get(idx))
-            .and_then(|leaf| leaf.maybe_askama_node())
-            .is_some_and(AskamaNode::is_comment);
-
     for (i, &leaf_idx) in leaves.iter().enumerate() {
         if let Some(leaf) = tree.leaves.get(leaf_idx) {
             let content = content_normalized(leaf);
@@ -58,18 +49,9 @@ fn ink_inline_branch(inked_tree: &mut String, tree: &SakuraTree, indent: i32, le
     }
 
     if !line_content.trim().is_empty() {
-        // Handle multi-line content ONLY for comments - indent each line
-        if is_comment_only && line_content.contains('\n') {
-            for line in line_content.lines() {
-                inked_tree.push_str(&indent_str);
-                inked_tree.push_str(line.trim_end());
-                inked_tree.push('\n');
-            }
-        } else {
-            inked_tree.push_str(&indent_str);
-            inked_tree.push_str(line_content.trim_end());
-            inked_tree.push('\n');
-        }
+        inked_tree.push_str(&indent_str);
+        inked_tree.push_str(line_content.trim_end());
+        inked_tree.push('\n');
     }
 }
 
@@ -240,9 +222,6 @@ fn ink_raw_branch(inked_tree: &mut String, tree: &SakuraTree, indent: i32, leave
                         }
                     }
                 }
-            } else if content.is_empty() {
-                // Preserve empty lines
-                inked_tree.push('\n');
             }
         }
     }
@@ -257,11 +236,6 @@ fn content_normalized(leaf: &Leaf) -> Cow<'_, str> {
 }
 
 fn normalize_text_content(text: &str) -> String {
-    // If only whitespace, return empty (space between expressions gets removed)
-    if text.trim().is_empty() {
-        return String::new();
-    }
-
     // Remove leading whitespace (template indentation), preserve trailing
     let has_trailing = text.ends_with(char::is_whitespace);
     let trailing = if has_trailing { " " } else { "" };
@@ -278,27 +252,19 @@ fn should_add_space_before_leaf(
     branch_indices: &[usize],
     position_in_branch: usize,
 ) -> bool {
-    // Get the current leaf and the previous leaf in the branch
-    let curr_leaf = tree.leaves.get(curr_leaf_idx);
-    let prev_branch_index = if position_in_branch > 0 {
-        branch_indices.get(position_in_branch - 1)
-    } else {
-        None
-    };
-
-    let prev_leaf = prev_branch_index.and_then(|&idx| tree.leaves.get(idx));
-
-    let (Some(current), Some(prev)) = (curr_leaf, prev_leaf) else {
+    if position_in_branch == 0 {
         return false;
-    };
+    }
+
+    let current = tree.leaves.get(curr_leaf_idx)
+        .expect("leaf index from branch should be valid");
+    let prev = branch_indices
+        .get(position_in_branch - 1)
+        .and_then(|&idx| tree.leaves.get(idx))
+        .expect("previous leaf should exist when position > 0");
 
     let curr_content = content_normalized(current);
     let prev_content = content_normalized(prev);
-
-    // Don't add space if either content is empty (nothing to separate)
-    if curr_content.is_empty() || prev_content.is_empty() {
-        return false;
-    }
 
     // The whitespace is already present
     if curr_content.starts_with(' ') || prev_content.ends_with(' ') {
