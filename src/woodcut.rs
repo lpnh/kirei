@@ -8,7 +8,7 @@ use crate::{
     sakura_tree::{BranchStyle, Leaf, Root, SakuraTree},
 };
 
-pub(crate) fn print(tree: &SakuraTree) -> String {
+pub fn print(tree: &SakuraTree) -> String {
     let estimated_inked_tree_size = tree.leaves.iter().map(|l| l.content.len()).sum::<usize>()
         + tree.leaves.len() * (tree.config.indent_size * 4);
     let mut inked_tree = String::with_capacity(estimated_inked_tree_size);

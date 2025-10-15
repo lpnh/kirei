@@ -8,37 +8,37 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub(crate) struct SakuraTree {
-    pub(crate) config: Config,
-    pub(crate) leaves: Vec<Leaf>,
-    pub(crate) rings: Vec<Ring>,
-    pub(crate) branches: Vec<Branch>,
+pub struct SakuraTree {
+    pub config: Config,
+    pub leaves: Vec<Leaf>,
+    pub rings: Vec<Ring>,
+    pub branches: Vec<Branch>,
     // Maps start_leaf index to end_leaf index
-    pub(crate) twigs: HashMap<usize, usize>,
+    pub twigs: HashMap<usize, usize>,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Leaf {
+pub struct Leaf {
     // The source of this leaf (Askama or HTML)
-    pub(crate) root: Root,
+    pub root: Root,
     // The rendered content for this leaf
-    pub(crate) content: String,
+    pub content: String,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum Root {
+pub enum Root {
     Askama(AskamaNode),
     Html(HtmlNode),
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Ring {
-    pub(crate) layer: Layer,
-    pub(crate) total_chars: usize,
+pub struct Ring {
+    pub layer: Layer,
+    pub total_chars: usize,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum Layer {
+pub enum Layer {
     // Complete HTML element with start/end tags
     CompleteElement {
         start_leaf: usize,
@@ -72,17 +72,17 @@ pub(crate) enum Layer {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Branch {
+pub struct Branch {
     // Indices of leaves that belong to this branch
-    pub(crate) leaves: Vec<usize>,
+    pub leaves: Vec<usize>,
     // A formatting style hint for the entire branch
-    pub(crate) style: BranchStyle,
+    pub style: BranchStyle,
     // Indentation level for this branch
-    pub(crate) indent: i32,
+    pub indent: i32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum BranchStyle {
+pub enum BranchStyle {
     Inline,
     MultiLine,
     Wrapped,
@@ -90,7 +90,7 @@ pub(crate) enum BranchStyle {
 }
 
 impl Leaf {
-    pub(crate) fn from_askama(config: &Config, askama_node: AskamaNode) -> Self {
+    fn from_askama(config: &Config, askama_node: AskamaNode) -> Self {
         let content = askama::format_askama_node(config, &askama_node);
         Self {
             content,
@@ -98,7 +98,7 @@ impl Leaf {
         }
     }
 
-    pub(crate) fn from_html(html_node: HtmlNode) -> Self {
+    fn from_html(html_node: HtmlNode) -> Self {
         let content = html_node.to_string();
         Self {
             content,
@@ -106,7 +106,7 @@ impl Leaf {
         }
     }
 
-    pub(crate) fn from_html_text(text: &str) -> Self {
+    fn from_html_text(text: &str) -> Self {
         let html_node = HtmlNode::Text(text.to_string());
         Self {
             content: text.to_string(),
@@ -114,7 +114,7 @@ impl Leaf {
         }
     }
 
-    pub(crate) fn from_html_raw_text(text: &str) -> Self {
+    fn from_html_raw_text(text: &str) -> Self {
         let html_node = HtmlNode::RawText(text.to_string());
 
         let trimmed = text.trim_matches('\n');
@@ -134,16 +134,16 @@ impl Leaf {
         }
     }
 
-    pub(crate) fn is_html_text(&self) -> bool {
+    pub fn is_html_text(&self) -> bool {
         matches!(self.root, Root::Html(HtmlNode::Text(_)))
     }
-    pub(crate) fn is_html_entity(&self) -> bool {
+    pub fn is_html_entity(&self) -> bool {
         matches!(self.root, Root::Html(HtmlNode::Entity(_)))
     }
-    pub(crate) fn chars_count(&self) -> usize {
+    fn chars_count(&self) -> usize {
         self.content.chars().count()
     }
-    pub(crate) fn maybe_askama_node(&self) -> Option<&AskamaNode> {
+    pub fn maybe_askama_node(&self) -> Option<&AskamaNode> {
         match &self.root {
             Root::Askama(node) => Some(node),
             Root::Html(_) => None,
@@ -152,7 +152,7 @@ impl Leaf {
 }
 
 impl Branch {
-    pub(crate) fn grow(leaves: Vec<usize>, style: BranchStyle, indent: i32) -> Self {
+    pub fn grow(leaves: Vec<usize>, style: BranchStyle, indent: i32) -> Self {
         Self {
             leaves,
             style,
@@ -162,11 +162,7 @@ impl Branch {
 }
 
 impl SakuraTree {
-    pub(crate) fn grow(
-        askama_nodes: &[AskamaNode],
-        html_nodes: &[HtmlNode],
-        config: Config,
-    ) -> Self {
+    pub fn grow(askama_nodes: &[AskamaNode], html_nodes: &[HtmlNode], config: Config) -> Self {
         let mut tree = Self {
             config,
             leaves: Vec::new(),
@@ -544,7 +540,7 @@ impl SakuraTree {
 }
 
 impl Ring {
-    pub(crate) fn new(layer: Layer, tree: &SakuraTree) -> Self {
+    fn new(layer: Layer, tree: &SakuraTree) -> Self {
         let total_chars = Self::calculate_total_chars(&layer, tree);
         Self { layer, total_chars }
     }
@@ -558,12 +554,12 @@ impl Ring {
             .sum()
     }
 
-    pub(crate) fn all_leaf_indices(&self) -> Vec<usize> {
+    pub fn all_leaf_indices(&self) -> Vec<usize> {
         self.layer.all_leaf_indices()
     }
 
     // Check if the inner rings contain any semantic multi-line content
-    pub(crate) fn inner_has_multi_line_content(&self) -> bool {
+    pub fn inner_has_multi_line_content(&self) -> bool {
         match &self.layer {
             Layer::CompleteElement { inner_rings, .. }
             | Layer::ControlBlock { inner_rings, .. } => inner_rings.iter().any(|ring| {
@@ -583,7 +579,7 @@ impl Ring {
 }
 
 impl Layer {
-    pub(crate) fn all_leaf_indices(&self) -> Vec<usize> {
+    fn all_leaf_indices(&self) -> Vec<usize> {
         match self {
             Self::CompleteElement {
                 start_leaf,

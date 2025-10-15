@@ -4,7 +4,7 @@ use tree_sitter::Node;
 use crate::config::Config;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Boundary {
+pub enum Boundary {
     Open,       // Tags that start blocks: if, for, block, etc.
     Inner,      // Tags that continue blocks with new indent: when
     Clause,     // Tags that continue blocks at same indent: else, else if
@@ -13,7 +13,7 @@ pub(crate) enum Boundary {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ControlTag {
+pub enum ControlTag {
     Block(Boundary),
     Endblock(Boundary),
     Filter(Boundary),
@@ -41,7 +41,7 @@ pub(crate) enum ControlTag {
 }
 
 impl ControlTag {
-    pub(crate) fn boundary(self) -> Boundary {
+    pub fn boundary(self) -> Boundary {
         match self {
             Self::Block(b)
             | Self::Endblock(b)
@@ -71,7 +71,7 @@ impl ControlTag {
     }
 
     // Check if this opening tag matches with a closing tag
-    pub(crate) fn matches_close(self, close: Self) -> bool {
+    pub fn matches_close(self, close: Self) -> bool {
         matches!(
             (self, close),
             (Self::Block(_), Self::Endblock(_))
@@ -86,19 +86,19 @@ impl ControlTag {
     }
 
     // Check if two tags are the same kind (both If, both For, etc.)
-    pub(crate) fn same_kind(self, other: Self) -> bool {
+    pub fn same_kind(self, other: Self) -> bool {
         std::mem::discriminant(&self) == std::mem::discriminant(&other)
     }
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Delimiters {
-    pub(crate) open: String,
-    pub(crate) close: String,
+pub struct Delimiters {
+    open: String,
+    close: String,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum AskamaNode {
+pub enum AskamaNode {
     Control {
         dlmts: Delimiters,
         inner: String,
@@ -115,7 +115,7 @@ pub(crate) enum AskamaNode {
 }
 
 impl AskamaNode {
-    pub(crate) fn placeholder(&self, idx: usize) -> String {
+    pub fn placeholder(&self, idx: usize) -> String {
         match self {
             Self::Control { .. } => format!("__ASKAMA_CTRL_{}_ASKAMA_END__", idx),
             Self::Expression { .. } => format!("__ASKAMA_EXPR_{}_ASKAMA_END__", idx),
@@ -123,7 +123,7 @@ impl AskamaNode {
         }
     }
 
-    pub(crate) fn delimiters(&self) -> (&str, &str) {
+    fn delimiters(&self) -> (&str, &str) {
         match self {
             Self::Control { dlmts, .. }
             | Self::Expression { dlmts, .. }
@@ -131,7 +131,7 @@ impl AskamaNode {
         }
     }
 
-    pub(crate) fn inner(&self) -> &str {
+    fn inner(&self) -> &str {
         match self {
             Self::Control { inner, .. }
             | Self::Expression { inner, .. }
@@ -139,7 +139,7 @@ impl AskamaNode {
         }
     }
 
-    pub(crate) fn indent_delta(&self) -> (i32, i32) {
+    pub fn indent_delta(&self) -> (i32, i32) {
         match self {
             Self::Control {
                 ctrl_tag: Some(tag),
@@ -154,19 +154,19 @@ impl AskamaNode {
         }
     }
 
-    pub(crate) fn is_ctrl(&self) -> bool {
+    pub fn is_ctrl(&self) -> bool {
         matches!(self, Self::Control { .. })
     }
 
-    pub(crate) fn is_expr(&self) -> bool {
+    pub fn is_expr(&self) -> bool {
         matches!(self, Self::Expression { .. })
     }
 
-    pub(crate) fn is_comment(&self) -> bool {
+    pub fn is_comment(&self) -> bool {
         matches!(self, Self::Comment { .. })
     }
 
-    pub(crate) fn get_ctrl_tag(&self) -> Option<ControlTag> {
+    pub fn get_ctrl_tag(&self) -> Option<ControlTag> {
         match self {
             Self::Control { ctrl_tag, .. } => *ctrl_tag,
             _ => None,
@@ -174,12 +174,12 @@ impl AskamaNode {
     }
 
     // Check if this is a when clause that should preserve leading spaces in following text
-    pub(crate) fn is_when_clause(&self) -> bool {
+    pub fn is_when_clause(&self) -> bool {
         matches!(self.get_ctrl_tag(), Some(ControlTag::When(_)))
     }
 }
 
-pub(crate) fn extract_nodes(source: &str, root: &Node) -> Result<(String, Vec<AskamaNode>)> {
+pub fn extract_nodes(source: &str, root: &Node) -> Result<(String, Vec<AskamaNode>)> {
     let mut html = String::new();
     let mut nodes = Vec::new();
     let mut pos = 0;
@@ -287,7 +287,7 @@ fn extract_delimiters(node: Node, source: &str) -> Option<(Delimiters, String)> 
 }
 
 // Format an Askama node with proper normalization
-pub(crate) fn format_askama_node(config: &Config, node: &AskamaNode) -> String {
+pub fn format_askama_node(config: &Config, node: &AskamaNode) -> String {
     // Normalize whitespace inside delimiters
     let (open, close, inner) = normalize_askama_node(node, config);
 
@@ -327,7 +327,7 @@ pub(crate) fn format_askama_node(config: &Config, node: &AskamaNode) -> String {
     }
 }
 
-pub(crate) fn replace_placeholder_in_raw_text(text: &str, nodes: &[AskamaNode]) -> String {
+pub fn replace_placeholder_in_raw_text(text: &str, nodes: &[AskamaNode]) -> String {
     let mut result = text.to_string();
     for (idx, node) in nodes.iter().enumerate() {
         let placeholder = node.placeholder(idx);
@@ -339,7 +339,7 @@ pub(crate) fn replace_placeholder_in_raw_text(text: &str, nodes: &[AskamaNode]) 
     result
 }
 
-pub(crate) fn fmt_node_for_attr_or_raw_text(node: &AskamaNode) -> String {
+pub fn fmt_node_for_attr_or_raw_text(node: &AskamaNode) -> String {
     let (open, close) = node.delimiters();
     let inner = normalize_whitespace(node.inner());
     format!("{} {} {}", open, inner.trim(), close)
@@ -373,6 +373,6 @@ fn normalize_askama_comment(text: &str, max_length: usize) -> String {
     }
 }
 
-pub(crate) fn normalize_whitespace(text: &str) -> String {
+fn normalize_whitespace(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }

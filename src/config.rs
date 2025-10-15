@@ -1,5 +1,5 @@
 #[derive(Debug, Clone)]
-pub(crate) struct Config {
+pub struct Config {
     pub(crate) indent_size: usize,
     pub(crate) max_width: usize,
 }

@@ -4,7 +4,7 @@ use tree_sitter::Node;
 use crate::askama::{self, AskamaNode};
 
 #[derive(Debug, Clone)]
-pub(crate) enum HtmlNode {
+pub enum HtmlNode {
     StartTag {
         name: String,
         attributes: Vec<Attribute>,
@@ -34,13 +34,13 @@ pub(crate) enum HtmlNode {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Attribute {
-    pub(crate) name: String,
-    pub(crate) value: Option<String>,
+pub struct Attribute {
+    name: String,
+    value: Option<String>,
 }
 
 impl Attribute {
-    pub(crate) fn to_string(&self) -> String {
+    fn to_string(&self) -> String {
         match &self.value {
             Some(val) => {
                 // If value already has quotes (from quoted_attribute_value), use as-is
@@ -58,7 +58,7 @@ impl Attribute {
     }
 
     // Replace Askama placeholder in attribute name and value
-    pub(crate) fn replace_placeholder(mut self, askama_nodes: &[AskamaNode]) -> Self {
+    fn replace_placeholder(mut self, askama_nodes: &[AskamaNode]) -> Self {
         // Process placeholder in attribute name
         for (idx, askama_node) in askama_nodes.iter().enumerate() {
             let placeholder = askama_node.placeholder(idx);
@@ -85,7 +85,7 @@ impl Attribute {
 }
 
 impl HtmlNode {
-    pub(crate) fn is_void_element(&self) -> bool {
+    fn is_void_element(&self) -> bool {
         matches!(self, Self::Void { .. })
     }
 
@@ -110,7 +110,7 @@ impl HtmlNode {
     }
 
     // Elements that can be displayed inline
-    pub(crate) fn is_inline_level(&self) -> bool {
+    pub fn is_inline_level(&self) -> bool {
         // Text, raw text and entities are always inline
         if matches!(self, Self::Text(_) | Self::RawText(_) | Self::Entity(_)) {
             return true;
@@ -169,12 +169,12 @@ impl HtmlNode {
     }
 
     // Check if this is a closing tag
-    pub(crate) fn is_closing_tag(&self) -> bool {
+    pub fn is_closing_tag(&self) -> bool {
         matches!(self, Self::EndTag { .. } | Self::ErroneousEndTag { .. })
     }
 
     // Get the tag name if this is any kind of tag
-    pub(crate) fn get_tag_name(&self) -> Option<&str> {
+    fn get_tag_name(&self) -> Option<&str> {
         match self {
             Self::StartTag { name, .. }
             | Self::Void { name, .. }
@@ -185,7 +185,7 @@ impl HtmlNode {
         }
     }
 
-    pub(crate) fn to_string(&self) -> String {
+    pub fn to_string(&self) -> String {
         match self {
             Self::StartTag {
                 name, attributes, ..
@@ -224,7 +224,7 @@ impl HtmlNode {
     }
 
     // Replace Askama placeholder in this HTML node
-    pub(crate) fn replace_placeholder(self, askama_nodes: &[AskamaNode]) -> Self {
+    pub fn replace_placeholder(self, askama_nodes: &[AskamaNode]) -> Self {
         match self {
             Self::StartTag {
                 name,
@@ -258,7 +258,7 @@ impl HtmlNode {
     }
 }
 
-pub(crate) fn parse_html_tree(root_node: &Node, source: &[u8]) -> Result<Vec<HtmlNode>> {
+pub fn parse_html_tree(root_node: &Node, source: &[u8]) -> Result<Vec<HtmlNode>> {
     let mut html_nodes = Vec::new();
     // The top-level call now returns a count, which we can ignore.
     let _ = parse_html_node_recursive(root_node, source, &mut html_nodes, 0)?;

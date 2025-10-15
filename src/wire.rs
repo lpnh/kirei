@@ -4,7 +4,7 @@ use crate::{
     sakura_tree::{Branch, BranchStyle, Layer, Ring, Root, SakuraTree},
 };
 
-pub(crate) fn wire(tree: &mut SakuraTree) {
+pub fn wire(tree: &mut SakuraTree) {
     let indent_map = analyze_indentation_structure(tree);
 
     wire_branches(tree, &indent_map);
