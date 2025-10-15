@@ -74,37 +74,34 @@ fn ink_inline_branch(inked_tree: &mut String, tree: &SakuraTree, indent: i32, le
 }
 
 fn ink_multiline_branch(inked_tree: &mut String, tree: &SakuraTree, indent: i32, leaves: &[usize]) {
+    let indent_str = indent_for(&tree.config, indent);
+
     for &leaf_idx in leaves {
         if let Some(leaf) = tree.leaves.get(leaf_idx) {
             let content = content_normalized(leaf);
 
-            if !content.trim().is_empty() {
-                let indent_str = indent_for(&tree.config, indent);
-
-                if leaf.is_html_text() || leaf.is_html_entity() {
-                    // Only wrap pure text content
-                    let wrapped_content = wrap_inline_content(&tree.config, &content, indent);
-                    inked_tree.push_str(&wrapped_content);
-                } else {
-                    // HTML tags and Askama expressions - handle multiline content properly
-                    if content.contains('\n') {
-                        // Multiline content: indent each line properly
-                        let lines: Vec<&str> = content.lines().collect();
-                        for (i, line) in lines.iter().enumerate() {
-                            if i > 0 {
-                                inked_tree.push('\n');
-                            }
-                            inked_tree.push_str(&indent_str);
-                            inked_tree.push_str(line.trim_end());
+            // Only wrap text content
+            if leaf.is_html_text() || leaf.is_html_entity() {
+                let wrapped_content = wrap_inline_content(&tree.config, &content, indent);
+                inked_tree.push_str(&wrapped_content);
+            } else {
+                // Handle multiline content
+                if content.contains('\n') {
+                    let lines: Vec<&str> = content.lines().collect();
+                    for (i, line) in lines.iter().enumerate() {
+                        if i > 0 {
+                            inked_tree.push('\n');
                         }
-                    } else {
-                        // Single line content
                         inked_tree.push_str(&indent_str);
-                        inked_tree.push_str(content.trim_end());
+                        inked_tree.push_str(line.trim_end());
                     }
+                } else {
+                    // Single line content
+                    inked_tree.push_str(&indent_str);
+                    inked_tree.push_str(content.trim_end());
                 }
-                inked_tree.push('\n');
             }
+            inked_tree.push('\n');
         }
     }
 }
