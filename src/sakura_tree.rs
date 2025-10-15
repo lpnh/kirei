@@ -203,17 +203,15 @@ impl SakuraTree {
             }
         }
 
-        // Convert metadata from html indices to leaf indices and store as twigs
+        // Convert html end_tag index to end_leaf index
         for (leaf_idx, leaf) in tree.leaves.iter().enumerate() {
             if let Root::Html(HtmlNode::StartTag {
                 end_tag_idx: Some(elem_end_tag_idx),
                 ..
             }) = &leaf.root
+                && let Some(&end_leaf) = html_to_leaf_map.get(elem_end_tag_idx)
             {
-                // Convert html end_tag index to end_leaf index
-                if let Some(&end_leaf) = html_to_leaf_map.get(elem_end_tag_idx) {
-                    tree.twigs.insert(leaf_idx, end_leaf);
-                }
+                tree.twigs.insert(leaf_idx, end_leaf);
             }
         }
 
