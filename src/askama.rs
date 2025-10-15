@@ -298,7 +298,7 @@ pub(crate) fn format_askama_node(config: &Config, node: &AskamaNode) -> String {
 
     let total_inline_len = open.len() + 1 + inner.len() + 1 + close.len();
 
-    if total_inline_len > config.max_line_length {
+    if total_inline_len > config.max_width {
         // Multiline format
         let content_indent = " ".repeat(config.indent_size);
 
@@ -356,7 +356,7 @@ fn normalize_askama_node(node: &AskamaNode, config: &Config) -> (String, String,
     // Normalize inner content
     let inner = if node.is_comment() {
         // Special treatment for comments
-        normalize_askama_comment(raw_inner, config.max_line_length)
+        normalize_askama_comment(raw_inner, config.max_width)
     } else {
         normalize_whitespace(raw_inner)
     };

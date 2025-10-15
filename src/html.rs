@@ -397,12 +397,12 @@ fn parse_html_node_recursive(
         anyhow::bail!("nesting too deep");
     }
 
-    let mut current_chars_count = 0;
+    let mut curr_chars_count = 0;
 
     match node.kind() {
         "document" | "script_element" | "style_element" => {
             for child in node.children(&mut node.walk()) {
-                current_chars_count +=
+                curr_chars_count +=
                     parse_html_node_recursive(&child, source, html_nodes, depth + 1)?;
             }
         }
@@ -410,19 +410,19 @@ fn parse_html_node_recursive(
             if let Some(html_node) = parse_html_node(node, source)? {
                 // Count the actual characters in the tag markup
                 let tag_text = node.utf8_text(source)?;
-                current_chars_count = tag_text.chars().count();
+                curr_chars_count = tag_text.chars().count();
                 html_nodes.push(html_node);
             }
         }
         "entity" => {
             let entity = node.utf8_text(source)?;
-            current_chars_count = entity.chars().count();
+            curr_chars_count = entity.chars().count();
             html_nodes.push(HtmlNode::Entity(entity.to_string()));
         }
         "text" => {
             let text = node.utf8_text(source)?;
             if !text.trim().is_empty() {
-                current_chars_count = text.chars().count();
+                curr_chars_count = text.chars().count();
                 html_nodes.push(HtmlNode::Text(text.to_string()));
             }
         }
@@ -466,12 +466,12 @@ fn parse_html_node_recursive(
             {
                 *end_tag_idx = Some(elem_end_tag_idx);
             }
-            current_chars_count = total_child_chars;
+            curr_chars_count = total_child_chars;
         }
         "raw_text" => {
             let text = node.utf8_text(source)?;
             if !text.trim().is_empty() {
-                current_chars_count = text.chars().count();
+                curr_chars_count = text.chars().count();
                 html_nodes.push(HtmlNode::RawText(text.to_string()));
             }
         }
@@ -480,18 +480,18 @@ fn parse_html_node_recursive(
             if node.child_count() > 0 {
                 // Recurse and aggregate char counts from children if any
                 for child in node.children(&mut node.walk()) {
-                    current_chars_count +=
+                    curr_chars_count +=
                         parse_html_node_recursive(&child, source, html_nodes, depth + 1)?;
                 }
             } else {
                 // Fallback to HtmlNode::Text
                 let text = node.utf8_text(source)?;
                 if !text.trim().is_empty() {
-                    current_chars_count = text.chars().count();
+                    curr_chars_count = text.chars().count();
                     html_nodes.push(HtmlNode::Text(text.to_string()));
                 }
             }
         }
     }
-    Ok(current_chars_count)
+    Ok(curr_chars_count)
 }

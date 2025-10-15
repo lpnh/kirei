@@ -13,25 +13,25 @@ pub(crate) fn wire(tree: &mut SakuraTree) {
 // Build indentation map for proper formatting
 fn analyze_indentation_structure(tree: &SakuraTree) -> Vec<i32> {
     let mut indent_map = vec![0; tree.leaves.len()];
-    let mut current_indent = 0;
+    let mut curr_indent = 0;
 
     for (i, leaf) in tree.leaves.iter().enumerate() {
         // Check for HTML EndTags to decrease indent before assigning it
         if let Root::Html(html_node) = &leaf.root
             && html_node.is_closing_tag()
         {
-            current_indent = (current_indent - 1).max(0);
+            curr_indent = (curr_indent - 1).max(0);
         }
 
         // Handle Askama indentation changes
         if let Some(askama_node) = leaf.maybe_askama_node() {
             let (pre_delta, post_delta) = askama_node.indent_delta();
-            current_indent = (current_indent + pre_delta).max(0);
-            indent_map[i] = current_indent;
-            current_indent = (current_indent + post_delta).max(0);
+            curr_indent = (curr_indent + pre_delta).max(0);
+            indent_map[i] = curr_indent;
+            curr_indent = (curr_indent + post_delta).max(0);
         } else {
             // Not an Askama node, so just assign the current indent
-            indent_map[i] = current_indent;
+            indent_map[i] = curr_indent;
         }
 
         // Check for HTML StartTags to increase indent for subsequent nodes
@@ -39,7 +39,7 @@ fn analyze_indentation_structure(tree: &SakuraTree) -> Vec<i32> {
         if let Root::Html(html_node) = &leaf.root
             && matches!(html_node, html::HtmlNode::StartTag { .. })
         {
-            current_indent += 1;
+            curr_indent += 1;
         }
     }
     indent_map
@@ -121,8 +121,8 @@ fn wire_multiple_branches(
 }
 
 fn wire_single_branch(tree: &SakuraTree, ring: &Ring, indent_map: &[i32]) -> Branch {
-    let leaf_indices = ring.all_leaf_indices();
-    let indent_level = leaf_indices
+    let leaves = ring.all_leaf_indices();
+    let indent = leaves
         .first()
         .and_then(|&idx| indent_map.get(idx))
         .copied()
@@ -130,14 +130,14 @@ fn wire_single_branch(tree: &SakuraTree, ring: &Ring, indent_map: &[i32]) -> Bra
 
     let style = decide_branch_style(tree, ring);
 
-    Branch::grow(leaf_indices, style, indent_level)
+    Branch::grow(leaves, style, indent)
 }
 
 fn decide_branch_style(tree: &SakuraTree, ring: &Ring) -> BranchStyle {
     match &ring.layer {
         // Inline if fits, otherwise multiline
         Layer::EmptyControlBlock { .. } | Layer::Standalone { .. } => {
-            if ring.total_chars <= tree.config.max_line_length {
+            if ring.total_chars <= tree.config.max_width {
                 BranchStyle::Inline
             } else {
                 BranchStyle::MultiLine
@@ -159,7 +159,7 @@ fn decide_branch_style(tree: &SakuraTree, ring: &Ring) -> BranchStyle {
             if starts_with_when {
                 // When clauses with their content should stay inline
                 BranchStyle::Inline
-            } else if ring.total_chars <= tree.config.max_line_length {
+            } else if ring.total_chars <= tree.config.max_width {
                 BranchStyle::Inline
             } else {
                 BranchStyle::Wrapped
@@ -170,7 +170,7 @@ fn decide_branch_style(tree: &SakuraTree, ring: &Ring) -> BranchStyle {
             is_semantic_inline, ..
         } => {
             // Check structure constraints
-            let fits_in_line = ring.total_chars <= tree.config.max_line_length;
+            let fits_in_line = ring.total_chars <= tree.config.max_width;
             let has_multi_line_content = ring.inner_has_multi_line_content();
 
             if fits_in_line && (*is_semantic_inline || !has_multi_line_content) {
