@@ -186,7 +186,7 @@ impl SakuraTree {
         // Convert each HtmlNode to SakuraLeaf while replacing placeholders
         for (i, html_node) in html_nodes.iter().enumerate() {
             // Record the mapping before processing
-            let leaf_index = tree.leaf_count();
+            let leaf_index = tree.leaves.len();
             html_to_leaf_map.insert(i, leaf_index);
 
             // Dispatch based on node type
@@ -218,37 +218,10 @@ impl SakuraTree {
         tree
     }
 
-    pub(crate) fn grow_leaf(&mut self, leaf: Leaf) {
-        self.leaves.push(leaf);
-    }
-    pub(crate) fn grow_layer(&mut self, ring: Ring) {
-        self.rings.push(ring);
-    }
-    pub(crate) fn grow_branch(&mut self, branch: Branch) {
-        self.branches.push(branch);
-    }
-    pub(crate) fn leaf_count(&self) -> usize {
-        self.leaves.len()
-    }
-    pub(crate) fn get_leaf(&self, index: usize) -> Option<&Leaf> {
-        self.leaves.get(index)
-    }
-    pub(crate) fn iter_leaves(&self) -> std::slice::Iter<'_, Leaf> {
-        self.leaves.iter()
-    }
-    pub(crate) fn iter_rings(&self) -> std::slice::Iter<'_, Ring> {
-        self.rings.iter()
-    }
-    pub(crate) fn iter_branches(&self) -> std::slice::Iter<'_, Branch> {
-        self.branches.iter()
-    }
 
     fn grow_layers(&mut self) {
-        let rings = self.grow_rings(0, self.leaf_count());
-
-        for ring in rings {
-            self.grow_layer(ring);
-        }
+        let rings = self.grow_rings(0, self.leaves.len());
+        self.rings.extend(rings);
     }
 
     // Grow concentric rings
@@ -257,7 +230,7 @@ impl SakuraTree {
         let mut index = start_index;
 
         while index < end_index {
-            if let Some(leaf) = self.get_leaf(index) {
+            if let Some(leaf) = self.leaves.get(index) {
                 match &leaf.root {
                     // Try to build when clause (they need to claim their inline content)
                     Root::Askama(askama_node) if !askama_node.is_expr() => {
@@ -342,7 +315,7 @@ impl SakuraTree {
         let inner_rings = self.grow_rings(start_leaf + 1, end_leaf);
 
         // Get inline status from the start tag
-        let leaf = self.get_leaf(start_leaf)?;
+        let leaf = self.leaves.get(start_leaf)?;
         let is_semantic_inline = match &leaf.root {
             Root::Html(html_node) => html_node.is_inline_level(),
             Root::Askama(_) => false,
@@ -377,7 +350,7 @@ impl SakuraTree {
         let mut depth: u32 = 0;
 
         while current_index < end_index && depth < 200 {
-            let leaf = self.get_leaf(current_index)?;
+            let leaf = self.leaves.get(current_index)?;
 
             if let Root::Askama(node) = &leaf.root
                 && let Some(tag) = node.get_ctrl_tag()
@@ -438,7 +411,7 @@ impl SakuraTree {
 
         // 1. Collect all potential leaves until we hit a control block/comment
         while current_index < end_index {
-            let Some(leaf) = self.get_leaf(current_index) else {
+            let Some(leaf) = self.leaves.get(current_index) else {
                 break;
             };
 
@@ -468,7 +441,7 @@ impl SakuraTree {
         // 2. Calculate total chars for all candidates
         let total_chars: usize = candidate_leaves
             .iter()
-            .filter_map(|&idx| self.get_leaf(idx))
+            .filter_map(|&idx| self.leaves.get(idx))
             .map(Leaf::chars_count)
             .sum();
 
@@ -496,7 +469,7 @@ impl SakuraTree {
         // Collect text content and expressions that can be grouped
         let mut current_index = start_index + 1;
         while current_index < end_index {
-            let Some(leaf) = self.get_leaf(current_index) else {
+            let Some(leaf) = self.leaves.get(current_index) else {
                 break;
             };
 
@@ -538,7 +511,7 @@ impl Ring {
         let leaf_indices = layer.all_leaf_indices();
         leaf_indices
             .iter()
-            .filter_map(|&i| tree.get_leaf(i))
+            .filter_map(|&i| tree.leaves.get(i))
             .map(Leaf::chars_count)
             .sum()
     }
@@ -620,7 +593,7 @@ fn process_html_node(html_node: &HtmlNode, tree: &mut SakuraTree, askama_nodes: 
         HtmlNode::RawText(text) => process_raw_text_node(text, tree, askama_nodes),
         HtmlNode::Entity(_) | HtmlNode::Comment(_) | HtmlNode::Doctype(_) => {
             // Simple nodes - direct conversion
-            tree.grow_leaf(Leaf::from_html(html_node.clone()));
+            tree.leaves.push(Leaf::from_html(html_node.clone()));
         }
         _ => process_element_node(html_node, tree, askama_nodes),
     }
@@ -630,7 +603,7 @@ fn process_text_node(text: &str, tree: &mut SakuraTree, askama_nodes: &[AskamaNo
     let placeholders = find_placeholders(text, askama_nodes);
 
     if placeholders.is_empty() {
-        tree.grow_leaf(Leaf::from_html_text(text));
+        tree.leaves.push(Leaf::from_html_text(text));
     } else {
         replace_placeholders_in_text(text, placeholders, tree);
     }
@@ -638,12 +611,12 @@ fn process_text_node(text: &str, tree: &mut SakuraTree, askama_nodes: &[AskamaNo
 
 fn process_raw_text_node(text: &str, tree: &mut SakuraTree, askama_nodes: &[AskamaNode]) {
     let processed = askama::replace_placeholder_in_raw_text(text, askama_nodes);
-    tree.grow_leaf(Leaf::from_html_raw_text(&processed));
+    tree.leaves.push(Leaf::from_html_raw_text(&processed));
 }
 
 fn process_element_node(html_node: &HtmlNode, tree: &mut SakuraTree, askama_nodes: &[AskamaNode]) {
     let processed = html_node.clone().replace_placeholder(askama_nodes);
-    tree.grow_leaf(Leaf::from_html(processed));
+    tree.leaves.push(Leaf::from_html(processed));
 }
 
 fn find_placeholders(
@@ -679,11 +652,11 @@ fn replace_placeholders_in_text(
         // Add text before this placeholder
         if pos > last_end {
             let text_segment = &text[last_end..pos];
-            tree.grow_leaf(Leaf::from_html_text(text_segment));
+            tree.leaves.push(Leaf::from_html_text(text_segment));
         }
 
         // Add the Askama node
-        tree.grow_leaf(Leaf::from_askama(&config, askama_node.clone()));
+        tree.leaves.push(Leaf::from_askama(&config, askama_node.clone()));
 
         last_end = pos + placeholder.len();
     }
@@ -691,6 +664,6 @@ fn replace_placeholders_in_text(
     // Add any remaining text after the last placeholder
     if last_end < text.len() {
         let remaining = &text[last_end..];
-        tree.grow_leaf(Leaf::from_html_text(remaining));
+        tree.leaves.push(Leaf::from_html_text(remaining));
     }
 }

@@ -12,10 +12,10 @@ pub(crate) fn wire(tree: &mut SakuraTree) {
 
 // Build indentation map for proper formatting
 fn analyze_indentation_structure(tree: &SakuraTree) -> Vec<i32> {
-    let mut indent_map = vec![0; tree.leaf_count()];
+    let mut indent_map = vec![0; tree.leaves.len()];
     let mut current_indent = 0;
 
-    for (i, leaf) in tree.iter_leaves().enumerate() {
+    for (i, leaf) in tree.leaves.iter().enumerate() {
         // Check for HTML EndTags to decrease indent before assigning it
         if let Root::Html(html_node) = &leaf.root
             && html_node.is_closing_tag()
@@ -46,7 +46,7 @@ fn analyze_indentation_structure(tree: &SakuraTree) -> Vec<i32> {
 }
 
 fn wire_branches(tree: &mut SakuraTree, indent_map: &[i32]) {
-    let rings: Vec<Ring> = tree.iter_rings().cloned().collect();
+    let rings: Vec<Ring> = tree.rings.clone();
 
     for ring in &rings {
         wire_branch_recursive(tree, ring, indent_map);
@@ -81,11 +81,13 @@ fn wire_branch_recursive(tree: &mut SakuraTree, ring: &Ring, indent_map: &[i32])
                 wire_multiple_branches(tree, *open_leaf, &[], *close_leaf, indent_map);
             }
             _ => {
-                tree.grow_branch(wire_single_branch(tree, ring, indent_map));
+                tree.branches
+                    .push(wire_single_branch(tree, ring, indent_map));
             }
         }
     } else {
-        tree.grow_branch(wire_single_branch(tree, ring, indent_map));
+        tree.branches
+            .push(wire_single_branch(tree, ring, indent_map));
     }
 }
 
@@ -98,7 +100,7 @@ fn wire_multiple_branches(
 ) {
     // Wire first branch (opening element/control tag)
     let open_indent = indent_map.get(open_leaf).copied().unwrap_or(0);
-    tree.grow_branch(Branch::grow(
+    tree.branches.push(Branch::grow(
         vec![open_leaf],
         BranchStyle::MultiLine,
         open_indent,
@@ -111,7 +113,7 @@ fn wire_multiple_branches(
 
     // Wire last branch (closing element/control tag)
     let close_indent = indent_map.get(close_leaf).copied().unwrap_or(0);
-    tree.grow_branch(Branch::grow(
+    tree.branches.push(Branch::grow(
         vec![close_leaf],
         BranchStyle::MultiLine,
         close_indent,
@@ -149,7 +151,7 @@ fn decide_branch_style(tree: &SakuraTree, ring: &Ring) -> BranchStyle {
             // Check if this sequence starts with a when clause
             let starts_with_when = leaves
                 .first()
-                .and_then(|&idx| tree.get_leaf(idx))
+                .and_then(|&idx| tree.leaves.get(idx))
                 .and_then(|leaf| leaf.maybe_askama_node())
                 .and_then(AskamaNode::get_ctrl_tag)
                 .is_some_and(|tag| tag.boundary() == askama::Boundary::Inner);

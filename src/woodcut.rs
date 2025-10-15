@@ -9,11 +9,11 @@ use crate::{
 };
 
 pub(crate) fn print(tree: &SakuraTree) -> String {
-    let estimated_inked_tree_size = tree.iter_leaves().map(|l| l.content.len()).sum::<usize>()
-        + tree.leaf_count() * (tree.config.indent_size * 4);
+    let estimated_inked_tree_size = tree.leaves.iter().map(|l| l.content.len()).sum::<usize>()
+        + tree.leaves.len() * (tree.config.indent_size * 4);
     let mut inked_tree = String::with_capacity(estimated_inked_tree_size);
 
-    for branch in tree.iter_branches() {
+    for branch in &tree.branches {
         match branch.style {
             BranchStyle::Inline => ink_inline_branch(
                 &mut inked_tree,
@@ -58,12 +58,12 @@ fn ink_inline_branch(
     let is_comment_only = leaf_indices.len() == 1
         && leaf_indices
             .first()
-            .and_then(|&idx| tree.get_leaf(idx))
+            .and_then(|&idx| tree.leaves.get(idx))
             .and_then(|leaf| leaf.maybe_askama_node())
             .is_some_and(AskamaNode::is_comment);
 
     for (i, &leaf_index) in leaf_indices.iter().enumerate() {
-        if let Some(leaf) = tree.get_leaf(leaf_index) {
+        if let Some(leaf) = tree.leaves.get(leaf_index) {
             let content = content_normalized(leaf);
 
             // Add space between leaves when needed for proper formatting
@@ -97,7 +97,7 @@ fn ink_multiline_branch(
     leaf_indices: &[usize],
 ) {
     for &leaf_index in leaf_indices {
-        if let Some(leaf) = tree.get_leaf(leaf_index) {
+        if let Some(leaf) = tree.leaves.get(leaf_index) {
             let content = content_normalized(leaf);
 
             if !content.trim().is_empty() {
@@ -144,7 +144,7 @@ fn ink_wrapped_branch(
     let mut lines = Vec::new();
 
     for (i, &leaf_index) in leaf_indices.iter().enumerate() {
-        if let Some(leaf) = tree.get_leaf(leaf_index) {
+        if let Some(leaf) = tree.leaves.get(leaf_index) {
             let content = content_normalized(leaf);
 
             // Check if we need space before this leaf
@@ -214,7 +214,7 @@ fn ink_raw_branch(
     let mut current_indent = indent_level;
 
     for &leaf_index in leaf_indices {
-        if let Some(leaf) = tree.get_leaf(leaf_index) {
+        if let Some(leaf) = tree.leaves.get(leaf_index) {
             let content = &leaf.content;
 
             // Process raw text content with preserved line structure
@@ -316,14 +316,14 @@ fn should_add_space_before_leaf(
     position_in_branch: usize,
 ) -> bool {
     // Get the current leaf and the previous leaf in the branch
-    let current_leaf = tree.get_leaf(current_leaf_index);
+    let current_leaf = tree.leaves.get(current_leaf_index);
     let prev_branch_index = if position_in_branch > 0 {
         branch_indices.get(position_in_branch - 1)
     } else {
         None
     };
 
-    let prev_leaf = prev_branch_index.and_then(|&idx| tree.get_leaf(idx));
+    let prev_leaf = prev_branch_index.and_then(|&idx| tree.leaves.get(idx));
 
     let (Some(current), Some(prev)) = (current_leaf, prev_leaf) else {
         return false;
