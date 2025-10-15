@@ -556,30 +556,22 @@ impl Ring {
         match layer {
             Layer::CompleteElement { inner_rings, .. }
             | Layer::ControlBlock { inner_rings, .. } => {
-                inner_rings.iter().any(|ring| {
-                    match &ring.layer {
-                        // Check if inner element is block-level
-                        Layer::CompleteElement { start_leaf, .. } => {
-                            if let Some(leaf) = tree.leaves.get(*start_leaf) {
-                                match &leaf.root {
-                                    Root::Html(html_node) => !html_node.is_inline_level(),
-                                    Root::Askama(_) => true,
-                                }
-                            } else {
-                                true
-                            }
-                        }
-                        // Control blocks and script/style are always block-level
-                        Layer::ControlBlock { .. } | Layer::ScriptStyle { .. } => true,
-                        // Recurse for other layers
-                        _ => ring.has_block,
+                inner_rings.iter().any(|ring| match &ring.layer {
+                    // Check if inner element is block-level
+                    Layer::CompleteElement { start_leaf, .. } => {
+                        let Root::Html(html_node) = &tree.leaves[*start_leaf].root else {
+                            unreachable!("CompleteElement must have HTML StartTag")
+                        };
+                        !html_node.is_inline_level()
                     }
+                    // Control blocks and script/style are always block-level
+                    Layer::ControlBlock { .. } | Layer::ScriptStyle { .. } => true,
+                    // Recurse for other layers
+                    _ => ring.has_block,
                 })
             }
             Layer::ScriptStyle { .. } => true,
-            Layer::TextSequence { .. }
-            | Layer::Standalone { .. }
-            | Layer::EmptyControlBlock { .. } => false,
+            _ => false,
         }
     }
 
