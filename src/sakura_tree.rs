@@ -13,13 +13,8 @@ pub(crate) struct SakuraTree {
     pub(crate) leaves: Vec<Leaf>,
     pub(crate) rings: Vec<Ring>,
     pub(crate) branches: Vec<Branch>,
-    pub(crate) twigs: HashMap<usize, Twig>,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct Twig {
-    pub(crate) end_leaf: usize,
-    pub(crate) chars_count: usize,
+    // Maps start_leaf index to end_leaf index
+    pub(crate) twigs: HashMap<usize, usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -46,7 +41,6 @@ pub(crate) struct Ring {
 pub(crate) enum Layer {
     // Complete HTML element with start/end tags
     CompleteElement {
-        chars_count: usize,
         start_leaf: usize,
         inner_rings: Vec<Ring>,
         end_leaf: usize,
@@ -197,19 +191,13 @@ impl SakuraTree {
         // Convert metadata from html indices to leaf indices and store as twigs
         for (leaf_idx, leaf) in tree.leaves.iter().enumerate() {
             if let Root::Html(HtmlNode::StartTag {
-                element_metadata: Some(html_metadata),
+                end_tag_idx: Some(elem_end_tag_idx),
                 ..
             }) = &leaf.root
             {
                 // Convert html end_tag index to end_leaf index
-                if let Some(&end_leaf) = html_to_leaf_map.get(&html_metadata.end_tag_index) {
-                    tree.twigs.insert(
-                        leaf_idx,
-                        Twig {
-                            chars_count: html_metadata.chars_count,
-                            end_leaf,
-                        },
-                    );
+                if let Some(&end_leaf) = html_to_leaf_map.get(elem_end_tag_idx) {
+                    tree.twigs.insert(leaf_idx, end_leaf);
                 }
             }
         }
@@ -306,10 +294,8 @@ impl SakuraTree {
     }
 
     fn try_complete_element(&self, start_leaf: usize) -> Option<(Ring, usize)> {
-        // Get the twig for this element
-        let twig = self.twigs.get(&start_leaf)?;
-        let end_leaf = twig.end_leaf;
-        let chars_count = twig.chars_count;
+        // Get the end_leaf for this element
+        let &end_leaf = self.twigs.get(&start_leaf)?;
 
         // Recursively grow inner rings
         let inner_rings = self.grow_rings(start_leaf + 1, end_leaf);
@@ -322,7 +308,6 @@ impl SakuraTree {
         };
 
         let layer = Layer::CompleteElement {
-            chars_count,
             start_leaf,
             inner_rings,
             end_leaf,
@@ -418,8 +403,7 @@ impl SakuraTree {
             // For StartTags, include the complete element without splitting it
             if matches!(leaf.root, Root::Html(HtmlNode::StartTag { .. })) {
                 // Try to find the complete element boundaries
-                if let Some(twig) = self.twigs.get(&current_index) {
-                    let end_leaf = twig.end_leaf;
+                if let Some(&end_leaf) = self.twigs.get(&current_index) {
                     // Include all leaves from current to end
                     for idx in current_index..=end_leaf {
                         candidate_leaves.push(idx);
@@ -570,10 +554,7 @@ impl SakuraTree {
 
 impl Ring {
     pub(crate) fn new(layer: Layer, tree: &SakuraTree) -> Self {
-        let total_chars = match &layer {
-            Layer::CompleteElement { chars_count, .. } => *chars_count,
-            _ => Self::calculate_total_chars(&layer, tree),
-        };
+        let total_chars = Self::calculate_total_chars(&layer, tree);
         Self { layer, total_chars }
     }
 

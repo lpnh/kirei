@@ -8,7 +8,7 @@ pub(crate) enum HtmlNode {
     StartTag {
         name: String,
         attributes: Vec<Attribute>,
-        element_metadata: Option<ElementMetadata>,
+        end_tag_idx: Option<usize>,
     },
     Void {
         name: String,
@@ -37,14 +37,6 @@ pub(crate) enum HtmlNode {
 pub(crate) struct Attribute {
     pub(crate) name: String,
     pub(crate) value: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct ElementMetadata {
-    // The total characters of the entire element
-    pub(crate) chars_count: usize,
-    // The index of the end_tag node of this element
-    pub(crate) end_tag_index: usize,
 }
 
 impl Attribute {
@@ -237,14 +229,14 @@ impl HtmlNode {
             Self::StartTag {
                 name,
                 attributes,
-                element_metadata,
+                end_tag_idx,
             } => Self::StartTag {
                 name,
                 attributes: attributes
                     .into_iter()
                     .map(|attr| attr.replace_placeholder(askama_nodes))
                     .collect(),
-                element_metadata,
+                end_tag_idx,
             },
             Self::Void { name, attributes } => Self::Void {
                 name,
@@ -307,7 +299,7 @@ fn parse_start_tag(node: &Node, source: &[u8]) -> HtmlNode {
         HtmlNode::StartTag {
             name: tag_name,
             attributes,
-            element_metadata: None,
+            end_tag_idx: None,
         }
     }
 }
@@ -435,7 +427,7 @@ fn parse_html_node_recursive(
             }
         }
         "element" => {
-            let start_tag_index = html_nodes.len();
+            let start_tag_idx = html_nodes.len();
 
             let mut total_child_chars = 0;
 
@@ -445,39 +437,34 @@ fn parse_html_node_recursive(
             }
 
             let is_void_or_self_closing = html_nodes
-                .get(start_tag_index)
+                .get(start_tag_idx)
                 .is_some_and(HtmlNode::is_void_element);
 
-            let mut end_tag_index = if is_void_or_self_closing {
-                start_tag_index
+            let mut elem_end_tag_idx = if is_void_or_self_closing {
+                start_tag_idx
             } else {
                 html_nodes.len().saturating_sub(1)
             };
 
             // Validate that start and end tags match (detect malformed HTML)
             if !is_void_or_self_closing {
-                let start_tag_name = html_nodes
-                    .get(start_tag_index)
+                let start_tag_name = html_nodes.get(start_tag_idx).and_then(|n| n.get_tag_name());
+                let end_tag_name = html_nodes
+                    .get(elem_end_tag_idx)
                     .and_then(|n| n.get_tag_name());
-                let end_tag_name = html_nodes.get(end_tag_index).and_then(|n| n.get_tag_name());
 
                 if let (Some(start_name), Some(end_name)) = (start_tag_name, end_tag_name)
                     && start_name != end_name
                 {
-                    // Treat unclosed elements like void elements - point end to start
-                    end_tag_index = start_tag_index;
+                    // Treat unclosed elements like void elements (point end to start)
+                    elem_end_tag_idx = start_tag_idx;
                 }
             }
 
             // Attach metadata
-            if let Some(HtmlNode::StartTag {
-                element_metadata, ..
-            }) = html_nodes.get_mut(start_tag_index)
+            if let Some(HtmlNode::StartTag { end_tag_idx, .. }) = html_nodes.get_mut(start_tag_idx)
             {
-                *element_metadata = Some(ElementMetadata {
-                    chars_count: total_child_chars,
-                    end_tag_index,
-                });
+                *end_tag_idx = Some(elem_end_tag_idx);
             }
             current_chars_count = total_child_chars;
         }
