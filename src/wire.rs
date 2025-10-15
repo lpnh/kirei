@@ -134,10 +134,11 @@ fn wire_single_branch(tree: &SakuraTree, ring: &Ring, indent_map: &[i32]) -> Bra
 }
 
 fn decide_branch_style(tree: &SakuraTree, ring: &Ring) -> BranchStyle {
+    let fits_in_line = ring.total_chars <= tree.config.max_width;
+
     match &ring.layer {
-        // Inline if fits, otherwise multiline
         Layer::EmptyControlBlock { .. } | Layer::Standalone { .. } => {
-            if ring.total_chars <= tree.config.max_width {
+            if fits_in_line {
                 BranchStyle::Inline
             } else {
                 BranchStyle::MultiLine
@@ -146,7 +147,6 @@ fn decide_branch_style(tree: &SakuraTree, ring: &Ring) -> BranchStyle {
 
         Layer::ScriptStyle { .. } => BranchStyle::Raw,
 
-        // Text sequences are inline if they fit
         Layer::TextSequence { leaves } => {
             // Check if this sequence starts with a when clause
             let starts_with_when = leaves
@@ -156,24 +156,16 @@ fn decide_branch_style(tree: &SakuraTree, ring: &Ring) -> BranchStyle {
                 .and_then(AskamaNode::get_ctrl_tag)
                 .is_some_and(|tag| tag.boundary() == askama::Boundary::Inner);
 
-            if starts_with_when {
-                // When clauses with their content should stay inline
-                BranchStyle::Inline
-            } else if ring.total_chars <= tree.config.max_width {
+            if starts_with_when || fits_in_line {
                 BranchStyle::Inline
             } else {
                 BranchStyle::Wrapped
             }
         }
 
-        Layer::CompleteElement {
-            is_semantic_inline, ..
-        } => {
+        Layer::CompleteElement { .. } => {
             // Check structure constraints
-            let fits_in_line = ring.total_chars <= tree.config.max_width;
-            let has_multi_line_content = ring.inner_has_multi_line_content();
-
-            if fits_in_line && (*is_semantic_inline || !has_multi_line_content) {
+            if fits_in_line && !ring.has_block {
                 BranchStyle::Inline
             } else {
                 BranchStyle::MultiLine

@@ -35,6 +35,7 @@ pub enum Root {
 pub struct Ring {
     pub layer: Layer,
     pub total_chars: usize,
+    pub has_block: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -44,7 +45,6 @@ pub enum Layer {
         start_leaf: usize,
         inner_rings: Vec<Ring>,
         end_leaf: usize,
-        is_semantic_inline: bool,
     },
     // Sequence of text content and expressions
     TextSequence {
@@ -311,18 +311,10 @@ impl SakuraTree {
         // Recursively grow inner rings
         let inner_rings = self.grow_rings(start_leaf + 1, end_leaf);
 
-        // Get inline status from the start tag
-        let leaf = self.leaves.get(start_leaf)?;
-        let is_semantic_inline = match &leaf.root {
-            Root::Html(html_node) => html_node.is_inline_level(),
-            Root::Askama(_) => false,
-        };
-
         let layer = Layer::CompleteElement {
             start_leaf,
             inner_rings,
             end_leaf,
-            is_semantic_inline,
         };
         let ring = Ring::new(layer, self);
 
@@ -542,7 +534,12 @@ impl SakuraTree {
 impl Ring {
     fn new(layer: Layer, tree: &SakuraTree) -> Self {
         let total_chars = Self::calculate_total_chars(&layer, tree);
-        Self { layer, total_chars }
+        let has_block = Self::inner_has_block(&layer, tree);
+        Self {
+            layer,
+            total_chars,
+            has_block,
+        }
     }
 
     fn calculate_total_chars(layer: &Layer, tree: &SakuraTree) -> usize {
@@ -554,27 +551,40 @@ impl Ring {
             .sum()
     }
 
-    pub fn all_leaf_indices(&self) -> Vec<usize> {
-        self.layer.all_leaf_indices()
+    // Check if any inner rings contain block-level structure
+    fn inner_has_block(layer: &Layer, tree: &SakuraTree) -> bool {
+        match layer {
+            Layer::CompleteElement { inner_rings, .. }
+            | Layer::ControlBlock { inner_rings, .. } => {
+                inner_rings.iter().any(|ring| {
+                    match &ring.layer {
+                        // Check if inner element is block-level
+                        Layer::CompleteElement { start_leaf, .. } => {
+                            if let Some(leaf) = tree.leaves.get(*start_leaf) {
+                                match &leaf.root {
+                                    Root::Html(html_node) => !html_node.is_inline_level(),
+                                    Root::Askama(_) => true,
+                                }
+                            } else {
+                                true
+                            }
+                        }
+                        // Control blocks and script/style are always block-level
+                        Layer::ControlBlock { .. } | Layer::ScriptStyle { .. } => true,
+                        // Recurse for other layers
+                        _ => ring.has_block,
+                    }
+                })
+            }
+            Layer::ScriptStyle { .. } => true,
+            Layer::TextSequence { .. }
+            | Layer::Standalone { .. }
+            | Layer::EmptyControlBlock { .. } => false,
+        }
     }
 
-    // Check if the inner rings contain any semantic multi-line content
-    pub fn inner_has_multi_line_content(&self) -> bool {
-        match &self.layer {
-            Layer::CompleteElement { inner_rings, .. }
-            | Layer::ControlBlock { inner_rings, .. } => inner_rings.iter().any(|ring| {
-                match &ring.layer {
-                    // Look for non-semantic inline elements
-                    Layer::CompleteElement {
-                        is_semantic_inline, ..
-                    } => !is_semantic_inline || ring.inner_has_multi_line_content(),
-                    // Control blocks and script/style elements are always multi-line
-                    Layer::ControlBlock { .. } | Layer::ScriptStyle { .. } => true,
-                    _ => ring.inner_has_multi_line_content(),
-                }
-            }),
-            _ => false,
-        }
+    pub fn all_leaf_indices(&self) -> Vec<usize> {
+        self.layer.all_leaf_indices()
     }
 }
 
