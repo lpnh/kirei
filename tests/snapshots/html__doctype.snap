@@ -1,6 +1,0 @@
----
-source: tests/html.rs
-description: "<!DOCTYPE html><title>Page Title</title>\n"
----
-<!DOCTYPE html>
-<title>Page Title</title>

@@ -1,0 +1,5 @@
+---
+source: tests/snapshots/rules.rs
+description: "            \n{% block content %}     \n        \n    \n        {% endblock %}\n        \n"
+---
+{% block content %}{% endblock %}

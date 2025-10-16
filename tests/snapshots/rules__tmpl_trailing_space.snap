@@ -1,9 +1,0 @@
----
-source: tests/rules.rs
-description: "{%     if foo  ~%}   {{-    bar  -}}   {%   else if     another   -%}         nothing       {%-   endif   %}\n"
----
-{% if foo ~%}
-    {{- bar -}}
-{% else if another -%}
-    nothing
-{%- endif %}

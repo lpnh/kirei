@@ -1,0 +1,105 @@
+---
+source: tests/snapshots/ice_cream_club.rs
+description: "{% extends \"base.html\" %}\n\n{% block title %}Flavors - Ice Cream Social Club{% endblock %}\n\n{# Define reusable macros #}\n{% macro flavor_stats(total, available, seasonal) %}\n<div class=\"card\">\n<h3>📊 Statistics</h3>\n<div style=\"display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; text-align: center;\">\n<div>\n<strong style=\"color: var(--brand);\">{{ total }}</strong><br>\n<small>Total Flavors</small>\n</div>\n<div>\n<strong style=\"color: green;\">{{ available }}</strong><br>\n<small>Available Today</small>\n</div>\n<div>\n<strong style=\"color: orange;\">{{ seasonal }}</strong><br>\n<small>Seasonal Specials</small>\n</div>\n</div>\n</div>\n{% endmacro %}\n\n{% macro section_header(title, count, emoji = \"🍦\") %}\n<h3 style=\"color: var(--brand); margin: 16px 0 8px 0;\">\n{{ emoji }} {{ title }}\n{% if count > 0 %}({{ count }}){% endif %}\n</h3>\n{% endmacro %}\n\n{% block content %}\n<h2 style=\"margin-top:0\">Our Flavor Collection</h2>\n\n{# Available flavors section #}\n{% if available_count > 0 %}\n{{ section_header(\"Available Today\", available_count, \"✨\") }}\n<div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px\">\n{% for ice_cream in ice_creams if ice_cream.available %}\n{# Set variables for the card component #}\n{% set show_availability = false %}\n{% set show_position = true %}\n{% set show_first_choice = loop.first %}\n{% set position = loop.index %}\n{% if loop.first %}\n  {% set card_style = \"border-left: 4px solid gold;\" %}\n{% endif %}\n\n{% include \"ice_cream_card.html\" %}\n{% endfor %}\n</div>\n{% endif %}\n\n{# Coming soon flavors section #}\n{% if coming_soon_count > 0 %}\n{{ section_header(\"Coming Soon\", coming_soon_count, \"🔮\") }}\n<div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px\">\n{% for ice_cream in ice_creams if !ice_cream.available %}\n{# Set variables for coming soon cards #}\n{% set show_availability = false %}\n{% set show_position = false %}\n{% set show_first_choice = false %}\n{% set card_style = \"opacity: 0.7; border: 2px dashed var(--muted);\" %}\n{% set emoji_style = \"filter: grayscale(50%);\" %}\n\n{% include \"ice_cream_card.html\" %}\n{% endfor %}\n</div>\n{% endif %}\n\n{# Fallback for empty collection #}\n{% if total_items == 0 %}\n<div class=\"card\" style=\"text-align: center; padding: 32px;\">\n<div style=\"font-size: 3em; margin-bottom: 16px;\">🧪</div>\n<h3>Flavor Lab in Progress</h3>\n<p>Our flavor scientists are cooking up something amazing! Check back soon for our weekly flavor lineup.</p>\n</div>\n{% endif %}\n\n<section class=\"card\" style=\"margin-top:18px\">\n<h3>About Our Flavors</h3>\n<p>Our flavors are handcrafted by members and change weekly based on seasonality and member requests. Everyone gets a vote on what we make next!</p>\n\n{# Enhanced info using computed values #}\n{% if seasonal_count > 0 %}\n<p style=\"color: orange; font-style: italic;\">\n🌱 We currently have {{ seasonal_count }} seasonal special{% if seasonal_count != 1 %}s{% endif %} celebrating the current season!\n</p>\n{% endif %}\n</section>\n\n{# Display statistics using macro #}\n{{ flavor_stats(total_items, available_count, seasonal_count) }}\n{% endblock %}\n"
+---
+{% extends "base.html" %}
+{% block title %}
+    Flavors - Ice Cream Social Club
+{% endblock %}
+{# Define reusable macros #}
+{% macro flavor_stats(total, available, seasonal) %}
+    <div class="card">
+        <h3>📊 Statistics</h3>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; text-align: center;">
+            <div>
+                <strong style="color: var(--brand);">{{ total }}</strong>
+                <br />
+                <small>Total Flavors</small>
+            </div>
+            <div>
+                <strong style="color: green;">{{ available }}</strong>
+                <br />
+                <small>Available Today</small>
+            </div>
+            <div>
+                <strong style="color: orange;">{{ seasonal }}</strong>
+                <br />
+                <small>Seasonal Specials</small>
+            </div>
+        </div>
+    </div>
+{% endmacro %}
+{% macro section_header(title, count, emoji = "🍦") %}
+    <h3 style="color: var(--brand); margin: 16px 0 8px 0;">
+        {{ emoji }}{{ title }}
+        {% if count > 0 %}
+            ({{ count }})
+        {% endif %}
+    </h3>
+{% endmacro %}
+{% block content %}
+    <h2 style="margin-top:0">Our Flavor Collection</h2>
+    {# Available flavors section #}
+    {% if available_count > 0 %}
+        {{ section_header("Available Today", available_count, "✨") }}
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+            {% for ice_cream in ice_creams if ice_cream.available %}
+                {# Set variables for the card component #}
+                {% set show_availability = false %}
+                {% set show_position = true %}
+                {% set show_first_choice = loop.first %}
+                {% set position = loop.index %}
+                {% if loop.first %}
+                    {% set card_style = "border-left: 4px solid gold;" %}
+                {% endif %}
+                {% include "ice_cream_card.html" %}
+            {% endfor %}
+        </div>
+    {% endif %}
+    {# Coming soon flavors section #}
+    {% if coming_soon_count > 0 %}
+        {{ section_header("Coming Soon", coming_soon_count, "🔮") }}
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+            {% for ice_cream in ice_creams if !ice_cream.available %}
+                {# Set variables for coming soon cards #}
+                {% set show_availability = false %}
+                {% set show_position = false %}
+                {% set show_first_choice = false %}
+                {% set card_style = "opacity: 0.7; border: 2px dashed var(--muted);" %}
+                {% set emoji_style = "filter: grayscale(50%);" %}
+                {% include "ice_cream_card.html" %}
+            {% endfor %}
+        </div>
+    {% endif %}
+    {# Fallback for empty collection #}
+    {% if total_items == 0 %}
+        <div class="card" style="text-align: center; padding: 32px;">
+            <div style="font-size: 3em; margin-bottom: 16px;">🧪</div>
+            <h3>Flavor Lab in Progress</h3>
+            <p>
+                Our flavor scientists are cooking up something amazing! Check
+                back soon for our weekly flavor lineup.
+            </p>
+        </div>
+    {% endif %}
+    <section class="card" style="margin-top:18px">
+        <h3>About Our Flavors</h3>
+        <p>
+            Our flavors are handcrafted by members and change weekly based on
+            seasonality and member requests. Everyone gets a vote on what we
+            make next!
+        </p>
+        {# Enhanced info using computed values #}
+        {% if seasonal_count > 0 %}
+            <p style="color: orange; font-style: italic;">
+                🌱 We currently have {{ seasonal_count }} seasonal special
+                {% if seasonal_count != 1 %}
+                    s
+                {% endif %}
+                celebrating the current season!
+            </p>
+        {% endif %}
+    </section>
+    {# Display statistics using macro #}
+    {{ flavor_stats(total_items, available_count, seasonal_count) }}
+{% endblock %}

@@ -1,5 +1,0 @@
----
-source: tests/rules.rs
-description: "{#-   Some    {# Nested {#~   Comments #}   +#}    ~#}\n"
----
-{#- Some {# Nested {#~ Comments #} +#} ~#}

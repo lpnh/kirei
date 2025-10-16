@@ -1,0 +1,5 @@
+---
+source: tests/snapshots/rules.rs
+description: "{% if foo %}{% endif %}\n"
+---
+{% if foo %}{% endif %}

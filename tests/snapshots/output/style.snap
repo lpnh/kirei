@@ -1,0 +1,11 @@
+---
+source: tests/snapshots/html.rs
+description: "<style>\n  @media (max-width: 600px) {\n    body {\n      background: lightblue;\n    }\n  }\n</style>\n"
+---
+<style>
+    @media (max-width: 600px) {
+        body {
+            background: lightblue;
+        }
+    }
+</style>

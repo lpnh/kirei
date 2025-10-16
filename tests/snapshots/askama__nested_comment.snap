@@ -1,5 +1,0 @@
----
-source: tests/askama.rs
-description: "{# A {# Nested #} Comment #}\n"
----
-{# A {# Nested #} Comment #}

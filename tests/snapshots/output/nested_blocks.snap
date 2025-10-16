@@ -1,0 +1,9 @@
+---
+source: tests/snapshots/mixed.rs
+description: "{% block first %}{% block inner %}<p>A cool paragraph</p>{% endblock %}{% endblock %}\n"
+---
+{% block first %}
+    {% block inner %}
+        <p>A cool paragraph</p>
+    {% endblock %}
+{% endblock %}

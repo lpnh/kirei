@@ -1,5 +1,0 @@
----
-source: tests/askama.rs
-description: "{# A Comment #}\n"
----
-{# A Comment #}

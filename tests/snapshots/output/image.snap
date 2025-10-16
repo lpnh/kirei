@@ -1,0 +1,5 @@
+---
+source: tests/snapshots/html.rs
+description: "<img src=\"image.jpg\" alt=\"A test image\">\n"
+---
+<img src="image.jpg" alt="A test image" />

@@ -1,0 +1,5 @@
+---
+source: tests/snapshots/html.rs
+description: "<p>Hello, world!</p>\n"
+---
+<p>Hello, world!</p>

@@ -1,0 +1,8 @@
+---
+source: tests/snapshots/html.rs
+description: "<ul><li>Item 1</li><li>Item 2</li></ul>\n"
+---
+<ul>
+    <li>Item 1</li>
+    <li>Item 2</li>
+</ul>

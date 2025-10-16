@@ -1,9 +1,0 @@
----
-source: tests/rules.rs
-description: "\n    {%  \n            if \n\n\n        foo  \n                ~%}   \n\n    This    is\n\n\n    a    multi-line\n\n            {{-    \n\n        bar \n    -}}   \n\n    {%   \n\n        else if     another   \n\n            -%}         \n\n\n            if block  surrounded    \n\n        by whitespaces \n\nand \n\n                    blank lines !   \n\n      {%- \n             endif  \n\n            %}\n\n"
----
-{% if foo ~%}
-    This is a multi-line {{- bar -}}
-{% else if another -%}
-    if block surrounded by whitespaces and blank lines !
-{%- endif %}

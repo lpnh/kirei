@@ -1,0 +1,64 @@
+---
+source: tests/snapshots/html.rs
+description: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <title>Formatter Test Page</title>\n</head>\n<body>\n    <!-- link -->\n    <a href=\"https://example.com\">Visit us</a>\n\n    <!-- image -->\n    <img src=\"image.jpg\" alt=\"A test image\">\n\n    <!-- list -->\n    <ul>\n        <li>Item 1</li>\n        <li>Item 2</li>\n    </ul>\n\n    <!-- form -->\n    <form action=\"/submit\" method=\"post\">\n        <label for=\"name\">Name:</label>\n        <input type=\"text\" id=\"name\">\n    </form>\n\n    <!-- bold -->\n    <div>\n        <h1>Main Heading</h1>\n        <p>Some content with <strong>bold text</strong>.</p>\n    </div>\n\n    <!-- table -->\n    <table border=\"1\">\n        <thead>\n            <tr><th>Header 1</th></tr>\n        </thead>\n        <tbody>\n            <tr><td>Data 1</td></tr>\n        </tbody>\n    </table>\n\n    <!-- container -->\n    <div class=\"container\">\n        <header>\n            <nav>\n                <ul><li><a href=\"/\">Home</a></li></ul>\n            </nav>\n        </header>\n        <main>\n            <section>\n                <h2>Section Heading</h2>\n                <p>This is a paragraph.</p>\n            </section>\n        </main>\n        <footer>\n            <p>&copy; 2025</p>\n        </footer>\n    </div>\n</body>\n</html>\n"
+---
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Formatter Test Page</title>
+    </head>
+    <body>
+        <!-- link -->
+        <a href="https://example.com">Visit us</a>
+        <!-- image -->
+        <img src="image.jpg" alt="A test image" />
+        <!-- list -->
+        <ul>
+            <li>Item 1</li>
+            <li>Item 2</li>
+        </ul>
+        <!-- form -->
+        <form action="/submit" method="post">
+            <label for="name">Name:</label>
+            <input type="text" id="name" />
+        </form>
+        <!-- bold -->
+        <div>
+            <h1>Main Heading</h1>
+            <p>Some content with <strong>bold text</strong>.</p>
+        </div>
+        <!-- table -->
+        <table border="1">
+            <thead>
+                <tr>
+                    <th>Header 1</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Data 1</td>
+                </tr>
+            </tbody>
+        </table>
+        <!-- container -->
+        <div class="container">
+            <header>
+                <nav>
+                    <ul>
+                        <li><a href="/">Home</a></li>
+                    </ul>
+                </nav>
+            </header>
+            <main>
+                <section>
+                    <h2>Section Heading</h2>
+                    <p>This is a paragraph.</p>
+                </section>
+            </main>
+            <footer>
+                <p>&copy; 2025</p>
+            </footer>
+        </div>
+    </body>
+</html>

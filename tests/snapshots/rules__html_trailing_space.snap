@@ -1,5 +1,0 @@
----
-source: tests/rules.rs
-description: "<p>    This    is     a    paragraph  line  surrounded    by whitespaces    !   </p>\n"
----
-<p>This is a paragraph line surrounded by whitespaces !</p>

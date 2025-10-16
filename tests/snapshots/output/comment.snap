@@ -1,0 +1,5 @@
+---
+source: tests/snapshots/html.rs
+description: "<!-- This is a comment -->\n"
+---
+<!-- This is a comment -->

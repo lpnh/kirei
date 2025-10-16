@@ -1,0 +1,9 @@
+---
+source: tests/snapshots/malformed.rs
+description: "<main> <div> <h2>Test</h2> <p> Where did that div go </p> </main>\n"
+---
+<main>
+    <div>
+        <h2>Test</h2>
+        <p>Where did that div go</p>
+    </main>

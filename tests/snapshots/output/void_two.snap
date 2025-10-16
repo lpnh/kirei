@@ -1,0 +1,10 @@
+---
+source: tests/snapshots/html.rs
+description: "<div>Text<div>More text</div><img src=\"image.jpg\" >Some text<br /></div>\n"
+---
+<div>
+    Text
+    <div>More text</div>
+    <img src="image.jpg" />
+    Some text<br />
+</div>

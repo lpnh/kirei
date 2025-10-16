@@ -1,0 +1,26 @@
+---
+source: tests/snapshots/axum_app.rs
+description: "{% extends \"_layout.html\" %}\n{%- block title -%}\n{%- match err -%}\n{% when AppError::NotFound -%} 404: Not Found\n{% else -%} 500: Internal Server Error\n{%- endmatch -%}\n{%- endblock -%}\n{%- block content -%}\n<h1>\n{%- match err -%}\n{% when AppError::NotFound -%} 404: Not Found\n{% else -%} 500: Internal Server Error\n{%- endmatch -%}\n</h1>\n{%- match err -%}\n{% when AppError::NotFound -%}\n{% when AppError::Render(err) -%}\n<pre>{{ err }}</pre>\n{%- endmatch -%}\n<h2><a href=\"/\">Back to the first page.</a></h2>\n{%- endblock -%}\n"
+---
+{% extends "_layout.html" %}
+{%- block title -%}
+    {%- match err -%}
+        {% when AppError::NotFound -%} 404: Not Found
+    {% else -%}
+        500: Internal Server Error
+    {%- endmatch -%}
+{%- endblock -%}
+{%- block content -%}
+    <h1>
+        {%- match err -%}
+            {% when AppError::NotFound -%} 404: Not Found
+        {% else -%}
+            500: Internal Server Error
+        {%- endmatch -%}
+    </h1>
+    {%- match err -%}
+        {% when AppError::NotFound -%}
+        {% when AppError::Render(err) -%} <pre>{{ err }}</pre>
+    {%- endmatch -%}
+    <h2><a href="/">Back to the first page.</a></h2>
+{%- endblock -%}

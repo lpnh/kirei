@@ -1,5 +1,0 @@
----
-source: tests/html.rs
-description: "<a href=\"https://example.com\">Visit us</a>\n"
----
-<a href="https://example.com">Visit us</a>

@@ -1,6 +1,0 @@
----
-source: tests/malformed.rs
-description: "{% block paragraph %}<p>A cool paragraph</p>\n"
----
-{% block paragraph %}
-    <p>A cool paragraph</p>

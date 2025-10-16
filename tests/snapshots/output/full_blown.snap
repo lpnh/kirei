@@ -1,0 +1,34 @@
+---
+source: tests/snapshots/mixed.rs
+description: "{% extends \"base.html\" %}\n{% block title %}Profile{% endblock %}\n{% block head %}\n{# Template comment: Styles specific to the profile page #}\n<style>\n/* CSS comment: highlight user name */\n.username {\nfont-weight: bold;\ncolor: {{ name_color }};\n}\n</style>\n<script>\n// JS comment: greet user on page load\ndocument.addEventListener(\"DOMContentLoaded\", () => {\nalert(\"Welcome, {{ user.name }}!\");\n});\n</script>\n{% endblock %}\n{% block content %}\n<!-- HTML comment: Profile header -->\n<h1 class=\"username\">{{ user.name }}</h1>\n{# Loop through user posts #}\n<ul>\n{% for post in user.posts %}\n<li>{{ post.title }}</li>\n{% endfor %}\n</ul>\n{% endblock %}\n"
+---
+{% extends "base.html" %}
+{% block title %}
+    Profile
+{% endblock %}
+{% block head %}
+    {# Template comment: Styles specific to the profile page #}
+    <style>
+        /* CSS comment: highlight user name */
+        .username {
+            font-weight: bold;
+            color: {{ name_color }};
+        }
+    </style>
+    <script>
+        // JS comment: greet user on page load
+        document.addEventListener("DOMContentLoaded", () => {
+            alert("Welcome, {{ user.name }}!");
+        });
+    </script>
+{% endblock %}
+{% block content %}
+    <!-- HTML comment: Profile header -->
+    <h1 class="username">{{ user.name }}</h1>
+    {# Loop through user posts #}
+    <ul>
+        {% for post in user.posts %}
+            <li>{{ post.title }}</li>
+        {% endfor %}
+    </ul>
+{% endblock %}
