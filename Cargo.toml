@@ -11,7 +11,7 @@ repository = "https://github.com/lpnh/kirei.git"
 edition = "2024"
 autoexamples = false
 
-include = ["src/*", "tests/*.rs"]
+include = ["src/*", "tests/integration/*.rs"]
 
 [dependencies]
 anyhow = "1.0.100"
