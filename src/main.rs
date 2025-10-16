@@ -30,7 +30,7 @@ fn run(args: &Args) -> Result<()> {
             std::process::exit(0);
         } else {
             if args.list_different {
-                eprintln!(
+                println!(
                     "{}",
                     maybe_filepath.unwrap_or_else(|| "<stdin>".to_string())
                 );
