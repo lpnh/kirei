@@ -1,5 +1,4 @@
 use crate::{
-    askama::{self, AskamaNode},
     html,
     sakura_tree::{Branch, BranchStyle, Layer, Ring, Root, SakuraTree},
 };
@@ -63,27 +62,20 @@ fn wire_branch_recursive(tree: &mut SakuraTree, ring: &Ring, indent_map: &[i32])
                 inner_rings,
                 end_leaf,
                 ..
-            } => {
-                wire_multiple_branches(tree, *start_leaf, inner_rings, *end_leaf, indent_map);
             }
-            Layer::ControlBlock {
-                open_leaf,
+            | Layer::ControlBlock {
+                start_leaf,
                 inner_rings,
-                close_leaf,
+                end_leaf,
                 ..
-            } => {
-                wire_multiple_branches(tree, *open_leaf, inner_rings, *close_leaf, indent_map);
-            }
+            } => wire_multiple_branches(tree, *start_leaf, inner_rings, *end_leaf, indent_map),
             Layer::EmptyControlBlock {
-                open_leaf,
-                close_leaf,
-            } => {
-                wire_multiple_branches(tree, *open_leaf, &[], *close_leaf, indent_map);
-            }
-            _ => {
-                tree.branches
-                    .push(wire_single_branch(tree, ring, indent_map));
-            }
+                start_leaf,
+                end_leaf,
+            } => wire_multiple_branches(tree, *start_leaf, &[], *end_leaf, indent_map),
+            _ => tree
+                .branches
+                .push(wire_single_branch(tree, ring, indent_map)),
         }
     } else {
         tree.branches
@@ -93,15 +85,15 @@ fn wire_branch_recursive(tree: &mut SakuraTree, ring: &Ring, indent_map: &[i32])
 
 fn wire_multiple_branches(
     tree: &mut SakuraTree,
-    open_leaf: usize,
+    start_leaf: usize,
     inner_rings: &[Ring],
-    close_leaf: usize,
+    end_leaf: usize,
     indent_map: &[i32],
 ) {
     // Wire first branch (opening element/control tag)
-    let open_indent = indent_map.get(open_leaf).copied().unwrap_or(0);
+    let open_indent = indent_map.get(start_leaf).copied().unwrap_or(0);
     tree.branches.push(Branch::grow(
-        vec![open_leaf],
+        vec![start_leaf],
         BranchStyle::MultiLine,
         open_indent,
     ));
@@ -112,9 +104,9 @@ fn wire_multiple_branches(
     }
 
     // Wire last branch (closing element/control tag)
-    let close_indent = indent_map.get(close_leaf).copied().unwrap_or(0);
+    let close_indent = indent_map.get(end_leaf).copied().unwrap_or(0);
     tree.branches.push(Branch::grow(
-        vec![close_leaf],
+        vec![end_leaf],
         BranchStyle::MultiLine,
         close_indent,
     ));
@@ -147,21 +139,15 @@ fn decide_branch_style(tree: &SakuraTree, ring: &Ring) -> BranchStyle {
 
         Layer::ScriptStyle { .. } => BranchStyle::Raw,
 
-        Layer::TextSequence { leaves } => {
-            // Check if this sequence starts with a when clause
-            let starts_with_when = leaves
-                .first()
-                .and_then(|&idx| tree.leaves.get(idx))
-                .and_then(|leaf| leaf.maybe_askama_node())
-                .and_then(AskamaNode::get_ctrl_tag)
-                .is_some_and(|tag| tag.boundary() == askama::Boundary::Inner);
-
-            if starts_with_when || fits_in_line {
+        Layer::TextSequence { .. } => {
+            if fits_in_line {
                 BranchStyle::Inline
             } else {
                 BranchStyle::Wrapped
             }
         }
+
+        Layer::MatchArm { .. } => BranchStyle::Inline,
 
         Layer::CompleteElement { .. } => {
             // Check structure constraints

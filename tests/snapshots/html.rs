@@ -59,6 +59,11 @@ fn void_two() {
 }
 
 #[test]
+fn erroneous_end_tag() {
+    format_and_snapshot!("html/erroneous_end_tag.html");
+}
+
+#[test]
 fn page() {
     format_and_snapshot!("html/page.html");
 }

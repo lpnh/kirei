@@ -190,8 +190,7 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                         <p>
                             <label for="sweetness-level">Sweetness Level (1-10):</label>
                             <input type="range" id="sweetness-level" name="sweetness" min="1" max="10" value="7" oninput="document.getElementById('sweetness-display').textContent=this.value" />
-                            <output id="sweetness-display">7</output>
-                            🍯
+                            <output id="sweetness-display">7</output>🍯
                         </p>
                         <p>
                             <label for="quantity">Quantity:</label>

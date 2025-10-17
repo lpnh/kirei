@@ -267,15 +267,13 @@ pub fn parse_html_tree(root_node: &Node, source: &[u8]) -> Result<Vec<HtmlNode>>
 
 fn parse_html_node(node: &Node, source: &[u8]) -> Result<Option<HtmlNode>> {
     match node.kind() {
+        "doctype" => parse_doctype(node, source),
         "start_tag" => Ok(Some(parse_start_tag(node, source))),
         "end_tag" => Ok(Some(parse_end_tag(node, source))),
         "self_closing_tag" => Ok(Some(parse_self_closing_tag(node, source))),
-        "text" => parse_text_content(node, source),
-        "entity" => parse_entity(node, source),
-        "comment" => parse_comment(node, source),
-        "doctype" => parse_doctype(node, source),
         "erroneous_end_tag" => Ok(Some(parse_erroneous_end_tag(node, source))),
-        _ => parse_text_content(node, source),
+        "comment" => parse_comment(node, source),
+        _ => unreachable!(),
     }
 }
 
@@ -329,16 +327,6 @@ fn parse_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
         .to_string();
 
     HtmlNode::EndTag { name: tag_name }
-}
-
-fn parse_text_content(node: &Node, source: &[u8]) -> Result<Option<HtmlNode>> {
-    let text = node.utf8_text(source)?;
-    Ok(Some(HtmlNode::Text(text.to_string())))
-}
-
-fn parse_entity(node: &Node, source: &[u8]) -> Result<Option<HtmlNode>> {
-    let text = node.utf8_text(source)?;
-    Ok(Some(HtmlNode::Entity(text.to_string())))
 }
 
 fn parse_comment(node: &Node, source: &[u8]) -> Result<Option<HtmlNode>> {
@@ -406,7 +394,8 @@ fn parse_html_node_recursive(
                     parse_html_node_recursive(&child, source, html_nodes, depth + 1)?;
             }
         }
-        "start_tag" | "end_tag" | "self_closing_tag" | "doctype" | "comment" => {
+        "doctype" | "start_tag" | "end_tag" | "self_closing_tag" | "erroneous_end_tag"
+        | "comment" => {
             if let Some(html_node) = parse_html_node(node, source)? {
                 // Count the actual characters in the tag markup
                 let tag_text = node.utf8_text(source)?;

@@ -1,0 +1,8 @@
+---
+source: tests/snapshots/mixed.rs
+description: "{# A Comment #}{% if let Some(user) = user %}<i>Bonjour</i> {{ user.name }} !{%\nendif %}\n"
+---
+{# A Comment #}
+{% if let Some(user) = user %}
+    <i>Bonjour</i> {{ user.name }} !
+{% endif %}

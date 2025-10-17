@@ -56,14 +56,19 @@ pub enum Layer {
     },
     // Askama control block with open/close tag indices
     ControlBlock {
-        open_leaf: usize,
+        start_leaf: usize,
         inner_rings: Vec<Ring>,
-        close_leaf: usize,
+        end_leaf: usize,
     },
     // Empty Askama control block with open/close tag indices
     EmptyControlBlock {
-        open_leaf: usize,
-        close_leaf: usize,
+        start_leaf: usize,
+        end_leaf: usize,
+    },
+    // Askama when clause with optional inline content
+    MatchArm {
+        leaf: usize,
+        inner_rings: Vec<Ring>,
     },
     // Fallback leaf (self-closing elements, standalone text, etc.)
     Standalone {
@@ -238,26 +243,50 @@ impl SakuraTree {
                         {
                             // Build text sequence starting with this when clause
                             // This will collect the when clause + all its inline content
-                            if let Some((ring, next_idx)) =
-                                self.try_when_clause_with_inline_content(idx, end_idx)
-                            {
-                                rings.push(ring);
-                                idx = next_idx;
-                                continue;
-                            }
-                        } else {
-                            // Regular control block (if/for/match/etc)
-                            if let Some((ring, next_idx)) =
-                                self.try_askama_block(idx, askama_node, end_idx)
-                            {
-                                rings.push(ring);
-                                idx = next_idx;
-                                continue;
-                            }
+                            let (ring, next_idx) =
+                                self.when_clause_with_inline_content(idx, end_idx);
+                            rings.push(ring);
+                            idx = next_idx;
+                            continue;
+                        }
+
+                        // Regular control block (if/for/match/etc)
+                        if let Some((ring, next_idx)) =
+                            self.try_askama_block(idx, askama_node, end_idx)
+                        {
+                            rings.push(ring);
+                            idx = next_idx;
+                            continue;
                         }
                     }
                     // Try to build complete HTML elements
                     Root::Html(HtmlNode::StartTag { .. }) => {
+                        let Root::Html(html_node) = &leaf.root else {
+                            unreachable!()
+                        };
+
+                        // Try text sequence for inline elements
+                        if html_node.is_inline_level()
+                            && let Some(&end_leaf) = self.twigs.get(&idx)
+                            && self
+                                .leaves
+                                .get(end_leaf + 1)
+                                .is_some_and(|next| match &next.root {
+                                    Root::Html(HtmlNode::Text(_)) => {
+                                        !next.content.trim().is_empty()
+                                    }
+                                    Root::Html(HtmlNode::Entity(_)) => true,
+                                    Root::Askama(node) => node.is_expr(),
+                                    Root::Html(_) => false,
+                                })
+                            && let Some((ring, next_idx)) = self.try_text_sequence(idx, end_idx)
+                        {
+                            rings.push(ring);
+                            idx = next_idx;
+                            continue;
+                        }
+
+                        // Fall back to complete element
                         if let Some((ring, next_idx)) = self.try_complete_element(idx) {
                             rings.push(ring);
                             idx = next_idx;
@@ -347,25 +376,25 @@ impl SakuraTree {
                 } else if tag.boundary() == askama::Boundary::Close && open_tag.matches_close(tag) {
                     if depth == 0 {
                         // Found our matching close at depth 0
-                        let close_leaf = curr_idx;
+                        let end_leaf = curr_idx;
 
                         // Recursively grow inner rings for leaves between open and close indices
-                        let inner_rings = self.grow_rings(start_idx + 1, close_leaf);
+                        let inner_rings = self.grow_rings(start_idx + 1, end_leaf);
 
                         let layer = if inner_rings.is_empty() {
                             Layer::EmptyControlBlock {
-                                open_leaf: start_idx,
-                                close_leaf,
+                                start_leaf: start_idx,
+                                end_leaf,
                             }
                         } else {
                             Layer::ControlBlock {
-                                open_leaf: start_idx,
+                                start_leaf: start_idx,
                                 inner_rings,
-                                close_leaf,
+                                end_leaf,
                             }
                         };
                         let ring = Ring::new(layer, self);
-                        return Some((ring, close_leaf + 1));
+                        return Some((ring, end_leaf + 1));
                     }
                     // This closes a nested block, decrement depth
                     depth = depth.saturating_sub(1);
@@ -377,82 +406,79 @@ impl SakuraTree {
         None
     }
 
-    // Build a when clause with all its inline content (including complete inline elements)
-    // All or nothing: either all content fits (up to 2x max line length), or the when clause stays alone
-    fn try_when_clause_with_inline_content(
-        &self,
-        start_idx: usize,
-        end_idx: usize,
-    ) -> Option<(Ring, usize)> {
-        // TODO: new configuration value?
-        let permissive_limit = self.config.max_width * 3 / 2;
-
-        let mut candidate_leaves = vec![start_idx];
+    // Build a when clause with its inline content as inner rings
+    fn when_clause_with_inline_content(&self, start_idx: usize, end_idx: usize) -> (Ring, usize) {
         let mut curr_idx = start_idx + 1;
 
-        // 1. Collect all potential leaves until we hit a control block/comment
+        // Find the end of the content for this when clause
         while curr_idx < end_idx {
             let Some(leaf) = self.leaves.get(curr_idx) else {
                 break;
             };
 
-            // Break immediately on Askama control blocks or comments
+            // Stop at next control block or comment
             if matches!(&leaf.root, Root::Askama(node) if node.is_ctrl() || node.is_comment()) {
                 break;
             }
 
-            // For StartTags, include the complete element without splitting it
-            if matches!(leaf.root, Root::Html(HtmlNode::StartTag { .. })) {
-                // Try to find the complete element boundaries
-                if let Some(&end_leaf) = self.twigs.get(&curr_idx) {
-                    // Include all leaves from current to end
-                    for idx in curr_idx..=end_leaf {
-                        candidate_leaves.push(idx);
-                    }
-                    curr_idx = end_leaf + 1;
-                    continue;
-                }
+            // For StartTags, skip to after the end tag
+            if matches!(leaf.root, Root::Html(HtmlNode::StartTag { .. }))
+                && let Some(&end_leaf) = self.twigs.get(&curr_idx)
+            {
+                curr_idx = end_leaf + 1;
+                continue;
             }
 
-            // For everything else (text, entities, expressions, etc.)
-            candidate_leaves.push(curr_idx);
             curr_idx += 1;
         }
 
-        // 2. Calculate total chars for all candidates
-        let total_chars: usize = candidate_leaves
-            .iter()
-            .filter_map(|&idx| self.leaves.get(idx))
-            .map(Leaf::chars_count)
-            .sum();
-
-        // 3. All or nothing
-        let final_leaves = if total_chars > permissive_limit {
-            vec![start_idx]
+        // Build rings for the content (if any)
+        let inner_rings = if curr_idx > start_idx + 1 {
+            self.grow_rings(start_idx + 1, curr_idx)
         } else {
-            candidate_leaves
+            Vec::new()
         };
 
-        if final_leaves.len() > 1 {
-            let layer = Layer::TextSequence {
-                leaves: final_leaves,
-            };
-            let ring = Ring::new(layer, self);
-            return Some((ring, curr_idx));
-        }
-
-        None
+        let layer = Layer::MatchArm {
+            leaf: start_idx,
+            inner_rings,
+        };
+        let ring = Ring::new(layer, self);
+        (ring, curr_idx)
     }
 
     fn try_text_sequence(&self, start_idx: usize, end_idx: usize) -> Option<(Ring, usize)> {
         let mut leaves = vec![start_idx];
-
-        // Collect text content and expressions that can be grouped
         let mut curr_idx = start_idx + 1;
+
+        if let Some(leaf) = self.leaves.get(start_idx)
+            && matches!(leaf.root, Root::Html(HtmlNode::StartTag { .. }))
+            && let Some(&end_leaf) = self.twigs.get(&start_idx)
+        {
+            for idx in (start_idx + 1)..=end_leaf {
+                leaves.push(idx);
+            }
+
+            curr_idx = end_leaf + 1;
+        }
+
+        // Collect following inline content
         while curr_idx < end_idx {
             let Some(leaf) = self.leaves.get(curr_idx) else {
-                break;
+                unreachable!();
             };
+
+            if matches!(leaf.root, Root::Html(HtmlNode::StartTag { .. }))
+                && let Some(&end_leaf) = self.twigs.get(&curr_idx)
+                && let Root::Html(html_node) = &leaf.root
+                && html_node.is_inline_level()
+            {
+                for idx in curr_idx..=end_leaf {
+                    leaves.push(idx);
+                }
+                curr_idx = end_leaf + 1;
+                continue;
+            }
 
             let can_include = match &leaf.root {
                 Root::Html(HtmlNode::Text(_)) => !leaf.content.trim().is_empty(),
@@ -568,6 +594,7 @@ impl Ring {
                     _ => ring.has_block,
                 })
             }
+            Layer::MatchArm { inner_rings, .. } => inner_rings.iter().any(|ring| ring.has_block),
             Layer::ScriptStyle { .. } => true,
             _ => false,
         }
@@ -592,19 +619,22 @@ impl Layer {
                 .collect(),
             Self::TextSequence { leaves } => leaves.clone(),
             Self::ControlBlock {
-                open_leaf,
+                start_leaf,
                 inner_rings,
-                close_leaf,
+                end_leaf,
                 ..
-            } => once(*open_leaf)
+            } => once(*start_leaf)
                 .chain(inner_rings.iter().flat_map(Ring::all_leaf_indices))
-                .chain(once(*close_leaf))
+                .chain(once(*end_leaf))
                 .collect(),
             Self::EmptyControlBlock {
-                open_leaf,
-                close_leaf,
+                start_leaf,
+                end_leaf,
                 ..
-            } => vec![*open_leaf, *close_leaf],
+            } => vec![*start_leaf, *end_leaf],
+            Self::MatchArm { leaf, inner_rings } => once(*leaf)
+                .chain(inner_rings.iter().flat_map(Ring::all_leaf_indices))
+                .collect(),
             Self::ScriptStyle { leaf } | Self::Standalone { leaf } => vec![*leaf],
         }
     }

@@ -32,3 +32,8 @@ fn head() {
 fn full_blown() {
     format_and_snapshot!("mixed/full_blown.html");
 }
+
+#[test]
+fn simple_template() {
+    format_and_snapshot!("mixed/simple_template.html");
+}

@@ -256,7 +256,9 @@ fn should_add_space_before_leaf(
         return false;
     }
 
-    let current = tree.leaves.get(curr_leaf_idx)
+    let current = tree
+        .leaves
+        .get(curr_leaf_idx)
         .expect("leaf index from branch should be valid");
     let prev = branch_indices
         .get(position_in_branch - 1)
@@ -297,6 +299,9 @@ fn should_add_space_before_leaf(
         (Root::Html(HtmlNode::EndTag { .. }), Root::Html(HtmlNode::Text(_))) => {
             curr_content.starts_with(char::is_alphabetic)
         }
+
+        // HTML end tag followed by Askama expression
+        (Root::Html(HtmlNode::EndTag { .. }), Root::Askama(curr_askama)) => curr_askama.is_expr(),
 
         // When clause followed by HTML start tag
         (Root::Askama(prev_askama), Root::Html(HtmlNode::StartTag { .. })) => {
