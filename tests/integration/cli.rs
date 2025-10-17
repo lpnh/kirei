@@ -1,35 +1,25 @@
 use assert_cmd::Command;
-use assert_fs::prelude::*;
-use predicates::prelude::*;
+use assert_fs::{TempDir, prelude::*};
+use predicates::str::contains;
+use std::fs::{read_to_string, write};
 
 #[test]
-fn formats_file_to_stdout() {
-    let temp = assert_fs::TempDir::new().unwrap();
-    let file = temp.child("comment.html");
-    file.write_str("{# A Comment #}\n").unwrap();
-
-    Command::cargo_bin("kirei")
-        .unwrap()
-        .arg(file.path())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("{# A Comment #}"));
-}
-
-#[test]
-fn formats_askama_variables() {
-    let temp = assert_fs::TempDir::new().unwrap();
+fn formats_simple_template() {
+    let temp = TempDir::new().unwrap();
     let file = temp.child("template.html");
-    file.write_str("{% if user %}Hello {{ user.name }}!{% endif %}")
-        .unwrap();
+    file.write_str("{# A Comment #}\n{% if let Some(user) = user %}<i>Bonjour</i> {{ user.name }} !{% endif %}").unwrap();
 
     Command::cargo_bin("kirei")
         .unwrap()
         .arg(file.path())
         .assert()
         .success()
-        .stdout(predicate::str::contains("{% if user %}"))
-        .stdout(predicate::str::contains("{{ user.name }}"));
+        .stdout(contains("{# A Comment #}"))
+        .stdout(contains("{% if let Some(user) = user %}"))
+        .stdout(contains("<i>Bonjour</i>"))
+        .stdout(contains("{{ user.name }}"))
+        .stdout(contains("!"))
+        .stdout(contains("{% endif %}"));
 }
 
 #[test]
@@ -40,13 +30,13 @@ fn reads_from_stdin() {
         .write_stdin("{% if active %}<div><p>{{ message }}</p></div>{% endif %}")
         .assert()
         .success()
-        .stdout(predicate::str::contains("{% if active %}"))
-        .stdout(predicate::str::contains("{{ message }}"));
+        .stdout(contains("{% if active %}"))
+        .stdout(contains("{{ message }}"));
 }
 
 #[test]
 fn output_ends_with_newline() {
-    let temp = assert_fs::TempDir::new().unwrap();
+    let temp = TempDir::new().unwrap();
     let file = temp.child("test.html");
     file.write_str("{% for n in numbers %}<span>{{ n }}</span>{% endfor %}")
         .unwrap();
@@ -60,7 +50,7 @@ fn output_ends_with_newline() {
 
 #[test]
 fn format_is_idempotent() {
-    let temp = assert_fs::TempDir::new().unwrap();
+    let temp = TempDir::new().unwrap();
     let file = temp.child("test.html");
     file.write_str(
         "{% if enabled %}<div>  {{ title }}  </div>{% else %}<span>Disabled</span>{% endif %}",
@@ -74,7 +64,7 @@ fn format_is_idempotent() {
         .assert()
         .success();
 
-    let first_format = std::fs::read_to_string(file.path()).unwrap();
+    let first_format = read_to_string(file.path()).unwrap();
 
     Command::cargo_bin("kirei")
         .unwrap()
@@ -83,7 +73,7 @@ fn format_is_idempotent() {
         .assert()
         .success();
 
-    let second_format = std::fs::read_to_string(file.path()).unwrap();
+    let second_format = read_to_string(file.path()).unwrap();
 
     assert_eq!(
         first_format, second_format,
@@ -93,7 +83,7 @@ fn format_is_idempotent() {
 
 #[test]
 fn passes_when_formatted() {
-    let temp = assert_fs::TempDir::new().unwrap();
+    let temp = TempDir::new().unwrap();
     let file = temp.child("test.html");
     file.write_str("").unwrap();
 
@@ -113,7 +103,7 @@ fn passes_when_formatted() {
 
 #[test]
 fn fails_when_unformatted() {
-    let temp = assert_fs::TempDir::new().unwrap();
+    let temp = TempDir::new().unwrap();
     let file = temp.child("test.html");
     file.write_str("<div>  {% for item in items %}  {{ item }}  {% endfor %}  </div>")
         .unwrap();
@@ -129,7 +119,7 @@ fn fails_when_unformatted() {
 
 #[test]
 fn prints_error_to_stderr() {
-    let temp = assert_fs::TempDir::new().unwrap();
+    let temp = TempDir::new().unwrap();
     let file = temp.child("test.html");
     file.write_str("{% if user.logged_in %}<p>  Welcome {{ user.name }}!  </p>{% endif %}")
         .unwrap();
@@ -141,7 +131,7 @@ fn prints_error_to_stderr() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains("File needs formatting"));
+        .stderr(contains("File needs formatting"));
 }
 
 #[test]
@@ -169,9 +159,10 @@ fn stdin_fails_when_unformatted() {
 
 #[test]
 fn write_modifies_file() {
-    let temp = assert_fs::TempDir::new().unwrap();
+    let temp = TempDir::new().unwrap();
     let file = temp.child("test.html");
-    let unformatted = "{% if user %}<div>  <p>{{ user.name }}</p>  </div>{% endif %}";
+    let unformatted =
+        "{% if let Some(user) = user %}<div>  <p>{{ user.name }}</p>  </div>{% endif %}";
     file.write_str(unformatted).unwrap();
 
     Command::cargo_bin("kirei")
@@ -181,14 +172,14 @@ fn write_modifies_file() {
         .assert()
         .success();
 
-    let content = std::fs::read_to_string(file.path()).unwrap();
+    let content = read_to_string(file.path()).unwrap();
     assert_ne!(content, unformatted);
-    assert!(content.contains("{% if user %}"));
+    assert!(content.contains("{% if let Some(user) = user %}"));
     assert!(content.contains("{{ user.name }}"));
 }
 
 #[test]
-fn write_mode_with_stdin_prints_to_stdout() {
+fn write_with_stdin_prints_to_stdout() {
     Command::cargo_bin("kirei")
         .unwrap()
         .arg("-")
@@ -196,13 +187,13 @@ fn write_mode_with_stdin_prints_to_stdout() {
         .write_stdin("{% for tag in tags %}<span>  {{ tag }}  </span>{% endfor %}")
         .assert()
         .success()
-        .stdout(predicate::str::contains("{% for tag in tags %}"))
-        .stdout(predicate::str::contains("{{ tag }}"));
+        .stdout(contains("{% for tag in tags %}"))
+        .stdout(contains("{{ tag }}"));
 }
 
 #[test]
 fn list_different_shows_unformatted() {
-    let temp = assert_fs::TempDir::new().unwrap();
+    let temp = TempDir::new().unwrap();
     let file = temp.child("test.html");
     file.write_str("<ul>{% for user in users %}  <li>{{ user }}</li>  {% endfor %}</ul>")
         .unwrap();
@@ -214,7 +205,7 @@ fn list_different_shows_unformatted() {
         .assert()
         .failure()
         .code(1)
-        .stdout(predicate::str::contains("test.html"));
+        .stdout(contains("test.html"));
 }
 
 #[test]
@@ -227,7 +218,7 @@ fn list_different_with_stdin_shows_stdin() {
         .assert()
         .failure()
         .code(1)
-        .stdout(predicate::str::contains("<stdin>"));
+        .stdout(contains("<stdin>"));
 }
 
 #[test]
@@ -242,46 +233,7 @@ fn stdin_filepath_with_list_different() {
         .assert()
         .failure()
         .code(1)
-        .stdout(predicate::str::contains("custom/path.html"));
-}
-
-#[test]
-fn handles_empty_files() {
-    let temp = assert_fs::TempDir::new().unwrap();
-    let file = temp.child("empty.html");
-    file.write_str("").unwrap();
-
-    Command::cargo_bin("kirei")
-        .unwrap()
-        .arg(file.path())
-        .assert()
-        .success();
-}
-
-#[test]
-fn handles_malformed_html() {
-    let temp = assert_fs::TempDir::new().unwrap();
-    let file = temp.child("malformed.html");
-    file.write_str("<div").unwrap();
-
-    Command::cargo_bin("kirei")
-        .unwrap()
-        .arg(file.path())
-        .assert()
-        .success();
-}
-
-#[test]
-fn handles_utf8_special_chars() {
-    let temp = assert_fs::TempDir::new().unwrap();
-    let file = temp.child("utf8.html");
-    file.write_str("<div>\u{FFFD}\u{0000}</div>").unwrap();
-
-    Command::cargo_bin("kirei")
-        .unwrap()
-        .arg(file.path())
-        .assert()
-        .success();
+        .stdout(contains("custom/path.html"));
 }
 
 #[test]
@@ -294,11 +246,63 @@ fn fails_on_missing_file() {
 }
 
 #[test]
+fn handles_empty_files() {
+    let temp = TempDir::new().unwrap();
+    let file = temp.child("empty.html");
+    file.write_str("").unwrap();
+
+    Command::cargo_bin("kirei")
+        .unwrap()
+        .arg(file.path())
+        .assert()
+        .success();
+}
+
+#[test]
+fn handles_whitespace_only() {
+    let temp = TempDir::new().unwrap();
+    let file = temp.child("whitespace_only.html");
+    file.write_str(" \t \n \t \n").unwrap();
+
+    Command::cargo_bin("kirei")
+        .unwrap()
+        .arg(file.path())
+        .assert()
+        .success();
+}
+
+#[test]
+fn handles_malformed_tmpl() {
+    let temp = TempDir::new().unwrap();
+    let file = temp.child("malformed_tmpl.html");
+    file.write_str("{% block foo %}{% endblock").unwrap();
+
+    Command::cargo_bin("kirei")
+        .unwrap()
+        .arg(file.path())
+        .assert()
+        .success();
+}
+
+#[test]
+fn handles_malformed_html() {
+    let temp = TempDir::new().unwrap();
+    let file = temp.child("malformed_html.html");
+    file.write_str("<div").unwrap();
+
+    Command::cargo_bin("kirei")
+        .unwrap()
+        .arg(file.path())
+        .assert()
+        .success();
+}
+
+#[test]
 fn fails_on_invalid_utf8() {
-    let temp = assert_fs::TempDir::new().unwrap();
+    let temp = TempDir::new().unwrap();
     let file = temp.child("invalid.html");
 
-    std::fs::write(file.path(), &[0xFF, 0xFE, 0xFD]).unwrap();
+    write(file.path(), [0xFF, 0xFE, 0xFD]).unwrap();
 
     Command::cargo_bin("kirei")
         .unwrap()
@@ -308,13 +312,16 @@ fn fails_on_invalid_utf8() {
 }
 
 #[test]
-fn help_shows_description() {
+fn handles_utf8_special_chars() {
+    let temp = TempDir::new().unwrap();
+    let file = temp.child("utf8.html");
+    file.write_str("<div>\u{FFFD}\u{0000}</div>").unwrap();
+
     Command::cargo_bin("kirei")
         .unwrap()
-        .arg("--help")
+        .arg(file.path())
         .assert()
-        .success()
-        .stdout(predicate::str::contains("Askama formatter"));
+        .success();
 }
 
 #[test]
@@ -324,5 +331,15 @@ fn version_flag_works() {
         .arg("--version")
         .assert()
         .success()
-        .stdout(predicate::str::contains("kirei"));
+        .stdout(contains("kirei"));
+}
+
+#[test]
+fn help_shows_description() {
+    Command::cargo_bin("kirei")
+        .unwrap()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(contains("Askama formatter"));
 }
