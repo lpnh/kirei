@@ -7,16 +7,16 @@ use crate::askama::{self, AskamaNode};
 pub enum HtmlNode {
     StartTag {
         name: String,
-        attributes: Vec<Attribute>,
+        attr: Vec<Attribute>,
         end_tag_idx: Option<usize>,
     },
     Void {
         name: String,
-        attributes: Vec<Attribute>,
+        attr: Vec<Attribute>,
     },
     SelfClosingTag {
         name: String,
-        attributes: Vec<Attribute>,
+        attr: Vec<Attribute>,
     },
     EndTag {
         name: String,
@@ -187,31 +187,9 @@ impl HtmlNode {
 
     pub fn to_string(&self) -> String {
         match self {
-            Self::StartTag {
-                name, attributes, ..
-            } => {
-                if attributes.is_empty() {
-                    format!("<{}>", name)
-                } else {
-                    let attrs_str = attributes
-                        .iter()
-                        .map(Attribute::to_string)
-                        .collect::<Vec<_>>()
-                        .join(" ");
-                    format!("<{} {}>", name, attrs_str)
-                }
-            }
-            Self::Void { name, attributes } | Self::SelfClosingTag { name, attributes } => {
-                if attributes.is_empty() {
-                    format!("<{} />", name)
-                } else {
-                    let attrs_str = attributes
-                        .iter()
-                        .map(Attribute::to_string)
-                        .collect::<Vec<_>>()
-                        .join(" ");
-                    format!("<{} {} />", name, attrs_str)
-                }
+            Self::StartTag { name, attr, .. } => format_opening_tag(name, attr),
+            Self::Void { name, attr } | Self::SelfClosingTag { name, attr } => {
+                format_self_closing_tag(name, attr)
             }
             Self::Text(text)
             | Self::RawText(text)
@@ -228,29 +206,20 @@ impl HtmlNode {
         match self {
             Self::StartTag {
                 name,
-                attributes,
+                attr,
                 end_tag_idx,
             } => Self::StartTag {
                 name,
-                attributes: attributes
-                    .into_iter()
-                    .map(|attr| attr.replace_placeholder(askama_nodes))
-                    .collect(),
+                attr: replace_attr_placeholder(attr, askama_nodes),
                 end_tag_idx,
             },
-            Self::Void { name, attributes } => Self::Void {
+            Self::Void { name, attr } => Self::Void {
                 name,
-                attributes: attributes
-                    .into_iter()
-                    .map(|attr| attr.replace_placeholder(askama_nodes))
-                    .collect(),
+                attr: replace_attr_placeholder(attr, askama_nodes),
             },
-            Self::SelfClosingTag { name, attributes } => Self::SelfClosingTag {
+            Self::SelfClosingTag { name, attr } => Self::SelfClosingTag {
                 name,
-                attributes: attributes
-                    .into_iter()
-                    .map(|attr| attr.replace_placeholder(askama_nodes))
-                    .collect(),
+                attr: replace_attr_placeholder(attr, askama_nodes),
             },
             // Other variants don't have attributes, return unchanged
             other => other,
@@ -260,118 +229,8 @@ impl HtmlNode {
 
 pub fn parse_html_tree(root_node: &Node, source: &[u8]) -> Result<Vec<HtmlNode>> {
     let mut html_nodes = Vec::new();
-    // The top-level call now returns a count, which we can ignore.
-    let _ = parse_html_node_recursive(root_node, source, &mut html_nodes, 0)?;
+    parse_html_node_recursive(root_node, source, &mut html_nodes, 0)?;
     Ok(html_nodes)
-}
-
-fn parse_html_node(node: &Node, source: &[u8]) -> Result<Option<HtmlNode>> {
-    match node.kind() {
-        "doctype" => parse_doctype(node, source),
-        "start_tag" => Ok(Some(parse_start_tag(node, source))),
-        "end_tag" => Ok(Some(parse_end_tag(node, source))),
-        "self_closing_tag" => Ok(Some(parse_self_closing_tag(node, source))),
-        "erroneous_end_tag" => Ok(Some(parse_erroneous_end_tag(node, source))),
-        "comment" => parse_comment(node, source),
-        _ => unreachable!(),
-    }
-}
-
-fn parse_start_tag(node: &Node, source: &[u8]) -> HtmlNode {
-    let tag_name = node
-        .children(&mut node.walk())
-        .find(|c| c.kind() == "tag_name")
-        .and_then(|n| n.utf8_text(source).ok())
-        .unwrap_or("")
-        .to_string();
-
-    let attributes = extract_attributes(node, source);
-
-    // Check if this is a void element and create the appropriate variant
-    if HtmlNode::is_void_element_name(&tag_name) {
-        HtmlNode::Void {
-            name: tag_name,
-            attributes,
-        }
-    } else {
-        HtmlNode::StartTag {
-            name: tag_name,
-            attributes,
-            end_tag_idx: None,
-        }
-    }
-}
-
-fn parse_self_closing_tag(node: &Node, source: &[u8]) -> HtmlNode {
-    let tag_name = node
-        .children(&mut node.walk())
-        .find(|c| c.kind() == "tag_name")
-        .and_then(|n| n.utf8_text(source).ok())
-        .unwrap_or("")
-        .to_string();
-
-    let attributes = extract_attributes(node, source);
-
-    HtmlNode::SelfClosingTag {
-        name: tag_name,
-        attributes,
-    }
-}
-
-fn parse_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
-    let tag_name = node
-        .children(&mut node.walk())
-        .find(|c| c.kind() == "tag_name")
-        .and_then(|n| n.utf8_text(source).ok())
-        .unwrap_or("")
-        .to_string();
-
-    HtmlNode::EndTag { name: tag_name }
-}
-
-fn parse_comment(node: &Node, source: &[u8]) -> Result<Option<HtmlNode>> {
-    let text = node.utf8_text(source)?;
-    Ok(Some(HtmlNode::Comment(text.to_string())))
-}
-
-fn parse_doctype(node: &Node, source: &[u8]) -> Result<Option<HtmlNode>> {
-    let text = node.utf8_text(source)?;
-    Ok(Some(HtmlNode::Doctype(text.to_string())))
-}
-
-fn parse_erroneous_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
-    let tag_name = node
-        .children(&mut node.walk())
-        .find(|c| c.kind() == "erroneous_end_tag_name")
-        .and_then(|n| n.utf8_text(source).ok())
-        .unwrap_or("")
-        .to_string();
-
-    HtmlNode::ErroneousEndTag { name: tag_name }
-}
-
-fn extract_attributes(node: &Node, source: &[u8]) -> Vec<Attribute> {
-    node.children(&mut node.walk())
-        .filter(|c| c.kind() == "attribute")
-        .filter_map(|attr_node| {
-            let mut name = None;
-            let mut value = None;
-
-            for child in attr_node.children(&mut attr_node.walk()) {
-                match child.kind() {
-                    "attribute_name" => {
-                        name = child.utf8_text(source).ok().map(|s| s.to_string());
-                    }
-                    "attribute_value" | "quoted_attribute_value" => {
-                        value = Some(child.utf8_text(source).ok()?.to_string());
-                    }
-                    _ => {}
-                }
-            }
-
-            name.map(|n| Attribute { name: n, value })
-        })
-        .collect()
 }
 
 fn parse_html_node_recursive(
@@ -379,50 +238,43 @@ fn parse_html_node_recursive(
     source: &[u8],
     html_nodes: &mut Vec<HtmlNode>,
     depth: usize,
-) -> Result<usize> {
+) -> Result<()> {
     // Prevent stack overflow on deeply nested HTML
     if depth > 200 {
         anyhow::bail!("nesting too deep");
     }
 
-    let mut curr_chars_count = 0;
-
     match node.kind() {
         "document" | "script_element" | "style_element" => {
             for child in node.children(&mut node.walk()) {
-                curr_chars_count +=
-                    parse_html_node_recursive(&child, source, html_nodes, depth + 1)?;
+                parse_html_node_recursive(&child, source, html_nodes, depth + 1)?;
             }
         }
-        "doctype" | "start_tag" | "end_tag" | "self_closing_tag" | "erroneous_end_tag"
-        | "comment" => {
-            if let Some(html_node) = parse_html_node(node, source)? {
-                // Count the actual characters in the tag markup
-                let tag_text = node.utf8_text(source)?;
-                curr_chars_count = tag_text.chars().count();
-                html_nodes.push(html_node);
-            }
+        "doctype" => {
+            let text = node.utf8_text(source)?.to_string();
+            html_nodes.push(HtmlNode::Doctype(text));
+        }
+        "start_tag" => html_nodes.push(parse_start_tag(node, source)),
+        "end_tag" => html_nodes.push(parse_end_tag(node, source)),
+        "self_closing_tag" => html_nodes.push(parse_self_closing_tag(node, source)),
+        "erroneous_end_tag" => html_nodes.push(parse_erroneous_end_tag(node, source)),
+        "comment" => {
+            let text = node.utf8_text(source)?.to_string();
+            html_nodes.push(HtmlNode::Comment(text));
         }
         "entity" => {
-            let entity = node.utf8_text(source)?;
-            curr_chars_count = entity.chars().count();
-            html_nodes.push(HtmlNode::Entity(entity.to_string()));
+            let text = node.utf8_text(source)?.to_string();
+            html_nodes.push(HtmlNode::Entity(text));
         }
         "text" => {
-            let text = node.utf8_text(source)?;
-            if !text.trim().is_empty() {
-                curr_chars_count = text.chars().count();
-                html_nodes.push(HtmlNode::Text(text.to_string()));
-            }
+            let text = node.utf8_text(source)?.to_string();
+            html_nodes.push(HtmlNode::Text(text));
         }
         "element" => {
             let start_tag_idx = html_nodes.len();
 
-            let mut total_child_chars = 0;
-
             for child in node.children(&mut node.walk()) {
-                total_child_chars +=
-                    parse_html_node_recursive(&child, source, html_nodes, depth + 1)?;
+                parse_html_node_recursive(&child, source, html_nodes, depth + 1)?;
             }
 
             let is_void_or_self_closing = html_nodes
@@ -455,32 +307,125 @@ fn parse_html_node_recursive(
             {
                 *end_tag_idx = Some(elem_end_tag_idx);
             }
-            curr_chars_count = total_child_chars;
         }
         "raw_text" => {
             let text = node.utf8_text(source)?;
             if !text.trim().is_empty() {
-                curr_chars_count = text.chars().count();
                 html_nodes.push(HtmlNode::RawText(text.to_string()));
             }
         }
         _ => {
             // For nodes representing a syntax error...
             if node.child_count() > 0 {
-                // Recurse and aggregate char counts from children if any
                 for child in node.children(&mut node.walk()) {
-                    curr_chars_count +=
-                        parse_html_node_recursive(&child, source, html_nodes, depth + 1)?;
+                    parse_html_node_recursive(&child, source, html_nodes, depth + 1)?;
                 }
             } else {
                 // Fallback to HtmlNode::Text
-                let text = node.utf8_text(source)?;
-                if !text.trim().is_empty() {
-                    curr_chars_count = text.chars().count();
-                    html_nodes.push(HtmlNode::Text(text.to_string()));
-                }
+                let text = node.utf8_text(source)?.to_string();
+                html_nodes.push(HtmlNode::Text(text));
             }
         }
     }
-    Ok(curr_chars_count)
+    Ok(())
+}
+
+fn parse_start_tag(node: &Node, source: &[u8]) -> HtmlNode {
+    let tag_name = extract_tag_name(node, source, "tag_name");
+    let attr = extract_attr(node, source);
+
+    // Check if this is a void element and create the appropriate variant
+    if HtmlNode::is_void_element_name(&tag_name) {
+        HtmlNode::Void {
+            name: tag_name,
+            attr,
+        }
+    } else {
+        HtmlNode::StartTag {
+            name: tag_name,
+            attr,
+            end_tag_idx: None,
+        }
+    }
+}
+
+fn parse_self_closing_tag(node: &Node, source: &[u8]) -> HtmlNode {
+    let tag_name = extract_tag_name(node, source, "tag_name");
+    let attr = extract_attr(node, source);
+
+    HtmlNode::SelfClosingTag {
+        name: tag_name,
+        attr,
+    }
+}
+
+fn parse_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
+    let tag_name = extract_tag_name(node, source, "tag_name");
+    HtmlNode::EndTag { name: tag_name }
+}
+
+fn parse_erroneous_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
+    let tag_name = extract_tag_name(node, source, "erroneous_end_tag_name");
+    HtmlNode::ErroneousEndTag { name: tag_name }
+}
+
+fn extract_tag_name(node: &Node, source: &[u8], kind: &str) -> String {
+    node.children(&mut node.walk())
+        .find(|c| c.kind() == kind)
+        .and_then(|n| n.utf8_text(source).ok())
+        .unwrap_or("")
+        .to_string()
+}
+
+fn extract_attr(node: &Node, source: &[u8]) -> Vec<Attribute> {
+    node.children(&mut node.walk())
+        .filter(|c| c.kind() == "attribute")
+        .filter_map(|attr_node| {
+            let mut name = None;
+            let mut value = None;
+
+            for child in attr_node.children(&mut attr_node.walk()) {
+                match child.kind() {
+                    "attribute_name" => {
+                        name = child.utf8_text(source).ok().map(|s| s.to_string());
+                    }
+                    "attribute_value" | "quoted_attribute_value" => {
+                        value = Some(child.utf8_text(source).ok()?.to_string());
+                    }
+                    _ => {}
+                }
+            }
+
+            name.map(|n| Attribute { name: n, value })
+        })
+        .collect()
+}
+
+fn format_attr(attr: &[Attribute]) -> String {
+    attr.iter()
+        .map(Attribute::to_string)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn format_opening_tag(name: &str, attr: &[Attribute]) -> String {
+    if attr.is_empty() {
+        format!("<{}>", name)
+    } else {
+        format!("<{} {}>", name, format_attr(attr))
+    }
+}
+
+fn format_self_closing_tag(name: &str, attr: &[Attribute]) -> String {
+    if attr.is_empty() {
+        format!("<{} />", name)
+    } else {
+        format!("<{} {} />", name, format_attr(attr))
+    }
+}
+
+fn replace_attr_placeholder(attr: Vec<Attribute>, askama_nodes: &[AskamaNode]) -> Vec<Attribute> {
+    attr.into_iter()
+        .map(|attr| attr.replace_placeholder(askama_nodes))
+        .collect()
 }
