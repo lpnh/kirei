@@ -238,13 +238,9 @@ impl SakuraTree {
                     Root::Askama(askama_node) if !askama_node.is_expr() => {
                         // Check if this is a "when" clause (inner match block)
                         // These should be inline with their content
-                        if let Some(tag) = askama_node.get_ctrl_tag()
-                            && tag.boundary() == askama::Boundary::Inner
-                        {
+                        if askama_node.is_when_clause() {
                             // Build text sequence starting with this when clause
-                            // This will collect the when clause + all its inline content
-                            let (ring, next_idx) =
-                                self.when_clause_with_inline_content(idx, end_idx);
+                            let (ring, next_idx) = self.when_clause_with_content(idx, end_idx);
                             rings.push(ring);
                             idx = next_idx;
                             continue;
@@ -272,12 +268,9 @@ impl SakuraTree {
                                 .leaves
                                 .get(end_leaf + 1)
                                 .is_some_and(|next| match &next.root {
-                                    Root::Html(HtmlNode::Text(_)) => {
-                                        !next.content.trim().is_empty()
-                                    }
-                                    Root::Html(HtmlNode::Entity(_)) => true,
+                                    Root::Html(HtmlNode::Text(_)) => true,
                                     Root::Askama(node) => node.is_expr(),
-                                    Root::Html(_) => false,
+                                    _ => false,
                                 })
                             && let Some((ring, next_idx)) = self.try_text_sequence(idx, end_idx)
                         {
@@ -407,7 +400,7 @@ impl SakuraTree {
     }
 
     // Build a when clause with its inline content as inner rings
-    fn when_clause_with_inline_content(&self, start_idx: usize, end_idx: usize) -> (Ring, usize) {
+    fn when_clause_with_content(&self, start_idx: usize, end_idx: usize) -> (Ring, usize) {
         let mut curr_idx = start_idx + 1;
 
         // Find the end of the content for this when clause
