@@ -157,24 +157,19 @@ impl AskamaNode {
     pub fn is_ctrl(&self) -> bool {
         matches!(self, Self::Control { .. })
     }
-
     pub fn is_expr(&self) -> bool {
         matches!(self, Self::Expression { .. })
     }
-
     pub fn is_comment(&self) -> bool {
         matches!(self, Self::Comment { .. })
     }
-
     pub fn get_ctrl_tag(&self) -> Option<ControlTag> {
         match self {
             Self::Control { ctrl_tag, .. } => *ctrl_tag,
             _ => None,
         }
     }
-
-    // Check if this is a when clause that should preserve leading spaces in following text
-    pub fn is_when_clause(&self) -> bool {
+    pub fn is_when_block(&self) -> bool {
         matches!(self.get_ctrl_tag(), Some(ControlTag::When(_)))
     }
 }

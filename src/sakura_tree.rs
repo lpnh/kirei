@@ -65,7 +65,7 @@ pub enum Layer {
         start_leaf: usize,
         end_leaf: usize,
     },
-    // Askama when clause with optional inline content
+    // Askama when block with optional inline content
     MatchArm {
         leaf: usize,
         inner_rings: Vec<Ring>,
@@ -232,96 +232,60 @@ impl SakuraTree {
         let mut idx = start_idx;
 
         while idx < end_idx {
-            if let Some(leaf) = self.leaves.get(idx) {
-                match &leaf.root {
-                    // Try to build when clause (they need to claim their inline content)
-                    Root::Askama(askama_node) if !askama_node.is_expr() => {
-                        // Check if this is a "when" clause (inner match block)
-                        // These should be inline with their content
-                        if askama_node.is_when_clause() {
-                            // Build text sequence starting with this when clause
-                            let (ring, next_idx) = self.when_clause_with_content(idx, end_idx);
-                            rings.push(ring);
-                            idx = next_idx;
-                            continue;
-                        }
+            let leaf = &self.leaves[idx];
 
-                        // Regular control block (if/for/match/etc)
-                        if let Some((ring, next_idx)) =
-                            self.try_askama_block(idx, askama_node, end_idx)
-                        {
-                            rings.push(ring);
-                            idx = next_idx;
-                            continue;
-                        }
-                    }
-                    // Try to build complete HTML elements
-                    Root::Html(HtmlNode::StartTag { .. }) => {
-                        let Root::Html(html_node) = &leaf.root else {
-                            unreachable!()
-                        };
-
-                        // Try text sequence for inline elements
-                        if html_node.is_inline_level()
-                            && let Some(&end_leaf) = self.twigs.get(&idx)
-                            && self
-                                .leaves
-                                .get(end_leaf + 1)
-                                .is_some_and(|next| match &next.root {
-                                    Root::Html(HtmlNode::Text(_)) => true,
-                                    Root::Askama(node) => node.is_expr(),
-                                    _ => false,
-                                })
-                            && let Some((ring, next_idx)) = self.try_text_sequence(idx, end_idx)
-                        {
-                            rings.push(ring);
-                            idx = next_idx;
-                            continue;
-                        }
-
-                        // Fall back to complete element
-                        if let Some((ring, next_idx)) = self.try_complete_element(idx) {
-                            rings.push(ring);
-                            idx = next_idx;
-                            continue;
-                        }
-                    }
-                    // Standalone for void or self-closing elements
-                    Root::Html(HtmlNode::Void { .. } | HtmlNode::SelfClosingTag { .. }) => {
-                        let layer = Layer::Standalone { leaf: idx };
-                        let ring = Ring::new(layer, self);
-                        rings.push(ring);
-                        idx += 1;
-                        continue;
-                    }
-                    // Raw text (script/style content)
-                    Root::Html(HtmlNode::RawText(_)) => {
-                        let layer = Layer::ScriptStyle { leaf: idx };
-                        let ring = Ring::new(layer, self);
-                        rings.push(ring);
-                        idx += 1;
-                        continue;
-                    }
-                    // Try to build text sequences
-                    Root::Html(HtmlNode::Text(_)) | Root::Askama(_) => {
-                        if let Some((ring, next_idx)) = self.try_text_sequence(idx, end_idx) {
-                            rings.push(ring);
-                            idx = next_idx;
-                            continue;
-                        }
-                    }
-                    Root::Html(_) => {}
+            let (ring, next_idx) = match &leaf.root {
+                Root::Askama(node) if node.is_when_block() => {
+                    self.match_arm_with_content(idx, end_idx)
                 }
-            }
+                Root::Askama(node) if !node.is_expr() => self
+                    .try_askama_block(idx, node, end_idx)
+                    .unwrap_or_else(|| (Ring::new(Layer::Standalone { leaf: idx }, self), idx + 1)),
+                Root::Html(HtmlNode::StartTag { .. }) => self.handle_start_tag(idx, end_idx),
+                Root::Html(HtmlNode::Void { .. } | HtmlNode::SelfClosingTag { .. }) => {
+                    (Ring::new(Layer::Standalone { leaf: idx }, self), idx + 1)
+                }
+                Root::Html(HtmlNode::RawText(_)) => {
+                    (Ring::new(Layer::ScriptStyle { leaf: idx }, self), idx + 1)
+                }
+                Root::Html(HtmlNode::Text(_)) | Root::Askama(_) => self
+                    .try_text_sequence(idx, end_idx)
+                    .unwrap_or_else(|| (Ring::new(Layer::Standalone { leaf: idx }, self), idx + 1)),
+                _ => (Ring::new(Layer::Standalone { leaf: idx }, self), idx + 1),
+            };
 
-            // Fallback: Standalone
-            let layer = Layer::Standalone { leaf: idx };
-            let ring = Ring::new(layer, self);
             rings.push(ring);
-            idx += 1;
+            idx = next_idx;
         }
 
         rings
+    }
+
+    fn handle_start_tag(&self, idx: usize, end_idx: usize) -> (Ring, usize) {
+        let leaf = &self.leaves[idx];
+
+        // Try text sequence for inline elements followed by text/expr
+        let Root::Html(html_node) = &leaf.root else {
+            unreachable!()
+        };
+        if html_node.is_inline_level()
+            && let Some(&end_leaf) = self.twigs.get(&idx)
+            && self
+                .leaves
+                .get(end_leaf + 1)
+                .is_some_and(|next| match &next.root {
+                    Root::Html(HtmlNode::Text(_)) => true,
+                    Root::Askama(node) => node.is_expr(),
+                    _ => false,
+                })
+            && let Some(result) = self.try_text_sequence(idx, end_idx)
+        {
+            return result;
+        }
+
+        // Try complete element, or fall back to standalone for malformed HTML
+        self.try_complete_element(idx)
+            .unwrap_or_else(|| (Ring::new(Layer::Standalone { leaf: idx }, self), idx + 1))
     }
 
     fn try_complete_element(&self, start_leaf: usize) -> Option<(Ring, usize)> {
@@ -399,11 +363,11 @@ impl SakuraTree {
         None
     }
 
-    // Build a when clause with its inline content as inner rings
-    fn when_clause_with_content(&self, start_idx: usize, end_idx: usize) -> (Ring, usize) {
+    // Build a when block with its inline content as inner rings
+    fn match_arm_with_content(&self, start_idx: usize, end_idx: usize) -> (Ring, usize) {
         let mut curr_idx = start_idx + 1;
 
-        // Find the end of the content for this when clause
+        // Find the end of the inline content
         while curr_idx < end_idx {
             let Some(leaf) = self.leaves.get(curr_idx) else {
                 break;
@@ -444,6 +408,7 @@ impl SakuraTree {
         let mut leaves = vec![start_idx];
         let mut curr_idx = start_idx + 1;
 
+        // If starting with a StartTag, include all leaves up to its end tag
         if let Some(leaf) = self.leaves.get(start_idx)
             && matches!(leaf.root, Root::Html(HtmlNode::StartTag { .. }))
             && let Some(&end_leaf) = self.twigs.get(&start_idx)
@@ -451,15 +416,12 @@ impl SakuraTree {
             for idx in (start_idx + 1)..=end_leaf {
                 leaves.push(idx);
             }
-
             curr_idx = end_leaf + 1;
         }
 
         // Collect following inline content
         while curr_idx < end_idx {
-            let Some(leaf) = self.leaves.get(curr_idx) else {
-                unreachable!();
-            };
+            let leaf = &self.leaves[curr_idx];
 
             if matches!(leaf.root, Root::Html(HtmlNode::StartTag { .. }))
                 && let Some(&end_leaf) = self.twigs.get(&curr_idx)
@@ -577,7 +539,7 @@ impl Ring {
                     // Check if inner element is block-level
                     Layer::CompleteElement { start_leaf, .. } => {
                         let Root::Html(html_node) = &tree.leaves[*start_leaf].root else {
-                            unreachable!("CompleteElement must have HTML StartTag")
+                            unreachable!()
                         };
                         !html_node.is_inline_level()
                     }

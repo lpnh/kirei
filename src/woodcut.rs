@@ -303,9 +303,9 @@ fn should_add_space_before_leaf(
         // HTML end tag followed by Askama expression
         (Root::Html(HtmlNode::EndTag { .. }), Root::Askama(curr_askama)) => curr_askama.is_expr(),
 
-        // When clause followed by HTML start tag
+        // When block followed by HTML start tag
         (Root::Askama(prev_askama), Root::Html(HtmlNode::StartTag { .. })) => {
-            prev_askama.is_when_clause()
+            prev_askama.is_when_block()
         }
 
         _ => false,
