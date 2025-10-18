@@ -13,6 +13,13 @@ autoexamples = false
 
 include = ["src/*", "tests/integration/*.rs"]
 
+[lib]
+bench = false
+
+[[bin]]
+name = "kirei"
+bench = false
+
 [dependencies]
 anyhow = "1.0.100"
 clap = { version = "4.5.48", features = ["derive"] }
