@@ -14,25 +14,42 @@ pub fn print(tree: &SakuraTree) -> String {
 
     for branch in &tree.branches {
         match branch.style {
-            BranchStyle::Inline => {
-                ink_inline_branch(&mut inked_tree, tree, branch.indent, &branch.leaves);
+            BranchStyle::Inline => ink_inline(&mut inked_tree, tree, branch.indent, &branch.leaves),
+            BranchStyle::OpenClose => {
+                ink_open_close(
+                    &mut inked_tree,
+                    tree,
+                    branch.indent,
+                    single_leaf(&branch.leaves),
+                );
             }
-            BranchStyle::MultiLine => {
-                ink_multiline_branch(&mut inked_tree, tree, branch.indent, &branch.leaves);
+            BranchStyle::SingleHtmlText => {
+                ink_wrapped_text(
+                    &mut inked_tree,
+                    tree,
+                    branch.indent,
+                    single_leaf(&branch.leaves),
+                );
             }
-            BranchStyle::Wrapped => {
-                ink_wrapped_branch(&mut inked_tree, tree, branch.indent, &branch.leaves);
+            BranchStyle::AskamaComment => {
+                ink_askama_comment(
+                    &mut inked_tree,
+                    tree,
+                    branch.indent,
+                    single_leaf(&branch.leaves),
+                );
             }
-            BranchStyle::Raw => {
-                ink_raw_branch(&mut inked_tree, tree, branch.indent, &branch.leaves);
+            BranchStyle::Multiple => {
+                ink_wrapped_multiple(&mut inked_tree, tree, branch.indent, &branch.leaves)
             }
+            BranchStyle::Raw => ink_raw(&mut inked_tree, tree, branch.indent, &branch.leaves),
         }
     }
 
     inked_tree
 }
 
-fn ink_inline_branch(inked_tree: &mut String, tree: &SakuraTree, indent: i32, leaves: &[usize]) {
+fn ink_inline(inked_tree: &mut String, tree: &SakuraTree, indent: i32, leaves: &[usize]) {
     let indent_str = indent_for(&tree.config, indent);
     let mut line_content = String::new();
 
@@ -40,7 +57,6 @@ fn ink_inline_branch(inked_tree: &mut String, tree: &SakuraTree, indent: i32, le
         if let Some(leaf) = tree.leaves.get(leaf_idx) {
             let content = content_normalized(leaf);
 
-            // Add space between leaves when needed for proper formatting
             if i > 0 && should_add_space_before_leaf(tree, leaf_idx, leaves, i) {
                 line_content.push(' ');
             }
@@ -48,47 +64,45 @@ fn ink_inline_branch(inked_tree: &mut String, tree: &SakuraTree, indent: i32, le
         }
     }
 
-    if !line_content.trim().is_empty() {
-        inked_tree.push_str(&indent_str);
-        inked_tree.push_str(line_content.trim_end());
+    push_indented_line(inked_tree, &indent_str, &line_content);
+}
+
+fn ink_open_close(inked_tree: &mut String, tree: &SakuraTree, indent: i32, leaf_idx: usize) {
+    let indent_str = indent_for(&tree.config, indent);
+
+    if let Some(leaf) = tree.leaves.get(leaf_idx) {
+        let content = content_normalized(leaf);
+        push_indented_line(inked_tree, &indent_str, &content);
+    }
+}
+
+fn ink_wrapped_text(inked_tree: &mut String, tree: &SakuraTree, indent: i32, leaf_idx: usize) {
+    if let Some(leaf) = tree.leaves.get(leaf_idx) {
+        let content = content_normalized(leaf);
+        let wrapped_content = wrap_inline_content(&tree.config, &content, indent);
+        inked_tree.push_str(&wrapped_content);
         inked_tree.push('\n');
     }
 }
 
-fn ink_multiline_branch(inked_tree: &mut String, tree: &SakuraTree, indent: i32, leaves: &[usize]) {
+fn ink_askama_comment(inked_tree: &mut String, tree: &SakuraTree, indent: i32, leaf_idx: usize) {
     let indent_str = indent_for(&tree.config, indent);
 
-    for &leaf_idx in leaves {
-        if let Some(leaf) = tree.leaves.get(leaf_idx) {
-            let content = content_normalized(leaf);
+    if let Some(leaf) = tree.leaves.get(leaf_idx) {
+        let content = content_normalized(leaf);
 
-            // Only wrap text content
-            if leaf.is_html_text() || leaf.is_html_entity() {
-                let wrapped_content = wrap_inline_content(&tree.config, &content, indent);
-                inked_tree.push_str(&wrapped_content);
-            } else {
-                // Handle multiline content
-                if content.contains('\n') {
-                    let lines: Vec<&str> = content.lines().collect();
-                    for (i, line) in lines.iter().enumerate() {
-                        if i > 0 {
-                            inked_tree.push('\n');
-                        }
-                        inked_tree.push_str(&indent_str);
-                        inked_tree.push_str(line.trim_end());
-                    }
-                } else {
-                    // Single line content
-                    inked_tree.push_str(&indent_str);
-                    inked_tree.push_str(content.trim_end());
-                }
+        for (i, line) in content.lines().enumerate() {
+            if i > 0 {
+                inked_tree.push('\n');
             }
-            inked_tree.push('\n');
+            inked_tree.push_str(&indent_str);
+            inked_tree.push_str(line.trim_end());
         }
+        inked_tree.push('\n');
     }
 }
 
-fn ink_wrapped_branch(inked_tree: &mut String, tree: &SakuraTree, indent: i32, leaves: &[usize]) {
+fn ink_wrapped_multiple(inked_tree: &mut String, tree: &SakuraTree, indent: i32, leaves: &[usize]) {
     let indent_str = indent_for(&tree.config, indent);
     let available_width = tree.config.max_width - indent_str.len();
 
@@ -98,32 +112,23 @@ fn ink_wrapped_branch(inked_tree: &mut String, tree: &SakuraTree, indent: i32, l
     for (i, &leaf_idx) in leaves.iter().enumerate() {
         if let Some(leaf) = tree.leaves.get(leaf_idx) {
             let content = content_normalized(leaf);
-
-            // Check if we need space before this leaf
             let needs_space = i > 0 && should_add_space_before_leaf(tree, leaf_idx, leaves, i);
-
-            // Lookahead: check if adding this leaf would exceed line length
             let space_len = usize::from(needs_space);
             let would_exceed = curr_line.len() + space_len + content.len() > available_width;
 
-            // If would exceed AND current leaf is a StartTag, break before it
             if would_exceed && !curr_line.is_empty() {
                 let is_start_tag = matches!(&leaf.root, Root::Html(HtmlNode::StartTag { .. }));
 
                 if is_start_tag {
-                    // Start new line before this StartTag
                     lines.push(curr_line.trim_end().to_string());
                     curr_line = String::new();
-                    // Don't add space after breaking - we're on a new line
                     curr_line.push_str(&content);
                     continue;
                 } else if leaf.is_html_text() {
-                    // Current leaf is text and would exceed - try to wrap it
                     if !curr_line.is_empty() {
                         lines.push(curr_line.trim_end().to_string());
                         curr_line = String::new();
                     }
-                    // Use textwrap for the text content
                     let wrapped = wrap_inline_content(&tree.config, &content, indent);
                     for wrapped_line in wrapped.lines() {
                         lines.push(wrapped_line.trim_start().to_string());
@@ -132,7 +137,6 @@ fn ink_wrapped_branch(inked_tree: &mut String, tree: &SakuraTree, indent: i32, l
                 }
             }
 
-            // Add space if needed (but not at the start of a new line)
             if needs_space && !curr_line.is_empty() {
                 curr_line.push(' ');
             }
@@ -141,76 +145,59 @@ fn ink_wrapped_branch(inked_tree: &mut String, tree: &SakuraTree, indent: i32, l
         }
     }
 
-    // Don't forget the last line
     if !curr_line.trim().is_empty() {
         lines.push(curr_line.trim_end().to_string());
     }
 
-    // Output all lines with proper indentation
     for line in lines {
         if !line.trim().is_empty() {
-            inked_tree.push_str(&indent_str);
-            inked_tree.push_str(&line);
-            inked_tree.push('\n');
+            push_indented_line(inked_tree, &indent_str, &line);
         }
     }
 }
 
-fn ink_raw_branch(inked_tree: &mut String, tree: &SakuraTree, indent: i32, leaves: &[usize]) {
+fn ink_raw(inked_tree: &mut String, tree: &SakuraTree, indent: i32, leaves: &[usize]) {
     let mut curr_indent = indent;
 
     for &leaf_idx in leaves {
         if let Some(leaf) = tree.leaves.get(leaf_idx) {
             let content = &leaf.content;
 
-            // Process raw text content with preserved line structure
             if !content.trim().is_empty() {
-                // Content now preserves original line breaks
-                // Just add proper indentation to each line
                 for line in content.lines() {
                     if line.trim().is_empty() {
-                        // Preserve empty lines
                         inked_tree.push('\n');
                     } else {
                         let trimmed = line.trim();
-
-                        // Check if line starts with '}' - if so, temporarily decrease indent
                         let temp_indent_decrease = trimmed.starts_with('}');
+
                         if temp_indent_decrease {
                             curr_indent = curr_indent.saturating_sub(1);
                         }
 
-                        // Write the line with current indent level
                         let indent_str = indent_for(&tree.config, curr_indent);
                         inked_tree.push_str(&indent_str);
                         inked_tree.push_str(trimmed);
                         inked_tree.push('\n');
 
-                        // After writing, if line ends with '{', increase indent for next lines
                         if trimmed.ends_with('{') {
                             curr_indent += 1;
                         }
 
-                        // Handle lines with both braces (like "} else {")
-                        // Count net brace difference for complex cases
                         let open_braces = trimmed.matches('{').count();
                         let close_braces = trimmed.matches('}').count();
                         let net_change = open_braces as i32 - close_braces as i32;
 
-                        // If we already handled the opening brace above, subtract 1 from net_change
                         let net_change = if trimmed.ends_with('{') && net_change > 0 {
                             net_change - 1
                         } else {
                             net_change
                         };
 
-                        // Apply any additional net change (for cases like multiple braces on one line)
                         if net_change > 0 {
                             curr_indent += net_change;
                         } else if net_change < 0 {
-                            // For closing braces that weren't handled by the temp decrease
                             let decrease = (-net_change) as usize;
-                            // Only decrease if we didn't already handle it with temp_indent_decrease
                             if !temp_indent_decrease || decrease > 1 {
                                 let actual_decrease = if temp_indent_decrease {
                                     decrease - 1
@@ -236,13 +223,9 @@ fn content_normalized(leaf: &Leaf) -> Cow<'_, str> {
 }
 
 fn normalize_text_content(text: &str) -> String {
-    // Remove leading whitespace (template indentation), preserve trailing
     let has_trailing = text.ends_with(char::is_whitespace);
     let trailing = if has_trailing { " " } else { "" };
-
-    // Normalize internal content (removes leading whitespace)
     let internal = text.split_whitespace().collect::<Vec<_>>().join(" ");
-
     format!("{}{}", internal, trailing)
 }
 
@@ -256,57 +239,44 @@ fn should_add_space_before_leaf(
         return false;
     }
 
-    let current = tree
-        .leaves
-        .get(curr_leaf_idx)
-        .expect("leaf index from branch should be valid");
+    let current = tree.leaves.get(curr_leaf_idx).unwrap();
     let prev = branch_indices
         .get(position_in_branch - 1)
         .and_then(|&idx| tree.leaves.get(idx))
-        .expect("previous leaf should exist when position > 0");
+        .unwrap();
 
     let curr_content = content_normalized(current);
     let prev_content = content_normalized(prev);
 
-    // The whitespace is already present
     if curr_content.starts_with(' ') || prev_content.ends_with(' ') {
         return false;
     }
 
-    // Add space between specific node type combinations
     match (&prev.root, &current.root) {
-        // Text followed by HTML start tag or entity, entity followed by text
         (
             Root::Html(HtmlNode::Text(_)),
             Root::Html(HtmlNode::Entity(_) | HtmlNode::StartTag { .. }),
         )
         | (Root::Html(HtmlNode::Entity(_)), Root::Html(HtmlNode::Text(_))) => true,
 
-        // Askama expression followed by text (!punctuation)
-        (Root::Askama(prev_askama), Root::Html(HtmlNode::Text(_))) => {
-            !prev_askama.is_expr()
+        (Root::Askama(node), Root::Html(HtmlNode::Text(_))) => {
+            !node.is_expr()
                 || !current
                     .content
                     .starts_with(|c: char| c.is_ascii_punctuation())
         }
 
-        // Text (!punctuation) followed by Askama expression
-        (Root::Html(HtmlNode::Text(_)), Root::Askama(curr_askama)) => {
-            curr_askama.is_expr() && !prev.content.ends_with(|c: char| c.is_ascii_punctuation())
+        (Root::Html(HtmlNode::Text(_)), Root::Askama(node)) => {
+            node.is_expr() && !prev.content.ends_with(|c: char| c.is_ascii_punctuation())
         }
 
-        // HTML end tag followed by text that starts with a letter
         (Root::Html(HtmlNode::EndTag { .. }), Root::Html(HtmlNode::Text(_))) => {
             curr_content.starts_with(char::is_alphabetic)
         }
 
-        // HTML end tag followed by Askama expression
-        (Root::Html(HtmlNode::EndTag { .. }), Root::Askama(curr_askama)) => curr_askama.is_expr(),
+        (Root::Html(HtmlNode::EndTag { .. }), Root::Askama(node)) => node.is_expr(),
 
-        // When block followed by HTML start tag
-        (Root::Askama(prev_askama), Root::Html(HtmlNode::StartTag { .. })) => {
-            prev_askama.is_when_block()
-        }
+        (Root::Askama(node), Root::Html(HtmlNode::StartTag { .. })) => node.is_when_block(),
 
         _ => false,
     }
@@ -325,4 +295,14 @@ fn wrap_inline_content(config: &Config, content: &str, indent: i32) -> String {
 
 fn indent_for(config: &Config, indent: i32) -> String {
     " ".repeat(indent as usize * config.indent_size)
+}
+
+fn single_leaf(leaves: &[usize]) -> usize {
+    *leaves.first().unwrap()
+}
+
+fn push_indented_line(inked_tree: &mut String, indent_str: &str, content: &str) {
+    inked_tree.push_str(indent_str);
+    inked_tree.push_str(content.trim_end());
+    inked_tree.push('\n');
 }

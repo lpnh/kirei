@@ -32,65 +32,51 @@ pub enum Root {
 }
 
 #[derive(Debug, Clone)]
-pub struct Ring {
-    pub layer: Layer,
-    pub total_chars: usize,
-    pub has_block: bool,
-}
-
-#[derive(Debug, Clone)]
-pub enum Layer {
-    // Complete HTML element with start/end tags
-    CompleteElement {
+pub enum Ring {
+    // Compound
+    Element {
         start_leaf: usize,
-        inner_rings: Vec<Ring>,
+        inner: Vec<Ring>,
         end_leaf: usize,
     },
-    // Sequence of text content and expressions
+    ControlBlock {
+        start_leaf: usize,
+        inner: Vec<Ring>,
+        end_leaf: usize,
+    },
+    EmptyBlock {
+        start_leaf: usize,
+        end_leaf: usize,
+    },
     TextSequence {
         leaves: Vec<usize>,
     },
-    // Raw text (inside style/script elements)
-    ScriptStyle {
-        leaf: usize,
-    },
-    // Askama control block with open/close tag indices
-    ControlBlock {
-        start_leaf: usize,
-        inner_rings: Vec<Ring>,
-        end_leaf: usize,
-    },
-    // Empty Askama control block with open/close tag indices
-    EmptyControlBlock {
-        start_leaf: usize,
-        end_leaf: usize,
-    },
-    // Askama when block with optional inline content
     MatchArm {
         leaf: usize,
-        inner_rings: Vec<Ring>,
+        inner: Vec<Ring>,
     },
-    // Fallback leaf (self-closing elements, standalone text, etc.)
-    Standalone {
-        leaf: usize,
-    },
+
+    // Atomic
+    RawText(usize),
+    Comment(usize),
+    InlineText(usize),
+    Other(usize),
 }
 
 #[derive(Debug, Clone)]
 pub struct Branch {
-    // Indices of leaves that belong to this branch
     pub leaves: Vec<usize>,
-    // A formatting style hint for the entire branch
     pub style: BranchStyle,
-    // Indentation level for this branch
     pub indent: i32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BranchStyle {
     Inline,
-    MultiLine,
-    Wrapped,
+    OpenClose,
+    SingleHtmlText,
+    Multiple,
+    AskamaComment,
     Raw,
 }
 
@@ -142,9 +128,7 @@ impl Leaf {
     pub fn is_html_text(&self) -> bool {
         matches!(self.root, Root::Html(HtmlNode::Text(_)))
     }
-    pub fn is_html_entity(&self) -> bool {
-        matches!(self.root, Root::Html(HtmlNode::Entity(_)))
-    }
+
     fn chars_count(&self) -> usize {
         self.content.chars().count()
     }
@@ -240,18 +224,13 @@ impl SakuraTree {
                 }
                 Root::Askama(node) if !node.is_expr() => self
                     .try_askama_block(idx, node, end_idx)
-                    .unwrap_or_else(|| (Ring::new(Layer::Standalone { leaf: idx }, self), idx + 1)),
+                    .unwrap_or_else(|| (self.with_single_leaf(idx), idx + 1)),
                 Root::Html(HtmlNode::StartTag { .. }) => self.handle_start_tag(idx, end_idx),
-                Root::Html(HtmlNode::Void { .. } | HtmlNode::SelfClosingTag { .. }) => {
-                    (Ring::new(Layer::Standalone { leaf: idx }, self), idx + 1)
-                }
-                Root::Html(HtmlNode::RawText(_)) => {
-                    (Ring::new(Layer::ScriptStyle { leaf: idx }, self), idx + 1)
-                }
+                Root::Html(HtmlNode::RawText(_)) => (Ring::RawText(idx), idx + 1),
                 Root::Html(HtmlNode::Text(_)) | Root::Askama(_) => self
                     .try_text_sequence(idx, end_idx)
-                    .unwrap_or_else(|| (Ring::new(Layer::Standalone { leaf: idx }, self), idx + 1)),
-                _ => (Ring::new(Layer::Standalone { leaf: idx }, self), idx + 1),
+                    .unwrap_or_else(|| (self.with_single_leaf(idx), idx + 1)),
+                Root::Html(_) => (self.with_single_leaf(idx), idx + 1),
             };
 
             rings.push(ring);
@@ -259,6 +238,18 @@ impl SakuraTree {
         }
 
         rings
+    }
+
+    fn with_single_leaf(&self, idx: usize) -> Ring {
+        let leaf = &self.leaves[idx];
+
+        match &leaf.root {
+            Root::Html(HtmlNode::RawText(_)) => Ring::RawText(idx),
+            Root::Html(HtmlNode::Comment(_)) => Ring::Comment(idx),
+            Root::Askama(node) if node.is_comment() => Ring::Comment(idx),
+            Root::Html(HtmlNode::Text(_) | HtmlNode::Entity(_)) => Ring::InlineText(idx),
+            _ => Ring::Other(idx),
+        }
     }
 
     fn handle_start_tag(&self, idx: usize, end_idx: usize) -> (Ring, usize) {
@@ -276,16 +267,16 @@ impl SakuraTree {
                 .is_some_and(|next| match &next.root {
                     Root::Html(HtmlNode::Text(_)) => true,
                     Root::Askama(node) => node.is_expr(),
-                    _ => false,
+                    Root::Html(_) => false,
                 })
             && let Some(result) = self.try_text_sequence(idx, end_idx)
         {
             return result;
         }
 
-        // Try complete element, or fall back to standalone for malformed HTML
+        // Try complete element, or fall back to single leaf
         self.try_complete_element(idx)
-            .unwrap_or_else(|| (Ring::new(Layer::Standalone { leaf: idx }, self), idx + 1))
+            .unwrap_or_else(|| (self.with_single_leaf(idx), idx + 1))
     }
 
     fn try_complete_element(&self, start_leaf: usize) -> Option<(Ring, usize)> {
@@ -293,14 +284,13 @@ impl SakuraTree {
         let &end_leaf = self.twigs.get(&start_leaf)?;
 
         // Recursively grow inner rings
-        let inner_rings = self.grow_rings(start_leaf + 1, end_leaf);
+        let inner = self.grow_rings(start_leaf + 1, end_leaf);
 
-        let layer = Layer::CompleteElement {
+        let ring = Ring::Element {
             start_leaf,
-            inner_rings,
+            inner,
             end_leaf,
         };
-        let ring = Ring::new(layer, self);
 
         // Next index for parent is after the end tag
         Some((ring, end_leaf + 1))
@@ -336,21 +326,20 @@ impl SakuraTree {
                         let end_leaf = curr_idx;
 
                         // Recursively grow inner rings for leaves between open and close indices
-                        let inner_rings = self.grow_rings(start_idx + 1, end_leaf);
+                        let inner = self.grow_rings(start_idx + 1, end_leaf);
 
-                        let layer = if inner_rings.is_empty() {
-                            Layer::EmptyControlBlock {
+                        let ring = if inner.is_empty() {
+                            Ring::EmptyBlock {
                                 start_leaf: start_idx,
                                 end_leaf,
                             }
                         } else {
-                            Layer::ControlBlock {
+                            Ring::ControlBlock {
                                 start_leaf: start_idx,
-                                inner_rings,
+                                inner,
                                 end_leaf,
                             }
                         };
-                        let ring = Ring::new(layer, self);
                         return Some((ring, end_leaf + 1));
                     }
                     // This closes a nested block, decrement depth
@@ -390,17 +379,16 @@ impl SakuraTree {
         }
 
         // Build rings for the content (if any)
-        let inner_rings = if curr_idx > start_idx + 1 {
+        let inner = if curr_idx > start_idx + 1 {
             self.grow_rings(start_idx + 1, curr_idx)
         } else {
             Vec::new()
         };
 
-        let layer = Layer::MatchArm {
+        let ring = Ring::MatchArm {
             leaf: start_idx,
-            inner_rings,
+            inner,
         };
-        let ring = Ring::new(layer, self);
         (ring, curr_idx)
     }
 
@@ -436,8 +424,6 @@ impl SakuraTree {
             }
 
             let can_include = match &leaf.root {
-                Root::Html(HtmlNode::Text(_)) => !leaf.content.trim().is_empty(),
-                Root::Html(HtmlNode::Entity(_)) => true,
                 Root::Askama(node) => node.is_expr(),
                 Root::Html(html_node) => html_node.is_inline_level(),
             };
@@ -451,8 +437,7 @@ impl SakuraTree {
         }
 
         if leaves.len() > 1 {
-            let layer = Layer::TextSequence { leaves };
-            let ring = Ring::new(layer, self);
+            let ring = Ring::TextSequence { leaves };
             return Some((ring, curr_idx));
         }
 
@@ -511,18 +496,8 @@ impl SakuraTree {
 }
 
 impl Ring {
-    fn new(layer: Layer, tree: &SakuraTree) -> Self {
-        let total_chars = Self::calculate_total_chars(&layer, tree);
-        let has_block = Self::inner_has_block(&layer, tree);
-        Self {
-            layer,
-            total_chars,
-            has_block,
-        }
-    }
-
-    fn calculate_total_chars(layer: &Layer, tree: &SakuraTree) -> usize {
-        let leaf_indices = layer.all_leaf_indices();
+    pub fn total_chars(&self, tree: &SakuraTree) -> usize {
+        let leaf_indices = self.all_leaf_indices();
         leaf_indices
             .iter()
             .filter_map(|&i| tree.leaves.get(i))
@@ -531,66 +506,58 @@ impl Ring {
     }
 
     // Check if any inner rings contain block-level structure
-    fn inner_has_block(layer: &Layer, tree: &SakuraTree) -> bool {
-        match layer {
-            Layer::CompleteElement { inner_rings, .. }
-            | Layer::ControlBlock { inner_rings, .. } => {
-                inner_rings.iter().any(|ring| match &ring.layer {
-                    // Check if inner element is block-level
-                    Layer::CompleteElement { start_leaf, .. } => {
+    pub fn has_block(&self, tree: &SakuraTree) -> bool {
+        match self {
+            Ring::Element { inner, .. } => {
+                // Check if any inner ring is a block-level element
+                inner.iter().any(|node| match node {
+                    Ring::Element { start_leaf, .. } => {
                         let Root::Html(html_node) = &tree.leaves[*start_leaf].root else {
                             unreachable!()
                         };
                         !html_node.is_inline_level()
                     }
-                    // Control blocks and script/style are always block-level
-                    Layer::ControlBlock { .. } | Layer::ScriptStyle { .. } => true,
-                    // Recurse for other layers
-                    _ => ring.has_block,
+                    Ring::ControlBlock { .. } | Ring::RawText { .. } => true,
+                    _ => node.has_block(tree),
                 })
             }
-            Layer::MatchArm { inner_rings, .. } => inner_rings.iter().any(|ring| ring.has_block),
-            Layer::ScriptStyle { .. } => true,
+            Ring::ControlBlock { inner, .. } => inner.iter().any(|node| node.has_block(tree)),
+            Ring::MatchArm { inner, .. } => inner.iter().any(|node| node.has_block(tree)),
+            Ring::RawText { .. } => true,
             _ => false,
         }
     }
 
     pub fn all_leaf_indices(&self) -> Vec<usize> {
-        self.layer.all_leaf_indices()
-    }
-}
-
-impl Layer {
-    fn all_leaf_indices(&self) -> Vec<usize> {
         match self {
-            Self::CompleteElement {
+            Ring::Element {
                 start_leaf,
-                inner_rings,
+                inner,
                 end_leaf,
-                ..
             } => once(*start_leaf)
-                .chain(inner_rings.iter().flat_map(Ring::all_leaf_indices))
-                .chain((*end_leaf != *start_leaf).then_some(*end_leaf)) // Avoid duplicates for void elements
+                .chain(inner.iter().flat_map(Ring::all_leaf_indices))
+                .chain((*end_leaf != *start_leaf).then_some(*end_leaf))
                 .collect(),
-            Self::TextSequence { leaves } => leaves.clone(),
-            Self::ControlBlock {
+            Ring::TextSequence { leaves } => leaves.clone(),
+            Ring::ControlBlock {
                 start_leaf,
-                inner_rings,
+                inner,
                 end_leaf,
-                ..
             } => once(*start_leaf)
-                .chain(inner_rings.iter().flat_map(Ring::all_leaf_indices))
+                .chain(inner.iter().flat_map(Ring::all_leaf_indices))
                 .chain(once(*end_leaf))
                 .collect(),
-            Self::EmptyControlBlock {
+            Ring::EmptyBlock {
                 start_leaf,
                 end_leaf,
-                ..
             } => vec![*start_leaf, *end_leaf],
-            Self::MatchArm { leaf, inner_rings } => once(*leaf)
-                .chain(inner_rings.iter().flat_map(Ring::all_leaf_indices))
+            Ring::MatchArm { leaf, inner } => once(*leaf)
+                .chain(inner.iter().flat_map(Ring::all_leaf_indices))
                 .collect(),
-            Self::ScriptStyle { leaf } | Self::Standalone { leaf } => vec![*leaf],
+            Ring::RawText(leaf)
+            | Ring::Comment(leaf)
+            | Ring::InlineText(leaf)
+            | Ring::Other(leaf) => vec![*leaf],
         }
     }
 }

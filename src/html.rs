@@ -386,9 +386,7 @@ fn extract_attr(node: &Node, source: &[u8]) -> Vec<Attribute> {
 
             for child in attr_node.children(&mut attr_node.walk()) {
                 match child.kind() {
-                    "attribute_name" => {
-                        name = child.utf8_text(source).ok().map(|s| s.to_string());
-                    }
+                    "attribute_name" => name = child.utf8_text(source).ok().map(|s| s.to_string()),
                     "attribute_value" | "quoted_attribute_value" => {
                         value = Some(child.utf8_text(source).ok()?.to_string());
                     }
