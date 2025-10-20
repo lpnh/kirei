@@ -1,7 +1,7 @@
 [package]
 name = "kirei"
 description = "Askama formatter"
-version = "25.10.4"
+version = "25.10.20"
 authors = ["lpnh <paniguel.lpnh@gmail.com>"]
 license = "Unlicense"
 readme = "README.md"
