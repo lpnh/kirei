@@ -1,6 +1,6 @@
 use crate::{
     html,
-    sakura_tree::{Branch, BranchStyle, Ring, Root, SakuraTree},
+    sakura_tree::{Branch, BranchStyle, Ring, Root, SakuraTree, Twig},
 };
 
 pub fn wire(tree: &mut SakuraTree) {
@@ -51,74 +51,66 @@ fn wire_branch(tree: &mut SakuraTree, ring: &Ring, indent_map: &[i32]) {
 
     match ring {
         // Compound
-        Ring::Element {
-            start_leaf,
-            inner,
-            end_leaf,
-        } => {
+        Ring::Element(leaves, inner) => {
             if fits && !has_block {
-                let leaves = ring.all_leaf_indices();
-                push_branch(tree, leaves, BranchStyle::Inline, indent_map);
+                push_branch(tree, *leaves, BranchStyle::Inline, indent_map);
             } else {
-                wire_open_close_branches(tree, *start_leaf, inner, *end_leaf, indent_map);
+                let (start_leaf, end_leaf) = leaves.as_range();
+                wire_open_close_branches(tree, start_leaf, inner, end_leaf, indent_map);
             }
         }
-        Ring::ControlBlock {
-            start_leaf,
-            inner,
-            end_leaf,
-        } => wire_open_close_branches(tree, *start_leaf, inner, *end_leaf, indent_map),
-        Ring::EmptyBlock {
-            start_leaf,
-            end_leaf,
-        } => {
+        Ring::ControlBlock(leaves, inner) => {
+            let (start_leaf, end_leaf) = leaves.as_range();
+            wire_open_close_branches(tree, start_leaf, inner, end_leaf, indent_map);
+        }
+        Ring::EmptyBlock(leaves) => {
             if fits {
-                let leaves = vec![*start_leaf, *end_leaf];
-                push_branch(tree, leaves, BranchStyle::Inline, indent_map);
+                push_branch(tree, *leaves, BranchStyle::Inline, indent_map);
             } else {
-                wire_open_close_branches(tree, *start_leaf, &[], *end_leaf, indent_map);
+                let (start_leaf, end_leaf) = leaves.as_range();
+                wire_open_close_branches(tree, start_leaf, &[], end_leaf, indent_map);
             }
         }
-        Ring::TextSequence { leaves } => {
+        Ring::TextSequence(leaves) => {
             let style = if fits {
                 BranchStyle::Inline
             } else {
                 BranchStyle::Multiple
             };
-            push_branch(tree, leaves.clone(), style, indent_map);
+            push_branch(tree, *leaves, style, indent_map);
         }
-        Ring::MatchArm { .. } => {
+        Ring::MatchArm(_, _) => {
             let leaves = ring.all_leaf_indices();
             push_branch(tree, leaves, BranchStyle::Inline, indent_map);
         }
 
         // Atomic
-        Ring::RawText(leaf) => {
-            push_branch(tree, vec![*leaf], BranchStyle::Raw, indent_map);
+        Ring::RawText(leaves) => {
+            push_branch(tree, *leaves, BranchStyle::Raw, indent_map);
         }
-        Ring::Comment(leaf) => {
+        Ring::Comment(leaves) => {
             let style = if fits {
                 BranchStyle::Inline
             } else {
                 BranchStyle::AskamaComment
             };
-            push_branch(tree, vec![*leaf], style, indent_map);
+            push_branch(tree, *leaves, style, indent_map);
         }
-        Ring::InlineText(leaf) => {
+        Ring::InlineText(leaves) => {
             let style = if fits {
                 BranchStyle::Inline
             } else {
                 BranchStyle::SingleHtmlText
             };
-            push_branch(tree, vec![*leaf], style, indent_map);
+            push_branch(tree, *leaves, style, indent_map);
         }
-        Ring::Other(leaf) => {
+        Ring::Other(leaves) => {
             let style = if fits {
                 BranchStyle::Inline
             } else {
                 BranchStyle::OpenClose
             };
-            push_branch(tree, vec![*leaf], style, indent_map);
+            push_branch(tree, *leaves, style, indent_map);
         }
     }
 }
@@ -130,9 +122,9 @@ fn wire_open_close_branches(
     end_leaf: usize,
     indent_map: &[i32],
 ) {
-    let open_indent = get_indent(indent_map, Some(&start_leaf));
+    let open_indent = indent_map.get(start_leaf).copied().unwrap_or(0);
     tree.branches.push(Branch::grow(
-        vec![start_leaf],
+        Twig::Single(start_leaf),
         BranchStyle::OpenClose,
         open_indent,
     ));
@@ -141,21 +133,19 @@ fn wire_open_close_branches(
         wire_branch(tree, ring, indent_map);
     }
 
-    let close_indent = get_indent(indent_map, Some(&end_leaf));
+    let close_indent = indent_map.get(end_leaf).copied().unwrap_or(0);
     tree.branches.push(Branch::grow(
-        vec![end_leaf],
+        Twig::Single(end_leaf),
         BranchStyle::OpenClose,
         close_indent,
     ));
 }
 
-fn get_indent(indent_map: &[i32], leaf: Option<&usize>) -> i32 {
-    leaf.and_then(|&idx| indent_map.get(idx))
-        .copied()
-        .unwrap_or(0)
+fn get_indent(indent_map: &[i32], twig: Twig) -> i32 {
+    indent_map.get(twig.first()).copied().unwrap_or(0)
 }
 
-fn push_branch(tree: &mut SakuraTree, leaves: Vec<usize>, style: BranchStyle, indent_map: &[i32]) {
-    let indent = get_indent(indent_map, leaves.first());
-    tree.branches.push(Branch::grow(leaves, style, indent));
+fn push_branch(tree: &mut SakuraTree, twig: Twig, style: BranchStyle, indent_map: &[i32]) {
+    let indent = get_indent(indent_map, twig);
+    tree.branches.push(Branch::grow(twig, style, indent));
 }
