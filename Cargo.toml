@@ -22,7 +22,7 @@ bench = false
 
 [dependencies]
 anyhow = "1.0.100"
-clap = { version = "4.5.48", features = ["derive"] }
+clap = { version = "4.5.50", features = ["derive"] }
 textwrap = "0.16.2"
 tree-sitter = "0.25.10"
 tree-sitter-askama = "0.1.0"
