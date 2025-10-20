@@ -48,84 +48,36 @@ pub enum Ring {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum Twig {
-    Single(usize),
-    Range(usize, usize),
-}
+pub struct Twig(usize, usize);
 
 impl Twig {
     #[inline]
-    pub fn first(self) -> usize {
-        match self {
-            Twig::Single(i) => i,
-            Twig::Range(start, _) => start,
-        }
+    pub fn start(self) -> usize {
+        self.0
     }
     #[inline]
-    pub fn last(self) -> usize {
-        match self {
-            Twig::Single(i) => i,
-            Twig::Range(_, end) => end,
-        }
+    pub fn end(self) -> usize {
+        self.1
     }
     #[inline]
-    pub fn as_range(self) -> (usize, usize) {
-        match self {
-            Twig::Single(i) => (i, i),
-            Twig::Range(start, end) => (start, end),
-        }
+    pub fn has_same_idx(self) -> bool {
+        self.0 == self.1
     }
     #[inline]
-    pub fn is_single(self) -> bool {
-        matches!(self, Twig::Single(_))
-    }
-    pub fn iter(self) -> TwigIter {
-        let (start, end) = self.as_range();
-        TwigIter { range: start..=end }
-    }
-}
-
-pub struct TwigIter {
-    range: RangeInclusive<usize>,
-}
-
-impl Iterator for TwigIter {
-    type Item = usize;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.range.next()
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.range.size_hint()
-    }
-}
-
-impl ExactSizeIterator for TwigIter {}
-
-impl IntoIterator for Twig {
-    type Item = usize;
-    type IntoIter = TwigIter;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
+    pub fn indices(self) -> RangeInclusive<usize> {
+        self.0..=self.1
     }
 }
 
 impl From<usize> for Twig {
     fn from(idx: usize) -> Self {
-        Twig::Single(idx)
+        Self(idx, idx)
     }
 }
 
 impl From<(usize, usize)> for Twig {
     fn from((start, end): (usize, usize)) -> Self {
-        if start == end {
-            Twig::Single(start)
-        } else {
-            Twig::Range(start, end)
-        }
+        Self(start, end)
     }
 }
 
@@ -136,7 +88,7 @@ pub struct Branch {
     pub indent: i32,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum BranchStyle {
     Inline,
     OpenClose,
@@ -258,8 +210,8 @@ impl SakuraTree {
             }
         }
 
-        // Initialize twigs with Single for each leaf
-        tree.twigs = (0..tree.leaves.len()).map(Twig::Single).collect();
+        // Initialize twigs with same index for each leaf
+        tree.twigs = (0..tree.leaves.len()).map(|i| Twig(i, i)).collect();
 
         // Convert html end_tag index to end_leaf index
         for (leaf_idx, leaf) in tree.leaves.iter().enumerate() {
@@ -269,7 +221,7 @@ impl SakuraTree {
             }) = &leaf.root
                 && let Some(&end_leaf) = html_to_leaf_map.get(elem_end_tag_idx)
             {
-                tree.twigs[leaf_idx] = Twig::Range(leaf_idx, end_leaf);
+                tree.twigs[leaf_idx] = Twig(leaf_idx, end_leaf);
             }
         }
 
@@ -330,10 +282,10 @@ impl SakuraTree {
             unreachable!()
         };
         if html_node.is_inline_level()
-            && let Twig::Range(_, end_leaf) = self.twigs[idx]
+            && !self.twigs[idx].has_same_idx()
             && self
                 .leaves
-                .get(end_leaf + 1)
+                .get(self.twigs[idx].end() + 1)
                 .is_some_and(|next| match &next.root {
                     Root::Html(HtmlNode::Text(_)) => true,
                     Root::Askama(node) => node.is_expr(),
@@ -352,10 +304,10 @@ impl SakuraTree {
     fn try_complete_element(&self, start_leaf: usize) -> Option<(Ring, usize)> {
         // Get the end_leaf for this element from twigs
         let twig = self.twigs[start_leaf];
-        if twig.is_single() {
+        if twig.has_same_idx() {
             return None;
         }
-        let end_leaf = twig.last();
+        let end_leaf = twig.end();
 
         // Recursively grow inner rings
         let inner = self.grow_rings(start_leaf + 1, end_leaf);
@@ -433,9 +385,9 @@ impl SakuraTree {
 
             // For StartTags, skip to after the end tag
             if matches!(leaf.root, Root::Html(HtmlNode::StartTag { .. }))
-                && let Twig::Range(_, end_leaf) = self.twigs[curr_idx]
+                && !self.twigs[curr_idx].has_same_idx()
             {
-                curr_idx = end_leaf + 1;
+                curr_idx = self.twigs[curr_idx].end() + 1;
                 continue;
             }
 
@@ -460,10 +412,10 @@ impl SakuraTree {
         // If starting with a StartTag, include all leaves up to its end tag
         if let Some(leaf) = self.leaves.get(start_idx)
             && matches!(leaf.root, Root::Html(HtmlNode::StartTag { .. }))
-            && let Twig::Range(_, end_leaf) = self.twigs[start_idx]
+            && !self.twigs[start_idx].has_same_idx()
         {
-            last_idx = end_leaf;
-            curr_idx = end_leaf + 1;
+            last_idx = self.twigs[start_idx].end();
+            curr_idx = self.twigs[start_idx].end() + 1;
         }
 
         // Collect following inline content
@@ -471,12 +423,12 @@ impl SakuraTree {
             let leaf = &self.leaves[curr_idx];
 
             if matches!(leaf.root, Root::Html(HtmlNode::StartTag { .. }))
-                && let Twig::Range(_, end_leaf) = self.twigs[curr_idx]
+                && !self.twigs[curr_idx].has_same_idx()
                 && let Root::Html(html_node) = &leaf.root
                 && html_node.is_inline_level()
             {
-                last_idx = end_leaf;
-                curr_idx = end_leaf + 1;
+                last_idx = self.twigs[curr_idx].end();
+                curr_idx = self.twigs[curr_idx].end() + 1;
                 continue;
             }
 
@@ -554,9 +506,8 @@ impl SakuraTree {
 
 impl Ring {
     pub fn total_chars(&self, tree: &SakuraTree) -> usize {
-        let leaf_indices = self.all_leaf_indices();
-        leaf_indices
-            .iter()
+        self.twig()
+            .indices()
             .filter_map(|i| tree.leaves.get(i))
             .map(Leaf::chars_count)
             .sum()
@@ -565,48 +516,46 @@ impl Ring {
     // Check if any inner rings contain block-level structure
     pub fn has_block(&self, tree: &SakuraTree) -> bool {
         match self {
-            Ring::Element(_, inner) => {
+            Self::Element(_, inner) => {
                 // Check if any inner ring is a block-level element
                 inner.iter().any(|node| match node {
-                    Ring::Element(twig, _) => {
-                        let start = twig.first();
+                    Self::Element(twig, _) => {
+                        let start = twig.start();
                         let Root::Html(html_node) = &tree.leaves[start].root else {
                             unreachable!()
                         };
                         !html_node.is_inline_level()
                     }
-                    Ring::ControlBlock(_, _) | Ring::RawText(_) => true,
+                    Self::ControlBlock(_, _) | Self::RawText(_) => true,
                     _ => node.has_block(tree),
                 })
             }
-            Ring::ControlBlock(_, inner) => inner.iter().any(|node| node.has_block(tree)),
-            Ring::MatchArm(_, inner) => inner.iter().any(|node| node.has_block(tree)),
-            Ring::RawText(_) => true,
+            Self::ControlBlock(_, inner) => inner.iter().any(|node| node.has_block(tree)),
+            Self::MatchArm(_, inner) => inner.iter().any(|node| node.has_block(tree)),
+            Self::RawText(_) => true,
             _ => false,
         }
     }
 
-    pub fn all_leaf_indices(&self) -> Twig {
+    pub fn twig(&self) -> Twig {
         match self {
-            Ring::Element(twig, _)
-            | Ring::TextSequence(twig)
-            | Ring::ControlBlock(twig, _)
-            | Ring::EmptyBlock(twig)
-            | Ring::RawText(twig)
-            | Ring::Comment(twig)
-            | Ring::InlineText(twig)
-            | Ring::Other(twig) => *twig,
+            Self::Element(twig, _)
+            | Self::TextSequence(twig)
+            | Self::ControlBlock(twig, _)
+            | Self::EmptyBlock(twig)
+            | Self::RawText(twig)
+            | Self::Comment(twig)
+            | Self::InlineText(twig)
+            | Self::Other(twig) => *twig,
 
-            Ring::MatchArm(twig, inner) => {
+            Self::MatchArm(twig, inner) => {
                 if inner.is_empty() {
                     return *twig;
                 }
 
                 // Get the last leaf from the last inner ring
-                let first = twig.first();
-                let last = inner
-                    .last()
-                    .map_or(first, |ring| ring.all_leaf_indices().last());
+                let first = twig.start();
+                let last = inner.last().map_or(first, |ring| ring.twig().end());
 
                 (first, last).into()
             }

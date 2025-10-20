@@ -30,7 +30,7 @@ fn ink_inline(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
     let indent_str = indent_for(&tree.config, branch.indent);
     let mut line_content = String::new();
 
-    for (i, leaf_idx) in branch.twig.iter().enumerate() {
+    for (i, leaf_idx) in branch.twig.indices().enumerate() {
         if let Some(leaf) = tree.leaves.get(leaf_idx) {
             let content = content_normalized(leaf);
 
@@ -46,8 +46,8 @@ fn ink_inline(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
 
 fn ink_open_close(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
     let indent_str = indent_for(&tree.config, branch.indent);
-    debug_assert!(branch.twig.is_single());
-    let leaf_idx = branch.twig.first();
+    debug_assert!(branch.twig.has_same_idx());
+    let leaf_idx = branch.twig.start();
 
     if let Some(leaf) = tree.leaves.get(leaf_idx) {
         let content = content_normalized(leaf);
@@ -56,8 +56,8 @@ fn ink_open_close(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
 }
 
 fn ink_wrapped_text(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
-    debug_assert!(branch.twig.is_single());
-    let leaf_idx = branch.twig.first();
+    debug_assert!(branch.twig.has_same_idx());
+    let leaf_idx = branch.twig.start();
 
     if let Some(leaf) = tree.leaves.get(leaf_idx) {
         let content = content_normalized(leaf);
@@ -69,8 +69,8 @@ fn ink_wrapped_text(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch)
 
 fn ink_askama_comment(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
     let indent_str = indent_for(&tree.config, branch.indent);
-    debug_assert!(branch.twig.is_single());
-    let leaf_idx = branch.twig.first();
+    debug_assert!(branch.twig.has_same_idx());
+    let leaf_idx = branch.twig.start();
 
     if let Some(leaf) = tree.leaves.get(leaf_idx) {
         let content = content_normalized(leaf);
@@ -93,7 +93,7 @@ fn ink_wrapped_multiple(inked_tree: &mut String, tree: &SakuraTree, branch: &Bra
     let mut curr_line = String::new();
     let mut lines = Vec::new();
 
-    for (i, leaf_idx) in branch.twig.iter().enumerate() {
+    for (i, leaf_idx) in branch.twig.indices().enumerate() {
         if let Some(leaf) = tree.leaves.get(leaf_idx) {
             let content = content_normalized(leaf);
             let needs_space = i > 0 && should_add_space_before_leaf(tree, leaf_idx, branch.twig, i);
@@ -143,7 +143,7 @@ fn ink_wrapped_multiple(inked_tree: &mut String, tree: &SakuraTree, branch: &Bra
 fn ink_raw(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
     let mut curr_indent = branch.indent;
 
-    for leaf_idx in branch.twig {
+    for leaf_idx in branch.twig.indices() {
         process_raw_leaf(inked_tree, tree, leaf_idx, &mut curr_indent);
     }
 }
@@ -225,7 +225,7 @@ fn normalize_text_content(text: &str) -> String {
 fn should_add_space_before_leaf(
     tree: &SakuraTree,
     curr_leaf_idx: usize,
-    branch_indices: Twig,
+    twig: Twig,
     position_in_branch: usize,
 ) -> bool {
     if position_in_branch == 0 {
@@ -233,7 +233,7 @@ fn should_add_space_before_leaf(
     }
 
     let current = tree.leaves.get(curr_leaf_idx).unwrap();
-    let prev_idx = branch_indices.iter().nth(position_in_branch - 1).unwrap();
+    let prev_idx = twig.indices().nth(position_in_branch - 1).unwrap();
     let prev = tree.leaves.get(prev_idx).unwrap();
 
     let curr_content = content_normalized(current);
