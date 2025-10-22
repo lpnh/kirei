@@ -245,7 +245,7 @@ fn parse_html_node_recursive(
     }
 
     match node.kind() {
-        "document" | "script_element" | "style_element" => {
+        "document" => {
             for child in node.children(&mut node.walk()) {
                 parse_html_node_recursive(&child, source, html_nodes, depth + 1)?;
             }
@@ -270,7 +270,7 @@ fn parse_html_node_recursive(
             let text = node.utf8_text(source)?.to_string();
             html_nodes.push(HtmlNode::Text(text));
         }
-        "element" => {
+        "element" | "script_element" | "style_element" => {
             let start_tag_idx = html_nodes.len();
 
             for child in node.children(&mut node.walk()) {
