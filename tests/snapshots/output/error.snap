@@ -5,7 +5,7 @@ description: "{% extends \"_layout.html\" %}\n{%- block title -%}\n{%- match err
 {% extends "_layout.html" %}
 {%- block title -%}
     {%- match err -%}
-        {% when AppError::NotFound -%} 404: Not Found
+        {% when AppError::NotFound -%}404: Not Found
     {% else -%}
         500: Internal Server Error
     {%- endmatch -%}
@@ -13,7 +13,7 @@ description: "{% extends \"_layout.html\" %}\n{%- block title -%}\n{%- match err
 {%- block content -%}
     <h1>
         {%- match err -%}
-            {% when AppError::NotFound -%} 404: Not Found
+            {% when AppError::NotFound -%}404: Not Found
         {% else -%}
             500: Internal Server Error
         {%- endmatch -%}

@@ -8,9 +8,7 @@ description: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <title>
-            {% block title %}
-                Ice Cream Social Club
-            {% endblock %}
+            {% block title %}Ice Cream Social Club{% endblock %}
         </title>
         <style>
             :root{
