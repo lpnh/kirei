@@ -34,12 +34,12 @@ pub enum Root {
 #[derive(Debug, Clone)]
 pub enum Ring {
     // Compound
-    Element(Twig, Vec<Ring>),
-    ControlBlock(Twig, Vec<Ring>),
-    TextSequence(Twig),
-    MatchArm(Twig, Vec<Ring>),
+    Element(Twig, Option<Vec<Ring>>),
+    ControlBlock(Twig, Option<Vec<Ring>>),
+    MatchArm(Twig, Option<Vec<Ring>>),
 
     // Atomic
+    TextSequence(Twig),
     RawText(Twig),
     Comment(Twig),
     InlineText(Twig),
@@ -224,14 +224,19 @@ impl SakuraTree {
             }
         }
 
-        let rings = tree.grow_rings(0, tree.leaves.len());
-        tree.rings.extend(rings);
+        if let Some(rings) = tree.grow_rings(0, tree.leaves.len()) {
+            tree.rings.extend(rings);
+        }
 
         tree
     }
 
     // Grow concentric rings
-    fn grow_rings(&self, start_idx: usize, end_idx: usize) -> Vec<Ring> {
+    fn grow_rings(&self, start_idx: usize, end_idx: usize) -> Option<Vec<Ring>> {
+        if start_idx >= end_idx {
+            return None;
+        }
+
         let mut rings = Vec::new();
         let mut idx = start_idx;
 
@@ -257,7 +262,7 @@ impl SakuraTree {
             idx = next_idx;
         }
 
-        rings
+        Some(rings)
     }
 
     fn with_single_leaf(&self, idx: usize) -> Ring {
@@ -390,11 +395,7 @@ impl SakuraTree {
         }
 
         // Build rings for the content (if any)
-        let inner = if curr_idx > start_idx + 1 {
-            self.grow_rings(start_idx + 1, curr_idx)
-        } else {
-            Vec::new()
-        };
+        let inner = self.grow_rings(start_idx + 1, curr_idx);
 
         let ring = Ring::MatchArm(start_idx.into(), inner);
         (ring, curr_idx)
@@ -511,7 +512,7 @@ impl Ring {
     // Check if any inner rings contain block-level structure
     pub fn has_block(&self, tree: &SakuraTree) -> bool {
         match self {
-            Self::Element(_, inner) => {
+            Self::Element(_, Some(inner)) => {
                 // Check if any inner ring is a block-level element
                 inner.iter().any(|node| match node {
                     Self::Element(twig, _) => {
@@ -525,8 +526,8 @@ impl Ring {
                     _ => node.has_block(tree),
                 })
             }
-            Self::ControlBlock(_, inner) => inner.iter().any(|node| node.has_block(tree)),
-            Self::MatchArm(_, inner) => inner.iter().any(|node| node.has_block(tree)),
+            Self::ControlBlock(_, Some(inner)) => inner.iter().any(|node| node.has_block(tree)),
+            Self::MatchArm(_, Some(inner)) => inner.iter().any(|node| node.has_block(tree)),
             Self::RawText(_) => true,
             _ => false,
         }
@@ -540,13 +541,9 @@ impl Ring {
             | Self::RawText(twig)
             | Self::Comment(twig)
             | Self::InlineText(twig)
-            | Self::Other(twig) => *twig,
-
-            Self::MatchArm(twig, inner) => {
-                if inner.is_empty() {
-                    return *twig;
-                }
-
+            | Self::Other(twig)
+            | Self::MatchArm(twig, None) => *twig,
+            Self::MatchArm(twig, Some(inner)) => {
                 // Get the last leaf from the last inner ring
                 let first = twig.start();
                 let last = inner.last().map_or(first, |ring| ring.twig().end());

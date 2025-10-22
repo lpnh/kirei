@@ -55,7 +55,7 @@ fn wire_branch(tree: &mut SakuraTree, ring: &Ring, indent_map: &[i32]) {
             if fits && !has_block {
                 push_branch(tree, twig, BranchStyle::Inline, indent_map);
             } else {
-                wire_open_close_branches(tree, twig, inner, indent_map);
+                wire_open_close_branches(tree, twig, inner.as_deref(), indent_map);
             }
         }
         Ring::TextSequence(twig) => {
@@ -100,7 +100,7 @@ fn wire_branch(tree: &mut SakuraTree, ring: &Ring, indent_map: &[i32]) {
 fn wire_open_close_branches(
     tree: &mut SakuraTree,
     twig: &Twig,
-    inner: &[Ring],
+    inner: Option<&[Ring]>,
     indent_map: &[i32],
 ) {
     let indent = get_indent(indent_map, twig);
@@ -111,8 +111,10 @@ fn wire_open_close_branches(
         indent,
     ));
 
-    for ring in inner {
-        wire_branch(tree, ring, indent_map);
+    if let Some(inner) = inner {
+        for ring in inner {
+            wire_branch(tree, ring, indent_map);
+        }
     }
 
     tree.branches.push(Branch::grow(
