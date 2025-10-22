@@ -58,13 +58,6 @@ fn wire_branch(tree: &mut SakuraTree, ring: &Ring, indent_map: &[i32]) {
                 wire_open_close_branches(tree, twig, inner, indent_map);
             }
         }
-        Ring::EmptyBlock(twig) => {
-            if fits {
-                push_branch(tree, twig, BranchStyle::Inline, indent_map);
-            } else {
-                wire_open_close_branches(tree, twig, &[], indent_map);
-            }
-        }
         Ring::TextSequence(twig) => {
             let style = if fits {
                 BranchStyle::Inline

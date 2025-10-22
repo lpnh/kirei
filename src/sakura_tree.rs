@@ -36,7 +36,6 @@ pub enum Ring {
     // Compound
     Element(Twig, Vec<Ring>),
     ControlBlock(Twig, Vec<Ring>),
-    EmptyBlock(Twig),
     TextSequence(Twig),
     MatchArm(Twig, Vec<Ring>),
 
@@ -351,11 +350,7 @@ impl SakuraTree {
                         let inner = self.grow_rings(start_idx + 1, end_leaf);
 
                         let twig = (start_idx, end_leaf).into();
-                        let ring = if inner.is_empty() {
-                            Ring::EmptyBlock(twig)
-                        } else {
-                            Ring::ControlBlock(twig, inner)
-                        };
+                        let ring = Ring::ControlBlock(twig, inner);
                         return Some((ring, end_leaf + 1));
                     }
                     // This closes a nested block, decrement depth
@@ -542,7 +537,6 @@ impl Ring {
             Self::Element(twig, _)
             | Self::TextSequence(twig)
             | Self::ControlBlock(twig, _)
-            | Self::EmptyBlock(twig)
             | Self::RawText(twig)
             | Self::Comment(twig)
             | Self::InlineText(twig)

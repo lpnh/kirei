@@ -36,7 +36,9 @@ description: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8
             <a href="/flavors" class="btn ghost">Flavors</a>
             <a href="/club" class="btn ghost">Club</a>
         </nav>
-        <main>{% block content %}{% endblock %}</main>
+        <main>
+            {% block content %}{% endblock %}
+        </main>
         <footer style="text-align:center;margin-top:36px;color:var(--muted)">
             <small>© 2025 Ice Cream Social Club · Sharing smiles one scoop at a time</small>
         </footer>
