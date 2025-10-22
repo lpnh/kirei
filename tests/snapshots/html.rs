@@ -64,6 +64,11 @@ fn erroneous_end_tag() {
 }
 
 #[test]
+fn no_text() {
+    format_and_snapshot!("html/no_text.html");
+}
+
+#[test]
 fn page() {
     format_and_snapshot!("html/page.html");
 }
