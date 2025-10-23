@@ -146,6 +146,10 @@ impl Leaf {
         matches!(self.root, Root::Html(HtmlNode::Text(_)))
     }
 
+    pub fn is_expr(&self) -> bool {
+        matches!(&self.root, Root::Askama(node) if node.is_expr())
+    }
+
     fn chars_count(&self) -> usize {
         self.content.chars().count()
     }

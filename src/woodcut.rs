@@ -32,7 +32,7 @@ fn ink_inline(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
 
     for (i, leaf_idx) in branch.twig.indices().enumerate() {
         if let Some(leaf) = tree.leaves.get(leaf_idx) {
-            let content = content_normalized(leaf);
+            let content = content_normalized_with_context(tree, leaf, branch.twig, i);
 
             if i > 0 && should_add_space_before_leaf(tree, leaf_idx, branch.twig, i) {
                 line_content.push(' ');
@@ -95,7 +95,7 @@ fn ink_wrapped_multiple(inked_tree: &mut String, tree: &SakuraTree, branch: &Bra
 
     for (i, leaf_idx) in branch.twig.indices().enumerate() {
         if let Some(leaf) = tree.leaves.get(leaf_idx) {
-            let content = content_normalized(leaf);
+            let content = content_normalized_with_context(tree, leaf, branch.twig, i);
             let needs_space = i > 0 && should_add_space_before_leaf(tree, leaf_idx, branch.twig, i);
             let space_len = usize::from(needs_space);
             let would_exceed = curr_line.len() + space_len + content.len() > available_width;
@@ -207,19 +207,36 @@ fn process_raw_leaf(
     }
 }
 
-fn content_normalized(leaf: &Leaf) -> Cow<'_, str> {
-    if leaf.is_html_text() {
-        Cow::Owned(normalize_text_content(&leaf.content))
-    } else {
-        Cow::Borrowed(&leaf.content)
-    }
+fn content_normalized_with_context<'a>(
+    tree: &SakuraTree,
+    leaf: &'a Leaf,
+    twig: Twig,
+    position: usize,
+) -> Cow<'a, str> {
+    let prev_expr = is_askama_expr(tree, twig, position, -1);
+    let next_expr = is_askama_expr(tree, twig, position, 1);
+    normalize_leaf_content(leaf, prev_expr, next_expr)
 }
 
-fn normalize_text_content(text: &str) -> String {
-    let has_trailing = text.ends_with(char::is_whitespace);
-    let trailing = if has_trailing { " " } else { "" };
-    let internal = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    format!("{}{}", internal, trailing)
+fn content_normalized(leaf: &Leaf) -> Cow<'_, str> {
+    normalize_leaf_content(leaf, false, false)
+}
+
+fn normalize_leaf_content(leaf: &Leaf, prev_expr: bool, next_expr: bool) -> Cow<'_, str> {
+    let content = &leaf.content;
+
+    if !leaf.is_html_text() {
+        return Cow::Borrowed(content);
+    }
+
+    let has_leading = content.starts_with(char::is_whitespace);
+    let has_trailing = content.ends_with(char::is_whitespace);
+
+    let leading = if has_leading && prev_expr { " " } else { "" };
+    let trailing = if has_trailing && next_expr { " " } else { "" };
+    let normalized = content.split_whitespace().collect::<Vec<_>>().join(" ");
+
+    Cow::Owned(format!("{}{}{}", leading, normalized, trailing))
 }
 
 fn should_add_space_before_leaf(
@@ -236,13 +253,6 @@ fn should_add_space_before_leaf(
     let prev_idx = twig.indices().nth(position_in_branch - 1).unwrap();
     let prev = tree.leaves.get(prev_idx).unwrap();
 
-    let curr_content = content_normalized(current);
-    let prev_content = content_normalized(prev);
-
-    if curr_content.starts_with(' ') || prev_content.ends_with(' ') {
-        return false;
-    }
-
     match (&prev.root, &current.root) {
         (
             Root::Html(HtmlNode::Text(_)),
@@ -250,19 +260,9 @@ fn should_add_space_before_leaf(
         )
         | (Root::Html(HtmlNode::Entity(_)), Root::Html(HtmlNode::Text(_))) => true,
         (Root::Askama(node), _) if node.is_match_arm() => true,
-        (Root::Askama(node), Root::Html(HtmlNode::Text(_))) => {
-            node.is_expr()
-                && !current
-                    .content
-                    .starts_with(|c: char| c.is_ascii_punctuation())
+        (Root::Html(HtmlNode::EndTag { .. }), _) => {
+            current.is_expr() || current.content.starts_with(char::is_alphabetic)
         }
-        (Root::Html(HtmlNode::Text(_)), Root::Askama(node)) => {
-            node.is_expr() && !prev.content.ends_with(|c: char| c.is_ascii_punctuation())
-        }
-        (Root::Html(HtmlNode::EndTag { .. }), Root::Html(HtmlNode::Text(_))) => {
-            curr_content.starts_with(char::is_alphabetic)
-        }
-        (Root::Html(HtmlNode::EndTag { .. }), Root::Askama(node)) => node.is_expr(),
 
         _ => false,
     }
@@ -287,4 +287,17 @@ fn push_indented_line(inked_tree: &mut String, indent_str: &str, content: &str) 
     inked_tree.push_str(indent_str);
     inked_tree.push_str(content.trim_end());
     inked_tree.push('\n');
+}
+
+fn get_leaf_at_position(tree: &SakuraTree, twig: Twig, position: usize) -> Option<&Leaf> {
+    twig.indices()
+        .nth(position)
+        .and_then(|idx| tree.leaves.get(idx))
+}
+
+fn is_askama_expr(tree: &SakuraTree, twig: Twig, position: usize, offset: isize) -> bool {
+    let target_pos = position.checked_add_signed(offset);
+    target_pos
+        .and_then(|pos| get_leaf_at_position(tree, twig, pos))
+        .is_some_and(|leaf| leaf.is_expr())
 }

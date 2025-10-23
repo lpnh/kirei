@@ -35,6 +35,16 @@ fn tmpl_nested_comment() {
     format_and_snapshot!("rules/whitespace/tmpl_nested_comment.html");
 }
 
+#[test]
+fn mixed_text_sequence() {
+    format_and_snapshot!("rules/whitespace/mixed_text_sequence.html");
+}
+
+#[test]
+fn mixed_no_whitespace_between() {
+    format_and_snapshot!("rules/whitespace/mixed_no_whitespace_between.html");
+}
+
 // === Delimiter Padding
 
 #[test]
