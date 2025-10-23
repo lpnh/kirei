@@ -244,7 +244,7 @@ impl SakuraTree {
             let leaf = &self.leaves[idx];
 
             let (ring, next_idx) = match &leaf.root {
-                Root::Askama(node) if node.is_when_block() => {
+                Root::Askama(node) if node.is_match_arm() => {
                     self.match_arm_with_content(idx, end_idx)
                 }
                 Root::Askama(node) if !node.is_expr() => self
@@ -372,18 +372,26 @@ impl SakuraTree {
     fn match_arm_with_content(&self, start_idx: usize, end_idx: usize) -> (Ring, usize) {
         let mut curr_idx = start_idx + 1;
 
-        // Find the end of the inline content
+        // Find where the content ends
         while curr_idx < end_idx {
             let Some(leaf) = self.leaves.get(curr_idx) else {
                 break;
             };
 
-            // Stop at next control block or comment
-            if matches!(&leaf.root, Root::Askama(node) if node.is_ctrl() || node.is_comment()) {
+            // Stop at next When, Else, or Endmatch
+            if let Root::Askama(node) = &leaf.root
+                && let Some(tag) = node.get_ctrl_tag()
+                && matches!(
+                    tag,
+                    askama::ControlTag::When(_)
+                        | askama::ControlTag::Else(_)
+                        | askama::ControlTag::Endmatch(_)
+                )
+            {
                 break;
             }
 
-            // For StartTags, skip to after the end tag
+            // If start tag, skip to after the end tag
             if matches!(leaf.root, Root::Html(HtmlNode::StartTag { .. }))
                 && !self.twigs[curr_idx].has_same_idx()
             {
@@ -394,11 +402,19 @@ impl SakuraTree {
             curr_idx += 1;
         }
 
-        // Build rings for the content (if any)
-        let inner = self.grow_rings(start_idx + 1, curr_idx);
+        let content_end_idx = curr_idx;
 
-        let ring = Ring::MatchArm(start_idx.into(), inner);
-        (ring, curr_idx)
+        // All or nothing
+        let twig = (start_idx, content_end_idx - 1).into();
+        let temp_ring = Ring::TextSequence(twig);
+        let fits = temp_ring.total_chars(self) <= self.config.max_width;
+
+        if fits {
+            let inner = self.grow_rings(start_idx + 1, content_end_idx);
+            (Ring::MatchArm(start_idx.into(), inner), content_end_idx)
+        } else {
+            (Ring::MatchArm(start_idx.into(), None), start_idx + 1)
+        }
     }
 
     fn try_text_sequence(&self, start_idx: usize, end_idx: usize) -> Option<(Ring, usize)> {

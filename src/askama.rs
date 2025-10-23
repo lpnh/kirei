@@ -144,11 +144,15 @@ impl AskamaNode {
             Self::Control {
                 ctrl_tag: Some(tag),
                 ..
-            } => match tag.boundary() {
-                Boundary::Open => (0, 1),
-                Boundary::Clause => (-1, 1),
-                Boundary::Close => (-1, 0),
-                Boundary::Inner | Boundary::Standalone => (0, 0),
+            } => match tag {
+                ControlTag::Match(_) => (0, 2),
+                ControlTag::Endmatch(_) => (-2, 0),
+                _ => match tag.boundary() {
+                    Boundary::Open => (0, 1),
+                    Boundary::Clause | Boundary::Inner => (-1, 1),
+                    Boundary::Close => (-1, 0),
+                    Boundary::Standalone => (0, 0),
+                },
             },
             _ => (0, 0),
         }
@@ -169,8 +173,11 @@ impl AskamaNode {
             _ => None,
         }
     }
-    pub fn is_when_block(&self) -> bool {
-        matches!(self.get_ctrl_tag(), Some(ControlTag::When(_)))
+    pub fn is_match_arm(&self) -> bool {
+        matches!(
+            self.get_ctrl_tag(),
+            Some(ControlTag::When(_) | ControlTag::Else(Boundary::Inner))
+        )
     }
 }
 
@@ -227,6 +234,28 @@ fn parse_askama_node(node: Node, source: &str) -> Option<AskamaNode> {
     }
 }
 
+fn belongs_to_match_statement(node: Node) -> bool {
+    let Some(parent) = node.parent() else {
+        return false;
+    };
+
+    let mut cursor = parent.walk();
+    let mut prev_node = None;
+
+    for sibling in parent.children(&mut cursor) {
+        if sibling.id() == node.id() {
+            break;
+        }
+        if sibling.kind() == "control_tag" {
+            prev_node = Some(sibling);
+        }
+    }
+
+    prev_node
+        .and_then(|prev| prev.child(1))
+        .is_some_and(|child| child.kind() == "when_statement")
+}
+
 fn detect_block_type(node: Node) -> Option<ControlTag> {
     let child = node.child(1)?;
     match child.kind() {
@@ -238,7 +267,14 @@ fn detect_block_type(node: Node) -> Option<ControlTag> {
         "macro_statement" => Some(ControlTag::Macro(Boundary::Open)),
         "macro_call_statement" => Some(ControlTag::MacroCall(Boundary::Open)),
 
-        "else_statement" => Some(ControlTag::Else(Boundary::Clause)),
+        "else_statement" => {
+            let boundary = if belongs_to_match_statement(node) {
+                Boundary::Inner
+            } else {
+                Boundary::Clause
+            };
+            Some(ControlTag::Else(boundary))
+        }
         "else_if_statement" => Some(ControlTag::ElseIf(Boundary::Clause)),
         "when_statement" => Some(ControlTag::When(Boundary::Inner)),
 

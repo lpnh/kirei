@@ -249,7 +249,7 @@ fn should_add_space_before_leaf(
             Root::Html(HtmlNode::Entity(_) | HtmlNode::StartTag { .. }),
         )
         | (Root::Html(HtmlNode::Entity(_)), Root::Html(HtmlNode::Text(_))) => true,
-
+        (Root::Askama(node), _) if node.is_match_arm() => true,
         (Root::Askama(node), Root::Html(HtmlNode::Text(_))) => {
             node.is_expr()
                 && !current
@@ -259,14 +259,10 @@ fn should_add_space_before_leaf(
         (Root::Html(HtmlNode::Text(_)), Root::Askama(node)) => {
             node.is_expr() && !prev.content.ends_with(|c: char| c.is_ascii_punctuation())
         }
-
         (Root::Html(HtmlNode::EndTag { .. }), Root::Html(HtmlNode::Text(_))) => {
             curr_content.starts_with(char::is_alphabetic)
         }
-
         (Root::Html(HtmlNode::EndTag { .. }), Root::Askama(node)) => node.is_expr(),
-
-        (Root::Askama(node), Root::Html(HtmlNode::StartTag { .. })) => node.is_when_block(),
 
         _ => false,
     }
