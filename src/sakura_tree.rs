@@ -93,7 +93,7 @@ pub enum BranchStyle {
     OpenClose,
     SingleHtmlText,
     Multiple,
-    AskamaComment,
+    MultilineComment,
     Raw,
 }
 

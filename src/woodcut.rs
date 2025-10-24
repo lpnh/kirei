@@ -17,7 +17,7 @@ pub fn print(tree: &SakuraTree) -> String {
             BranchStyle::Inline => ink_inline(&mut inked_tree, tree, branch),
             BranchStyle::OpenClose => ink_open_close(&mut inked_tree, tree, branch),
             BranchStyle::SingleHtmlText => ink_wrapped_text(&mut inked_tree, tree, branch),
-            BranchStyle::AskamaComment => ink_askama_comment(&mut inked_tree, tree, branch),
+            BranchStyle::MultilineComment => ink_multiline_comment(&mut inked_tree, tree, branch),
             BranchStyle::Multiple => ink_wrapped_multiple(&mut inked_tree, tree, branch),
             BranchStyle::Raw => ink_raw(&mut inked_tree, tree, branch),
         }
@@ -67,23 +67,57 @@ fn ink_wrapped_text(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch)
     }
 }
 
-fn ink_askama_comment(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
-    let indent_str = indent_for(&tree.config, branch.indent);
+fn ink_multiline_comment(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
     debug_assert!(branch.twig.has_same_idx());
     let leaf_idx = branch.twig.start();
 
     if let Some(leaf) = tree.leaves.get(leaf_idx) {
-        let content = content_normalized(leaf);
-
-        for (i, line) in content.lines().enumerate() {
-            if i > 0 {
-                inked_tree.push('\n');
+        match &leaf.root {
+            Root::Html(HtmlNode::Comment(content)) => {
+                ink_html_comment(inked_tree, &tree.config, branch, content);
             }
-            inked_tree.push_str(&indent_str);
-            inked_tree.push_str(line.trim_end());
+            _ => {
+                ink_askama_comment(inked_tree, &tree.config, branch.indent, leaf);
+            }
         }
-        inked_tree.push('\n');
     }
+}
+
+fn ink_askama_comment(inked_tree: &mut String, config: &Config, indent_level: i32, leaf: &Leaf) {
+    let indent = indent_for(config, indent_level);
+    let content = content_normalized(leaf);
+
+    for line in content.lines() {
+        if !line.is_empty() {
+            push_indented_line(inked_tree, &indent, line);
+        } else {
+            inked_tree.push('\n');
+        }
+    }
+}
+
+fn ink_html_comment(inked_tree: &mut String, config: &Config, branch: &Branch, content: &str) {
+    const OPEN: &str = "<!--";
+    const CLOSE: &str = "-->";
+
+    let indent = indent_for(config, branch.indent);
+    let inner = &content[OPEN.len()..content.len() - CLOSE.len()];
+    let trimmed = inner.trim();
+
+    push_indented_line(inked_tree, &indent, OPEN);
+
+    if !trimmed.is_empty() {
+        if trimmed.len() <= config.max_width {
+            let content_indent = indent_for(config, branch.indent + 1);
+            push_indented_line(inked_tree, &content_indent, trimmed);
+        } else {
+            let wrapped = wrap_inline_content(config, trimmed, branch.indent + 1);
+            inked_tree.push_str(&wrapped);
+            inked_tree.push('\n');
+        }
+    }
+
+    push_indented_line(inked_tree, &indent, CLOSE);
 }
 
 fn ink_wrapped_multiple(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
@@ -234,7 +268,7 @@ fn normalize_leaf_content(leaf: &Leaf, prev_expr: bool, next_expr: bool) -> Cow<
 
     let leading = if has_leading && prev_expr { " " } else { "" };
     let trailing = if has_trailing && next_expr { " " } else { "" };
-    let normalized = content.split_whitespace().collect::<Vec<_>>().join(" ");
+    let normalized = crate::normalize_whitespace(content);
 
     Cow::Owned(format!("{}{}{}", leading, normalized, trailing))
 }

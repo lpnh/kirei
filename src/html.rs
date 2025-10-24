@@ -260,7 +260,8 @@ fn parse_html_node_recursive(
         "erroneous_end_tag" => html_nodes.push(parse_erroneous_end_tag(node, source)),
         "comment" => {
             let text = node.utf8_text(source)?.to_string();
-            html_nodes.push(HtmlNode::Comment(text));
+            let normalized = format_comment(&text);
+            html_nodes.push(HtmlNode::Comment(normalized));
         }
         "entity" => {
             let text = node.utf8_text(source)?.to_string();
@@ -426,4 +427,18 @@ fn replace_attr_placeholder(attr: Vec<Attribute>, askama_nodes: &[AskamaNode]) -
     attr.into_iter()
         .map(|attr| attr.replace_placeholder(askama_nodes))
         .collect()
+}
+
+fn format_comment(content: &str) -> String {
+    let open = "<!--";
+    let close = "-->";
+
+    let inner = &content[open.len()..content.len() - close.len()];
+    let normalized = crate::normalize_whitespace(inner);
+
+    if normalized.is_empty() {
+        format!("{}{}", open, close)
+    } else {
+        format!("{} {} {}", open, normalized, close)
+    }
 }

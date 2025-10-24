@@ -74,7 +74,7 @@ fn wire_branch(tree: &mut SakuraTree, ring: &Ring, indent_map: &[i32]) {
             let style = if fits {
                 BranchStyle::Inline
             } else {
-                BranchStyle::AskamaComment
+                BranchStyle::MultilineComment
             };
             push_branch(tree, twig, style, indent_map);
         }

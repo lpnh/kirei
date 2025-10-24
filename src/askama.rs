@@ -336,8 +336,8 @@ pub fn format_askama_node(config: &Config, node: &AskamaNode) -> String {
         // Respect user's line breaks by processing each line separately
         let mut formatted_lines = Vec::new();
 
-        // Remove leading whitespace to avoid extra empty lines
-        let trimmed_inner = inner.trim_start();
+        // Remove whitespace to avoid extra empty lines
+        let trimmed_inner = inner.trim();
 
         for line in trimmed_inner.lines() {
             let trimmed_line = line.trim();
@@ -372,7 +372,7 @@ pub fn replace_placeholder_in_raw_text(text: &str, nodes: &[AskamaNode]) -> Stri
 
 pub fn fmt_node_for_attr_or_raw_text(node: &AskamaNode) -> String {
     let (open, close) = node.delimiters();
-    let inner = normalize_whitespace(node.inner());
+    let inner = crate::normalize_whitespace(node.inner());
     format!("{} {} {}", open, inner.trim(), close)
 }
 
@@ -389,21 +389,17 @@ fn normalize_askama_node(node: &AskamaNode, config: &Config) -> (String, String,
         // Special treatment for comments
         normalize_askama_comment(raw_inner, config.max_width)
     } else {
-        normalize_whitespace(raw_inner)
+        crate::normalize_whitespace(raw_inner)
     };
 
     (open, close, inner)
 }
 
 fn normalize_askama_comment(text: &str, max_length: usize) -> String {
-    let normalized = normalize_whitespace(text);
+    let normalized = crate::normalize_whitespace(text);
     if normalized.len() <= max_length {
         normalized
     } else {
         text.to_string()
     }
-}
-
-fn normalize_whitespace(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
