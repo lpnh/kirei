@@ -163,11 +163,12 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                         <legend>Ice Cream Preferences</legend>
                         <!-- Radio buttons with inline elements -->
                         <p>
-                            Size: <label><input type="radio" name="size" value="single" checked />
-                            Single Scoop 🍦
-                            </label><label><input type="radio" name="size" value="double" />
-                            Double Scoop 🍦🍦
+                            Size:
+                            <label>
+                                <input type="radio" name="size" value="single" checked />
+                                Single Scoop 🍦
                             </label>
+                            <label><input type="radio" name="size" value="double" />Double Scoop 🍦🍦</label>
                         </p>
                         <!-- Checkboxes with various formatting -->
                         <p>Flavors:</p>
@@ -273,10 +274,9 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 <h2>Customer Testimonials</h2>
                 <blockquote cite="https://example.com/review1" style="background: #f0f0f0; padding: 15px; border-left: 5px solid #87CEEB; font-style: italic;">
                     <p>
-                        "This ice cream is <strong>absolutely</strong><em>
-                        incredible
-                        </em>! I've never tasted anything so <mark>creamy</mark>
-                        . The texture was
+                        "This ice cream is <strong>absolutely</strong>
+                        <em>incredible</em>! I've never tasted anything so
+                        <mark>creamy</mark>. The texture was
                         <u>perfectly smooth</u>, and the flavor was <s>good</s>
                         AMAZING!"
                     </p>
@@ -287,16 +287,14 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 <p>
                     Our ice cream contains the following
                     <abbr title="Generally Recognized as Safe">GRAS</abbr>
-                    ingredients. We use
-                    <code>document.cookie</code>
+                    ingredients. We use <code>document.cookie</code>
                     to remember your favorites! For nutrition info, check our
                     <a href="#nutrition">nutrition section</a>.
                 </p>
                 <!-- Mixed inline elements -->
                 <p>
-                    Scoops& Dreams: Where <sup>super</sup> meets <sub>creamy</sub>
-                    ! We've been serving
-                    <small>(big)</small>
+                    Scoops& Dreams: Where <sup>super</sup> meets
+                    <sub>creamy</sub>! We've been serving <small>(big)</small>
                     smiles since 1985. Mathematical proof: Ice Cream + Love =
                     ∞ Happiness!
                 </p>
@@ -319,8 +317,7 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 <!-- Self-closing tags with various formats -->
                 <p>
                     Flavor 1<br />Flavor 2 with space<br />
-                    Flavor 3 with self-closing
-                    <br />Flavor 4 compact
+                    Flavor 3 with self-closing<br />Flavor 4 compact
                 </p>
                 <hr style="margin: 20px 0; border: 2px dashed #87CEEB;" />
                 <p>Ice cream gallery:</p>
@@ -352,9 +349,7 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 <p>Freezing process: <progress value="75" max="100">75%</progress></p>
                 <p>
                     Freezer temperature:
-                    <meter value="-10" min="-20" max="0" optimum="-18" title="-10°F">
-                    -10°F
-                    </meter>
+                    <meter value="-10" min="-20" max="0" optimum="-18" title="-10°F">-10°F</meter>
                 </p>
             </section>
         </main>
@@ -364,11 +359,10 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 <strong>Scoops& Dreams</strong>
                 <br />
                 456 Frozen Lane<br />Sweet City, SC 67890<br />
-                <a href="tel:+1-555-SCOOPS" style="color: #87CEEB;">
-                📞 1-555-SCOOPS
-                </a><br />
+                <a href="tel:+1-555-SCOOPS" style="color: #87CEEB;">📞 1-555-SCOOPS</a>
+                <br />
                 <a href="mailto:info@scoopsanddreams.com" style="color: #87CEEB;">
-                📧 info@scoopsanddreams.com
+                    📧 info@scoopsanddreams.com
                 </a>
             </address>
             <p style="margin-top: 20px;">

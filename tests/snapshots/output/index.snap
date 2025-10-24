@@ -55,7 +55,8 @@ description: "{% extends \"_layout.html\" %}\n{%- block title -%}\n{#-\n    In h
                     {%- when Lang::de -%} Ich heiße
                     {%- when Lang::fr -%} Je m'appelle
                 {%- endmatch -%}
-                :<input type="text" value="{{ name }}" name="name" required style="width: 10em" />
+                :
+                <input type="text" value="{{ name }}" name="name" required style="width: 10em" />
             </label>
         </p>
         <p>

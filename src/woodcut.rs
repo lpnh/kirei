@@ -18,7 +18,6 @@ pub fn print(tree: &SakuraTree) -> String {
             BranchStyle::OpenClose => ink_open_close(&mut inked_tree, tree, branch),
             BranchStyle::SingleHtmlText => ink_wrapped_text(&mut inked_tree, tree, branch),
             BranchStyle::MultilineComment => ink_multiline_comment(&mut inked_tree, tree, branch),
-            BranchStyle::Multiple => ink_wrapped_multiple(&mut inked_tree, tree, branch),
             BranchStyle::Raw => ink_raw(&mut inked_tree, tree, branch),
         }
     }
@@ -117,58 +116,6 @@ fn ink_html_comment(inked_tree: &mut String, config: &Config, branch: &Branch, c
     }
 
     push_indented_line(inked_tree, &indent, CLOSE);
-}
-
-fn ink_wrapped_multiple(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
-    let indent_str = indent_for(&tree.config, branch.indent);
-    let available_width = tree.config.max_width - indent_str.len();
-
-    let mut curr_line = String::new();
-    let mut lines = Vec::new();
-
-    for (i, leaf_idx) in branch.twig.indices().enumerate() {
-        if let Some(leaf) = tree.leaves.get(leaf_idx) {
-            let content = content_normalized_with_context(tree, leaf, branch.twig, i);
-            let needs_space = i > 0 && should_add_space_before_leaf(tree, leaf_idx, branch.twig, i);
-            let space_len = usize::from(needs_space);
-            let would_exceed = curr_line.len() + space_len + content.len() > available_width;
-
-            if would_exceed {
-                let is_start_tag = matches!(&leaf.root, Root::Html(HtmlNode::StartTag { .. }));
-
-                if is_start_tag {
-                    lines.push(curr_line.to_string());
-                    curr_line = String::new();
-                    curr_line.push_str(&content);
-                    continue;
-                } else if leaf.is_html_text() {
-                    if !curr_line.is_empty() {
-                        lines.push(curr_line.to_string());
-                        curr_line = String::new();
-                    }
-                    let wrapped = wrap_inline_content(&tree.config, &content, branch.indent);
-                    for wrapped_line in wrapped.lines() {
-                        lines.push(wrapped_line.trim_start().to_string());
-                    }
-                    continue;
-                }
-            }
-
-            if needs_space && !curr_line.is_empty() {
-                curr_line.push(' ');
-            }
-
-            curr_line.push_str(&content);
-        }
-    }
-
-    lines.push(curr_line.to_string());
-
-    for line in lines {
-        if !line.is_empty() {
-            push_indented_line(inked_tree, &indent_str, &line);
-        }
-    }
 }
 
 fn ink_raw(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {

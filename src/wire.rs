@@ -58,13 +58,12 @@ fn wire_branch(tree: &mut SakuraTree, ring: &Ring, indent_map: &[i32]) {
                 wire_open_close_branches(tree, twig, inner.as_deref(), indent_map);
             }
         }
-        Ring::TextSequence(twig) => {
-            let style = if fits {
-                BranchStyle::Inline
+        Ring::TextSequence(twig, inner) => {
+            if fits {
+                push_branch(tree, twig, BranchStyle::Inline, indent_map);
             } else {
-                BranchStyle::Multiple
-            };
-            push_branch(tree, twig, style, indent_map);
+                split_text_sequence(tree, twig, inner, indent_map);
+            }
         }
         Ring::MatchArm(_, _) => push_branch(tree, &ring.twig(), BranchStyle::Inline, indent_map),
 
@@ -127,6 +126,73 @@ fn wire_open_close_branches(
 // Indent based on the start leaf
 fn get_indent(indent_map: &[i32], twig: &Twig) -> i32 {
     indent_map.get(twig.start()).copied().unwrap_or(0)
+}
+
+fn split_text_sequence(
+    tree: &mut SakuraTree,
+    twig: &Twig,
+    inner: &[Ring],
+    indent_map: &[i32],
+) {
+    let indent = get_indent(indent_map, twig);
+    let indent_width = (indent as usize) * tree.config.indent_size;
+    let available_width = tree.config.max_width.saturating_sub(indent_width);
+
+    let mut line_start = twig.start();
+    let mut line_end = twig.start();
+    let mut line_width = 0;
+
+    for (i, ring) in inner.iter().enumerate() {
+        let ring_width = ring.total_chars(tree);
+        let space_width = if i > 0 && line_width > 0 { 1 } else { 0 };
+        let total_width = line_width + space_width + ring_width;
+
+        if total_width > available_width && line_width > 0 {
+            // Check if this ring is wrappable text
+            if matches!(ring, Ring::InlineText(_)) && ring_width > available_width / 2 {
+                // Emit current line if not empty
+                if line_width > 0 {
+                    tree.branches
+                        .push(Branch::grow((line_start, line_end).into(), BranchStyle::Inline, indent));
+                }
+                // Emit the text as wrapped
+                tree.branches.push(Branch::grow(
+                    ring.twig(),
+                    BranchStyle::SingleHtmlText,
+                    indent,
+                ));
+                // Reset for next line
+                if let Some(next_ring) = inner.get(i + 1) {
+                    line_start = next_ring.twig().start();
+                    line_end = next_ring.twig().start();
+                } else {
+                    line_start = tree.leaves.len();
+                    line_end = tree.leaves.len();
+                }
+                line_width = 0;
+                continue;
+            }
+
+            // Emit current line
+            tree.branches
+                .push(Branch::grow((line_start, line_end).into(), BranchStyle::Inline, indent));
+
+            // Start new line
+            line_start = ring.twig().start();
+            line_end = ring.twig().end();
+            line_width = ring_width;
+        } else {
+            // Add to current line
+            line_end = ring.twig().end();
+            line_width = total_width;
+        }
+    }
+
+    // Emit final line
+    if line_width > 0 {
+        tree.branches
+            .push(Branch::grow((line_start, line_end).into(), BranchStyle::Inline, indent));
+    }
 }
 
 fn push_branch(tree: &mut SakuraTree, twig: &Twig, style: BranchStyle, indent_map: &[i32]) {

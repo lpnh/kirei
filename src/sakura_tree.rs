@@ -37,9 +37,9 @@ pub enum Ring {
     Element(Twig, Option<Vec<Ring>>),
     ControlBlock(Twig, Option<Vec<Ring>>),
     MatchArm(Twig, Option<Vec<Ring>>),
+    TextSequence(Twig, Vec<Ring>),
 
     // Atomic
-    TextSequence(Twig),
     RawText(Twig),
     Comment(Twig),
     InlineText(Twig),
@@ -92,7 +92,6 @@ pub enum BranchStyle {
     Inline,
     OpenClose,
     SingleHtmlText,
-    Multiple,
     MultilineComment,
     Raw,
 }
@@ -410,7 +409,7 @@ impl SakuraTree {
 
         // All or nothing
         let twig = (start_idx, content_end_idx - 1).into();
-        let temp_ring = Ring::TextSequence(twig);
+        let temp_ring = Ring::TextSequence(twig, Vec::new());
         let fits = temp_ring.total_chars(self) <= self.config.max_width;
 
         if fits {
@@ -424,14 +423,32 @@ impl SakuraTree {
     fn try_text_sequence(&self, start_idx: usize, end_idx: usize) -> Option<(Ring, usize)> {
         let mut last_idx = start_idx;
         let mut curr_idx = start_idx + 1;
+        let mut inner_rings = Vec::new();
 
-        // If starting with a StartTag, include all leaves up to its end tag
-        if let Some(leaf) = self.leaves.get(start_idx)
-            && matches!(leaf.root, Root::Html(HtmlNode::StartTag { .. }))
-            && !self.twigs[start_idx].has_same_idx()
-        {
-            last_idx = self.twigs[start_idx].end();
-            curr_idx = self.twigs[start_idx].end() + 1;
+        // Process first element
+        if let Some(leaf) = self.leaves.get(start_idx) {
+            if matches!(leaf.root, Root::Html(HtmlNode::StartTag { .. }))
+                && !self.twigs[start_idx].has_same_idx()
+            {
+                // Check if complete element fits inline
+                let elem_twig = self.twigs[start_idx];
+                let elem_width: usize = elem_twig
+                    .indices()
+                    .filter_map(|i| self.leaves.get(i))
+                    .map(Leaf::chars_count)
+                    .sum();
+
+                if elem_width > self.config.max_width {
+                    return None;
+                }
+
+                let elem_inner = self.grow_rings(start_idx + 1, elem_twig.end());
+                inner_rings.push(Ring::Element(elem_twig, elem_inner));
+                last_idx = elem_twig.end();
+                curr_idx = elem_twig.end() + 1;
+            } else {
+                inner_rings.push(self.with_single_leaf(start_idx));
+            }
         }
 
         // Collect following inline content
@@ -443,8 +460,22 @@ impl SakuraTree {
                 && let Root::Html(html_node) = &leaf.root
                 && html_node.is_inline_level()
             {
-                last_idx = self.twigs[curr_idx].end();
-                curr_idx = self.twigs[curr_idx].end() + 1;
+                // Check if complete element fits inline
+                let elem_twig = self.twigs[curr_idx];
+                let elem_width: usize = elem_twig
+                    .indices()
+                    .filter_map(|i| self.leaves.get(i))
+                    .map(Leaf::chars_count)
+                    .sum();
+
+                if elem_width > self.config.max_width {
+                    break;
+                }
+
+                let elem_inner = self.grow_rings(curr_idx + 1, elem_twig.end());
+                inner_rings.push(Ring::Element(elem_twig, elem_inner));
+                last_idx = elem_twig.end();
+                curr_idx = elem_twig.end() + 1;
                 continue;
             }
 
@@ -454,6 +485,7 @@ impl SakuraTree {
             };
 
             if can_include {
+                inner_rings.push(self.with_single_leaf(curr_idx));
                 last_idx = curr_idx;
                 curr_idx += 1;
             } else {
@@ -461,12 +493,10 @@ impl SakuraTree {
             }
         }
 
-        if last_idx > start_idx {
-            let ring = Ring::TextSequence((start_idx, last_idx).into());
-            return Some((ring, curr_idx));
-        }
-
-        None
+        (last_idx > start_idx).then(|| {
+            let ring = Ring::TextSequence((start_idx, last_idx).into(), inner_rings);
+            (ring, curr_idx)
+        })
     }
 
     fn find_placeholders(
@@ -548,6 +578,7 @@ impl Ring {
             }
             Self::ControlBlock(_, Some(inner)) => inner.iter().any(|node| node.has_block(tree)),
             Self::MatchArm(_, Some(inner)) => inner.iter().any(|node| node.has_block(tree)),
+            Self::TextSequence(_, inner) => inner.iter().any(|node| node.has_block(tree)),
             Self::RawText(_) => true,
             _ => false,
         }
@@ -556,7 +587,7 @@ impl Ring {
     pub fn twig(&self) -> Twig {
         match self {
             Self::Element(twig, _)
-            | Self::TextSequence(twig)
+            | Self::TextSequence(twig, _)
             | Self::ControlBlock(twig, _)
             | Self::RawText(twig)
             | Self::Comment(twig)
