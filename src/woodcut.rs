@@ -85,9 +85,8 @@ fn ink_multiline_comment(inked_tree: &mut String, tree: &SakuraTree, branch: &Br
 
 fn ink_askama_comment(inked_tree: &mut String, config: &Config, indent_level: i32, leaf: &Leaf) {
     let indent = indent_for(config, indent_level);
-    let content = content_normalized(leaf);
 
-    for line in content.lines() {
+    for line in leaf.content.lines() {
         if !line.is_empty() {
             push_indented_line(inked_tree, &indent, line);
         } else {
@@ -134,17 +133,17 @@ fn ink_wrapped_multiple(inked_tree: &mut String, tree: &SakuraTree, branch: &Bra
             let space_len = usize::from(needs_space);
             let would_exceed = curr_line.len() + space_len + content.len() > available_width;
 
-            if would_exceed && !curr_line.is_empty() {
+            if would_exceed {
                 let is_start_tag = matches!(&leaf.root, Root::Html(HtmlNode::StartTag { .. }));
 
                 if is_start_tag {
-                    lines.push(curr_line.trim_end().to_string());
+                    lines.push(curr_line.to_string());
                     curr_line = String::new();
                     curr_line.push_str(&content);
                     continue;
                 } else if leaf.is_html_text() {
                     if !curr_line.is_empty() {
-                        lines.push(curr_line.trim_end().to_string());
+                        lines.push(curr_line.to_string());
                         curr_line = String::new();
                     }
                     let wrapped = wrap_inline_content(&tree.config, &content, branch.indent);
@@ -163,12 +162,10 @@ fn ink_wrapped_multiple(inked_tree: &mut String, tree: &SakuraTree, branch: &Bra
         }
     }
 
-    if !curr_line.trim().is_empty() {
-        lines.push(curr_line.trim_end().to_string());
-    }
+    lines.push(curr_line.to_string());
 
     for line in lines {
-        if !line.trim().is_empty() {
+        if !line.is_empty() {
             push_indented_line(inked_tree, &indent_str, &line);
         }
     }
@@ -191,13 +188,12 @@ fn process_raw_leaf(
     if let Some(leaf) = tree.leaves.get(leaf_idx) {
         let content = &leaf.content;
 
-        if !content.trim().is_empty() {
+        if !content.is_empty() {
             for line in content.lines() {
-                if line.trim().is_empty() {
+                if line.is_empty() {
                     inked_tree.push('\n');
                 } else {
-                    let trimmed = line.trim();
-                    let temp_indent_decrease = trimmed.starts_with('}');
+                    let temp_indent_decrease = line.starts_with('}');
 
                     if temp_indent_decrease {
                         *curr_indent = curr_indent.saturating_sub(1);
@@ -205,18 +201,18 @@ fn process_raw_leaf(
 
                     let indent_str = indent_for(&tree.config, *curr_indent);
                     inked_tree.push_str(&indent_str);
-                    inked_tree.push_str(trimmed);
+                    inked_tree.push_str(line);
                     inked_tree.push('\n');
 
-                    if trimmed.ends_with('{') {
+                    if line.ends_with('{') {
                         *curr_indent += 1;
                     }
 
-                    let open_braces = trimmed.matches('{').count();
-                    let close_braces = trimmed.matches('}').count();
+                    let open_braces = line.matches('{').count();
+                    let close_braces = line.matches('}').count();
                     let net_change = open_braces as i32 - close_braces as i32;
 
-                    let net_change = if trimmed.ends_with('{') && net_change > 0 {
+                    let net_change = if line.ends_with('{') && net_change > 0 {
                         net_change - 1
                     } else {
                         net_change
@@ -319,7 +315,7 @@ fn indent_for(config: &Config, indent: i32) -> String {
 
 fn push_indented_line(inked_tree: &mut String, indent_str: &str, content: &str) {
     inked_tree.push_str(indent_str);
-    inked_tree.push_str(content.trim_end());
+    inked_tree.push_str(content);
     inked_tree.push('\n');
 }
 
