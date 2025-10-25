@@ -3,12 +3,11 @@ use textwrap::{Options, wrap};
 
 use crate::{
     config::Config,
-    html::HtmlNode,
-    sakura_tree::{Branch, BranchStyle, Leaf, Root, SakuraTree, Twig},
+    sakura_tree::{Branch, BranchStyle, Leaf, SakuraTree, Twig},
 };
 
 pub fn print(tree: &SakuraTree) -> String {
-    let estimated_inked_tree_size = tree.leaves.iter().map(|l| l.content.len()).sum::<usize>()
+    let estimated_inked_tree_size = tree.leaves.iter().map(Leaf::chars_count).sum::<usize>()
         + tree.leaves.len() * (tree.config.indent_size * 4);
     let mut inked_tree = String::with_capacity(estimated_inked_tree_size);
 
@@ -71,9 +70,9 @@ fn ink_multiline_comment(inked_tree: &mut String, tree: &SakuraTree, branch: &Br
     let leaf_idx = branch.twig.start();
 
     if let Some(leaf) = tree.leaves.get(leaf_idx) {
-        match &leaf.root {
-            Root::Html(HtmlNode::Comment(content)) => {
-                ink_html_comment(inked_tree, &tree.config, branch, content);
+        match leaf {
+            Leaf::HtmlComment(_) => {
+                ink_html_comment(inked_tree, &tree.config, branch, leaf.content());
             }
             _ => {
                 ink_askama_comment(inked_tree, &tree.config, branch.indent, leaf);
@@ -85,7 +84,7 @@ fn ink_multiline_comment(inked_tree: &mut String, tree: &SakuraTree, branch: &Br
 fn ink_askama_comment(inked_tree: &mut String, config: &Config, indent_level: i32, leaf: &Leaf) {
     let indent = indent_for(config, indent_level);
 
-    for line in leaf.content.lines() {
+    for line in leaf.content().lines() {
         if !line.is_empty() {
             push_indented_line(inked_tree, &indent, line);
         } else {
@@ -133,7 +132,7 @@ fn process_raw_leaf(
     curr_indent: &mut i32,
 ) {
     if let Some(leaf) = tree.leaves.get(leaf_idx) {
-        let content = &leaf.content;
+        let content = leaf.content();
 
         if !content.is_empty() {
             for line in content.lines() {
@@ -200,9 +199,9 @@ fn content_normalized(leaf: &Leaf) -> Cow<'_, str> {
 }
 
 fn normalize_leaf_content(leaf: &Leaf, prev_expr: bool, next_expr: bool) -> Cow<'_, str> {
-    let content = &leaf.content;
+    let content = leaf.content();
 
-    if !leaf.is_html_text() {
+    if !matches!(leaf, Leaf::HtmlText(_)) {
         return Cow::Borrowed(content);
     }
 
@@ -230,17 +229,13 @@ fn should_add_space_before_leaf(
     let prev_idx = twig.indices().nth(position_in_branch - 1).unwrap();
     let prev = tree.leaves.get(prev_idx).unwrap();
 
-    match (&prev.root, &current.root) {
-        (
-            Root::Html(HtmlNode::Text(_)),
-            Root::Html(HtmlNode::Entity(_) | HtmlNode::StartTag { .. }),
-        )
-        | (Root::Html(HtmlNode::Entity(_)), Root::Html(HtmlNode::Text(_))) => true,
-        (Root::Askama(node), _) if node.is_match_arm() => true,
-        (Root::Html(HtmlNode::EndTag { .. }), _) => {
-            current.is_expr() || current.content.starts_with(char::is_alphabetic)
+    match (prev, current) {
+        (Leaf::HtmlText(_), Leaf::HtmlEntity(_) | Leaf::HtmlStartTag { .. })
+        | (Leaf::HtmlEntity(_), Leaf::HtmlText(_)) => true,
+        (Leaf::AskamaControl { tag, .. }, _) => tag.is_match_arm(),
+        (Leaf::HtmlEndTag { .. }, _) => {
+            current.is_expr() || current.content().starts_with(char::is_alphabetic)
         }
-
         _ => false,
     }
 }
@@ -276,5 +271,5 @@ fn is_askama_expr(tree: &SakuraTree, twig: Twig, position: usize, offset: isize)
     let target_pos = position.checked_add_signed(offset);
     target_pos
         .and_then(|pos| get_leaf_at_position(tree, twig, pos))
-        .is_some_and(|leaf| leaf.is_expr())
+        .is_some_and(Leaf::is_expr)
 }

@@ -33,6 +33,7 @@ pub enum HtmlNode {
     },
 }
 
+
 #[derive(Debug, Clone)]
 pub struct Attribute {
     name: String,
@@ -109,70 +110,6 @@ impl HtmlNode {
         )
     }
 
-    // Elements that can be displayed inline
-    pub fn is_inline_level(&self) -> bool {
-        // Text, raw text and entities are always inline
-        if matches!(self, Self::Text(_) | Self::RawText(_) | Self::Entity(_)) {
-            return true;
-        }
-        // Comments and doctypes are usually not inline
-        if matches!(self, Self::Comment(_) | Self::Doctype(_)) {
-            return false;
-        }
-
-        self.get_tag_name().is_some_and(|name| {
-            matches!(
-                name.to_lowercase().as_str(),
-                "a" | "abbr"
-                    | "acronym"
-                    | "b"
-                    | "bdi"
-                    | "bdo"
-                    | "big"
-                    | "br"
-                    | "button"
-                    | "cite"
-                    | "code"
-                    | "dfn"
-                    | "em"
-                    | "i"
-                    | "img"
-                    | "input"
-                    | "kbd"
-                    | "label"
-                    | "map"
-                    | "mark"
-                    | "meter"
-                    | "noscript"
-                    | "object"
-                    | "output"
-                    | "progress"
-                    | "q"
-                    | "ruby"
-                    | "s"
-                    | "samp"
-                    | "script"
-                    | "select"
-                    | "small"
-                    | "span"
-                    | "strong"
-                    | "sub"
-                    | "sup"
-                    | "textarea"
-                    | "time"
-                    | "tt"
-                    | "u"
-                    | "var"
-                    | "wbr"
-            )
-        })
-    }
-
-    // Check if this is a closing tag
-    pub fn is_closing_tag(&self) -> bool {
-        matches!(self, Self::EndTag { .. } | Self::ErroneousEndTag { .. })
-    }
-
     // Get the tag name if this is any kind of tag
     fn get_tag_name(&self) -> Option<&str> {
         match self {
@@ -225,6 +162,53 @@ impl HtmlNode {
             other => other,
         }
     }
+}
+
+pub fn is_inline_tag_name(name: &str) -> bool {
+    matches!(
+        name.to_lowercase().as_str(),
+        "a" | "abbr"
+            | "acronym"
+            | "b"
+            | "bdi"
+            | "bdo"
+            | "big"
+            | "br"
+            | "button"
+            | "cite"
+            | "code"
+            | "dfn"
+            | "em"
+            | "i"
+            | "img"
+            | "input"
+            | "kbd"
+            | "label"
+            | "map"
+            | "mark"
+            | "meter"
+            | "noscript"
+            | "object"
+            | "output"
+            | "progress"
+            | "q"
+            | "ruby"
+            | "s"
+            | "samp"
+            | "script"
+            | "select"
+            | "small"
+            | "span"
+            | "strong"
+            | "sub"
+            | "sup"
+            | "textarea"
+            | "time"
+            | "tt"
+            | "u"
+            | "var"
+            | "wbr"
+    )
 }
 
 pub fn parse_html_tree(root_node: &Node, source: &[u8]) -> Result<Vec<HtmlNode>> {

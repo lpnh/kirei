@@ -1,7 +1,4 @@
-use crate::{
-    html,
-    sakura_tree::{Branch, BranchStyle, Ring, Root, SakuraTree, Twig},
-};
+use crate::sakura_tree::{Branch, BranchStyle, Leaf, Ring, SakuraTree, Twig};
 
 pub fn wire(tree: &mut SakuraTree) {
     let indent_map = analyze_indentation_structure(tree);
@@ -13,24 +10,19 @@ fn analyze_indentation_structure(tree: &SakuraTree) -> Vec<i32> {
     let mut curr_indent = 0;
 
     for (i, leaf) in tree.leaves.iter().enumerate() {
-        if let Root::Html(html_node) = &leaf.root
-            && html_node.is_closing_tag()
-        {
+        if matches!(leaf, Leaf::HtmlEndTag { .. }) {
             curr_indent = (curr_indent - 1).max(0);
         }
 
-        if let Some(askama_node) = leaf.maybe_askama_node() {
-            let (pre_delta, post_delta) = askama_node.indent_delta();
-            curr_indent = (curr_indent + pre_delta).max(0);
-            indent_map[i] = curr_indent;
-            curr_indent = (curr_indent + post_delta).max(0);
-        } else {
-            indent_map[i] = curr_indent;
-        }
+        let (pre_delta, post_delta) = match leaf {
+            Leaf::AskamaControl { tag, .. } => tag.indent_delta(),
+            _ => (0, 0),
+        };
+        curr_indent = (curr_indent + pre_delta).max(0);
+        indent_map[i] = curr_indent;
+        curr_indent = (curr_indent + post_delta).max(0);
 
-        if let Root::Html(html_node) = &leaf.root
-            && matches!(html_node, html::HtmlNode::StartTag { .. })
-        {
+        if let Leaf::HtmlStartTag { .. } = leaf {
             curr_indent += 1;
         }
     }
@@ -128,12 +120,7 @@ fn get_indent(indent_map: &[i32], twig: &Twig) -> i32 {
     indent_map.get(twig.start()).copied().unwrap_or(0)
 }
 
-fn split_text_sequence(
-    tree: &mut SakuraTree,
-    twig: &Twig,
-    inner: &[Ring],
-    indent_map: &[i32],
-) {
+fn split_text_sequence(tree: &mut SakuraTree, twig: &Twig, inner: &[Ring], indent_map: &[i32]) {
     let indent = get_indent(indent_map, twig);
     let indent_width = (indent as usize) * tree.config.indent_size;
     let available_width = tree.config.max_width.saturating_sub(indent_width);
@@ -144,7 +131,7 @@ fn split_text_sequence(
 
     for (i, ring) in inner.iter().enumerate() {
         let ring_width = ring.total_chars(tree);
-        let space_width = if i > 0 && line_width > 0 { 1 } else { 0 };
+        let space_width = usize::from(i > 0 && line_width > 0);
         let total_width = line_width + space_width + ring_width;
 
         if total_width > available_width && line_width > 0 {
@@ -152,8 +139,11 @@ fn split_text_sequence(
             if matches!(ring, Ring::InlineText(_)) && ring_width > available_width / 2 {
                 // Emit current line if not empty
                 if line_width > 0 {
-                    tree.branches
-                        .push(Branch::grow((line_start, line_end).into(), BranchStyle::Inline, indent));
+                    tree.branches.push(Branch::grow(
+                        (line_start, line_end).into(),
+                        BranchStyle::Inline,
+                        indent,
+                    ));
                 }
                 // Emit the text as wrapped
                 tree.branches.push(Branch::grow(
@@ -174,8 +164,11 @@ fn split_text_sequence(
             }
 
             // Emit current line
-            tree.branches
-                .push(Branch::grow((line_start, line_end).into(), BranchStyle::Inline, indent));
+            tree.branches.push(Branch::grow(
+                (line_start, line_end).into(),
+                BranchStyle::Inline,
+                indent,
+            ));
 
             // Start new line
             line_start = ring.twig().start();
@@ -190,8 +183,11 @@ fn split_text_sequence(
 
     // Emit final line
     if line_width > 0 {
-        tree.branches
-            .push(Branch::grow((line_start, line_end).into(), BranchStyle::Inline, indent));
+        tree.branches.push(Branch::grow(
+            (line_start, line_end).into(),
+            BranchStyle::Inline,
+            indent,
+        ));
     }
 }
 
