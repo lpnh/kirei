@@ -175,6 +175,10 @@ impl Leaf {
         }
     }
 
+    pub fn is_ctrl(&self) -> bool {
+        matches!(self, Self::AskamaControl { .. })
+    }
+
     pub fn is_expr(&self) -> bool {
         matches!(self, Self::AskamaExpr(_))
     }
@@ -399,12 +403,8 @@ impl SakuraTree {
                 break;
             };
 
-            // Stop at next When, Else, or Endmatch
-            if let Leaf::AskamaControl {
-                tag: ControlTag::When(_) | ControlTag::Else(_) | ControlTag::Endmatch(_),
-                ..
-            } = leaf
-            {
+            // Stop at any control block
+            if leaf.is_ctrl() {
                 break;
             }
 

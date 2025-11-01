@@ -1,0 +1,9 @@
+---
+source: tests/snapshots/askama.rs
+description: "{% match user %}\n{% when Some with (status) %}\n{% match status %}\n{% when Online %}\n{% when Offline %}\n{% endmatch %}\n{% when None %}\n{% endmatch %}\n"
+---
+{% match user %}
+    {% when Some with (status) %}
+        {% match status %}{% when Online %} {% when Offline %} {% endmatch %}
+    {% when None %}
+{% endmatch %}

@@ -1,0 +1,8 @@
+{% match user %}
+{% when Some with (status) %}
+{% match status %}
+{% when Online %}
+{% when Offline %}
+{% endmatch %}
+{% when None %}
+{% endmatch %}

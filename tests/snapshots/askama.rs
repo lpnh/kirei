@@ -9,6 +9,11 @@ fn nested_comment() {
 }
 
 #[test]
+fn nested_matches() {
+    format_and_snapshot!("askama/nested_matches.html");
+}
+
+#[test]
 fn if_block() {
     format_and_snapshot!("askama/if_block.html");
 }
