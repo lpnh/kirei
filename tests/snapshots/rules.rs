@@ -110,3 +110,10 @@ fn block_with_whitespace() {
 fn block_with_newline() {
     format_and_snapshot!("rules/collapsing/block_with_newline.html");
 }
+
+// === Quote
+
+#[test]
+fn attr_single_quote() {
+    format_and_snapshot!("rules/quote/attr_single_quote.html");
+}

@@ -7,16 +7,16 @@ use crate::askama::{self, AskamaNode};
 pub enum HtmlNode {
     StartTag {
         name: String,
-        attr: Vec<Attribute>,
+        attr: AttrSection,
         end_tag_idx: Option<usize>,
     },
     Void {
         name: String,
-        attr: Vec<Attribute>,
+        attr: AttrSection,
     },
     SelfClosingTag {
         name: String,
-        attr: Vec<Attribute>,
+        attr: AttrSection,
     },
     EndTag {
         name: String,
@@ -35,6 +35,12 @@ pub enum HtmlNode {
 
 
 #[derive(Debug, Clone)]
+pub enum AttrSection {
+    Default(Vec<Attribute>),
+    Malformed(String),
+}
+
+#[derive(Debug, Clone)]
 pub struct Attribute {
     name: String,
     value: Option<String>,
@@ -43,43 +49,29 @@ pub struct Attribute {
 impl Attribute {
     fn to_string(&self) -> String {
         match &self.value {
-            Some(val) => {
-                // If value already has quotes (from quoted_attribute_value), use as-is
-                if (val.starts_with('"') && val.ends_with('"'))
-                    || (val.starts_with('\'') && val.ends_with('\''))
-                {
-                    format!("{}={}", self.name, val)
-                } else {
-                    // Unquoted value, add quotes
-                    format!("{}=\"{}\"", self.name, val)
-                }
-            }
+            Some(val) => format!("{}=\"{}\"", self.name, val),
             None => self.name.clone(),
         }
     }
 
     // Replace Askama placeholder in attribute name and value
     fn replace_placeholder(mut self, askama_nodes: &[AskamaNode]) -> Self {
-        // Process placeholder in attribute name
         for (idx, askama_node) in askama_nodes.iter().enumerate() {
             let placeholder = askama_node.placeholder(idx);
+            let askama_str = askama::fmt_node_for_attr_or_raw_text(askama_node);
+
+            // Replace in name
             if self.name.contains(&placeholder) {
-                let askama_str = askama::fmt_node_for_attr_or_raw_text(askama_node);
                 self.name = self.name.replace(&placeholder, &askama_str);
             }
-        }
 
-        // Process placeholder in attribute value
-        self.value = self.value.map(|mut val| {
-            for (idx, askama_node) in askama_nodes.iter().enumerate() {
-                let placeholder = askama_node.placeholder(idx);
+            // Replace in value
+            if let Some(val) = &self.value {
                 if val.contains(&placeholder) {
-                    let askama_str = askama::fmt_node_for_attr_or_raw_text(askama_node);
-                    val = val.replace(&placeholder, &askama_str);
+                    self.value = Some(val.replace(&placeholder, &askama_str));
                 }
             }
-            val
-        });
+        }
 
         self
     }
@@ -362,9 +354,34 @@ fn extract_tag_name(node: &Node, source: &[u8], kind: &str) -> String {
         .to_string()
 }
 
-fn extract_attr(node: &Node, source: &[u8]) -> Vec<Attribute> {
-    node.children(&mut node.walk())
+fn extract_attr(node: &Node, source: &[u8]) -> AttrSection {
+    let attr_nodes: Vec<_> = node
+        .children(&mut node.walk())
         .filter(|c| c.kind() == "attribute")
+        .collect();
+
+    if attr_nodes.is_empty() {
+        return AttrSection::Default(Vec::new());
+    }
+
+    // Check if any attribute contains errors
+    let has_errors = attr_nodes.iter().any(|attr| contains_error_recursive(attr));
+
+    if has_errors {
+        // Extract raw text from first attribute to last attribute
+        if let (Some(first), Some(last)) = (attr_nodes.first(), attr_nodes.last()) {
+            let start = first.start_byte();
+            let end = last.end_byte();
+            let raw = std::str::from_utf8(&source[start..end])
+                .unwrap_or("")
+                .to_string();
+            return AttrSection::Malformed(raw);
+        }
+    }
+
+    // Normal parsing
+    let attributes = attr_nodes
+        .iter()
         .filter_map(|attr_node| {
             let mut name = None;
             let mut value = None;
@@ -373,7 +390,9 @@ fn extract_attr(node: &Node, source: &[u8]) -> Vec<Attribute> {
                 match child.kind() {
                     "attribute_name" => name = child.utf8_text(source).ok().map(|s| s.to_string()),
                     "attribute_value" | "quoted_attribute_value" => {
-                        value = Some(child.utf8_text(source).ok()?.to_string());
+                        if let Ok(text) = child.utf8_text(source) {
+                            value = Some(strip_quotes(text));
+                        }
                     }
                     _ => {}
                 }
@@ -381,36 +400,75 @@ fn extract_attr(node: &Node, source: &[u8]) -> Vec<Attribute> {
 
             name.map(|n| Attribute { name: n, value })
         })
-        .collect()
+        .collect();
+
+    AttrSection::Default(attributes)
 }
 
-fn format_attr(attr: &[Attribute]) -> String {
-    attr.iter()
-        .map(Attribute::to_string)
-        .collect::<Vec<_>>()
-        .join(" ")
+fn strip_quotes(text: &str) -> String {
+    let mut s = text;
+
+    // Remove leading quote (single or double)
+    if s.starts_with('"') || s.starts_with('\'') {
+        s = &s[1..];
+    }
+
+    // Remove trailing quote (single or double)
+    if s.ends_with('"') || s.ends_with('\'') {
+        s = &s[..s.len() - 1];
+    }
+
+    s.to_string()
 }
 
-fn format_opening_tag(name: &str, attr: &[Attribute]) -> String {
-    if attr.is_empty() {
+fn format_attr(attr: &AttrSection) -> String {
+    match attr {
+        AttrSection::Default(attrs) => attrs
+            .iter()
+            .map(Attribute::to_string)
+            .collect::<Vec<_>>()
+            .join(" "),
+        AttrSection::Malformed(raw) => raw.clone(),
+    }
+}
+
+fn format_opening_tag(name: &str, attr: &AttrSection) -> String {
+    let attr_str = format_attr(attr);
+    if attr_str.is_empty() {
         format!("<{}>", name)
     } else {
-        format!("<{} {}>", name, format_attr(attr))
+        format!("<{} {}>", name, attr_str)
     }
 }
 
-fn format_self_closing_tag(name: &str, attr: &[Attribute]) -> String {
-    if attr.is_empty() {
+fn format_self_closing_tag(name: &str, attr: &AttrSection) -> String {
+    let attr_str = format_attr(attr);
+    if attr_str.is_empty() {
         format!("<{} />", name)
     } else {
-        format!("<{} {} />", name, format_attr(attr))
+        format!("<{} {} />", name, attr_str)
     }
 }
 
-fn replace_attr_placeholder(attr: Vec<Attribute>, askama_nodes: &[AskamaNode]) -> Vec<Attribute> {
-    attr.into_iter()
-        .map(|attr| attr.replace_placeholder(askama_nodes))
-        .collect()
+fn replace_attr_placeholder(attr: AttrSection, askama_nodes: &[AskamaNode]) -> AttrSection {
+    match attr {
+        AttrSection::Default(attrs) => AttrSection::Default(
+            attrs
+                .into_iter()
+                .map(|attr| attr.replace_placeholder(askama_nodes))
+                .collect(),
+        ),
+        AttrSection::Malformed(mut raw) => {
+            for (idx, askama_node) in askama_nodes.iter().enumerate() {
+                let placeholder = askama_node.placeholder(idx);
+                let askama_str = askama::fmt_node_for_attr_or_raw_text(askama_node);
+                if raw.contains(&placeholder) {
+                    raw = raw.replace(&placeholder, &askama_str);
+                }
+            }
+            AttrSection::Malformed(raw)
+        }
+    }
 }
 
 fn format_comment(content: &str) -> String {
@@ -425,4 +483,12 @@ fn format_comment(content: &str) -> String {
     } else {
         format!("{} {} {}", open, normalized, close)
     }
+}
+
+fn contains_error_recursive(node: &Node) -> bool {
+    if node.is_error() {
+        return true;
+    }
+    node.children(&mut node.walk())
+        .any(|child| contains_error_recursive(&child))
 }

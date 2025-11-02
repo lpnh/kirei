@@ -12,3 +12,8 @@ fn unclosed_div() {
 fn unclosed_block() {
     format_and_snapshot!("malformed/unclosed_block.html");
 }
+
+#[test]
+fn unclosed_attr_quote() {
+    format_and_snapshot!("malformed/unclosed_attr_quote.html");
+}

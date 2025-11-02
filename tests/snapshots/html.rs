@@ -4,6 +4,11 @@ fn html_comment() {
 }
 
 #[test]
+fn attribute() {
+    format_and_snapshot!("html/attribute.html");
+}
+
+#[test]
 fn doctype() {
     format_and_snapshot!("html/doctype.html");
 }
