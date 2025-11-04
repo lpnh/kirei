@@ -1,5 +1,5 @@
 use anyhow::Result;
-use tree_sitter::Node;
+use tree_sitter::{Node, Range};
 
 use crate::config::Config;
 
@@ -137,23 +137,37 @@ pub enum AskamaNode {
         dlmts: Delimiters,
         inner: String,
         ctrl_tag: ControlTag,
+        start_byte: usize,
+        end_byte: usize,
     },
     Expression {
         dlmts: Delimiters,
         inner: String,
+        start_byte: usize,
+        end_byte: usize,
     },
     Comment {
         dlmts: Delimiters,
         inner: String,
+        start_byte: usize,
+        end_byte: usize,
     },
 }
 
 impl AskamaNode {
-    pub fn placeholder(&self, idx: usize) -> String {
+    pub fn start_byte(&self) -> usize {
         match self {
-            Self::Control { .. } => format!("__ASKAMA_CTRL_{}_ASKAMA_END__", idx),
-            Self::Expression { .. } => format!("__ASKAMA_EXPR_{}_ASKAMA_END__", idx),
-            Self::Comment { .. } => format!("__ASKAMA_COMMENT_{}_ASKAMA_END__", idx),
+            Self::Control { start_byte, .. }
+            | Self::Expression { start_byte, .. }
+            | Self::Comment { start_byte, .. } => *start_byte,
+        }
+    }
+
+    pub fn end_byte(&self) -> usize {
+        match self {
+            Self::Control { end_byte, .. }
+            | Self::Expression { end_byte, .. }
+            | Self::Comment { end_byte, .. } => *end_byte,
         }
     }
 
@@ -212,47 +226,39 @@ impl AskamaNode {
     }
 }
 
-pub fn extract_nodes(source: &str, root: &Node) -> Result<(String, Vec<AskamaNode>)> {
-    let mut html = String::new();
+pub fn extract_nodes(source: &str, root: &Node) -> Result<(Vec<AskamaNode>, Vec<Range>)> {
     let mut nodes = Vec::new();
-    let mut pos = 0;
+    let mut content_ranges = Vec::new();
 
     let mut cursor = root.walk();
     for child in root.children(&mut cursor) {
         let start = child.start_byte();
         let end = child.end_byte();
 
-        if start > pos {
-            let text_between = &source[pos..start];
-            html.push_str(text_between);
-        }
-
         match child.kind() {
             "control_tag" | "render_expression" | "comment" => {
                 let node = parse_askama_node(child, source)?;
-                let placeholder = node.placeholder(nodes.len());
-                html.push_str(&placeholder);
                 nodes.push(node);
             }
-            _ => {
-                let text = child.utf8_text(source.as_bytes())?;
-                html.push_str(text);
+            "content" => {
+                content_ranges.push(Range {
+                    start_byte: start,
+                    end_byte: end,
+                    start_point: child.start_position(),
+                    end_point: child.end_position(),
+                });
             }
+            _ => {}
         }
-
-        pos = end;
     }
 
-    if pos < source.len() {
-        let remaining = &source[pos..];
-        html.push_str(remaining);
-    }
-
-    Ok((html, nodes))
+    Ok((nodes, content_ranges))
 }
 
 fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode> {
     let (dlmts, inner) = extract_delimiters(node, source)?;
+    let start_byte = node.start_byte();
+    let end_byte = node.end_byte();
 
     let askama_node = match node.kind() {
         "control_tag" => {
@@ -261,10 +267,22 @@ fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode> {
                 dlmts,
                 inner,
                 ctrl_tag,
+                start_byte,
+                end_byte,
             }
         }
-        "render_expression" => AskamaNode::Expression { dlmts, inner },
-        "comment" => AskamaNode::Comment { dlmts, inner },
+        "render_expression" => AskamaNode::Expression {
+            dlmts,
+            inner,
+            start_byte,
+            end_byte,
+        },
+        "comment" => AskamaNode::Comment {
+            dlmts,
+            inner,
+            start_byte,
+            end_byte,
+        },
         _ => anyhow::bail!("Unexpected node kind: {}", node.kind()),
     };
 
@@ -396,24 +414,6 @@ pub fn format_askama_node(config: &Config, node: &AskamaNode) -> String {
         let trimmed_inner = inner.trim();
         format!("{} {} {}", open, trimmed_inner, close)
     }
-}
-
-pub fn replace_placeholder_in_raw_text(text: &str, nodes: &[AskamaNode]) -> String {
-    let mut result = text.to_string();
-    for (idx, node) in nodes.iter().enumerate() {
-        let placeholder = node.placeholder(idx);
-        if result.contains(&placeholder) {
-            let formatted = fmt_node_for_attr_or_raw_text(node);
-            result = result.replace(&placeholder, &formatted);
-        }
-    }
-    result
-}
-
-pub fn fmt_node_for_attr_or_raw_text(node: &AskamaNode) -> String {
-    let (open, close) = node.delimiters();
-    let inner = crate::normalize_whitespace(node.inner());
-    format!("{} {} {}", open, inner.trim(), close)
 }
 
 fn normalize_askama_node(node: &AskamaNode, config: &Config) -> (String, String, String) {

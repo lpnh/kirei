@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::ops::RangeInclusive;
 
 use crate::{
@@ -126,11 +126,11 @@ impl Leaf {
                 }
             }
             HtmlNode::EndTag { .. } | HtmlNode::ErroneousEndTag { .. } => Self::HtmlEndTag(source),
-            HtmlNode::Text(_) => Self::HtmlText(source),
-            HtmlNode::Entity(_) => Self::HtmlEntity(source),
-            HtmlNode::RawText(_) => Self::HtmlRawText(source),
-            HtmlNode::Comment(_) => Self::HtmlComment(source),
-            HtmlNode::Doctype(_) => Self::HtmlDoctype(source),
+            HtmlNode::Text { .. } => Self::HtmlText(source),
+            HtmlNode::Entity { .. } => Self::HtmlEntity(source),
+            HtmlNode::RawText { .. } => Self::HtmlRawText(source),
+            HtmlNode::Comment { .. } => Self::HtmlComment(source),
+            HtmlNode::Doctype { .. } => Self::HtmlDoctype(source),
         }
     }
 
@@ -199,60 +199,56 @@ impl Branch {
 }
 
 impl SakuraTree {
-    pub fn grow(askama_nodes: &[AskamaNode], html_nodes: &[HtmlNode], config: Config) -> Self {
+    pub fn grow(
+        askama_nodes: &[AskamaNode],
+        html_nodes: &[HtmlNode],
+        source: &str,
+        config: &Config,
+    ) -> Self {
         let mut tree = Self {
-            config,
+            config: config.clone(),
             leaves: Vec::new(),
             rings: Vec::new(),
             branches: Vec::new(),
             twigs: Vec::new(),
         };
 
-        let mut html_to_leaf_map: HashMap<usize, usize> = HashMap::new();
+        let leaves_with_pos: Vec<(usize, Leaf)> =
+            Self::merge_nodes_by_position_to_leaves(askama_nodes, html_nodes, source, config);
 
-        // Convert each HtmlNode to Leaf while replacing placeholders
-        for (i, html_node) in html_nodes.iter().enumerate() {
-            html_to_leaf_map.insert(i, tree.leaves.len());
-
-            // Dispatch based on node type
-            match html_node {
-                HtmlNode::Text(text) => {
-                    let placeholders = Self::find_placeholders(text, askama_nodes);
-                    if placeholders.is_empty() {
-                        tree.leaves.push(Leaf::HtmlText(text.to_string()));
-                    } else {
-                        tree.replace_placeholders_in_text(text, placeholders, askama_nodes);
-                    }
+        // Build byte-to-leaf map for HTML tags
+        let mut byte_to_leaf_map: HashMap<usize, usize> = HashMap::new();
+        for (leaf_idx, (start_byte, leaf)) in leaves_with_pos.iter().enumerate() {
+            match leaf {
+                Leaf::HtmlStartTag { .. } | Leaf::HtmlVoidTag { .. } | Leaf::HtmlEndTag(_) => {
+                    byte_to_leaf_map.insert(*start_byte, leaf_idx);
                 }
-                HtmlNode::Entity(_) | HtmlNode::Comment(_) | HtmlNode::Doctype(_) => {
-                    tree.leaves.push(Leaf::from_html(html_node));
-                }
-                HtmlNode::RawText(text) => {
-                    let processed = askama::replace_placeholder_in_raw_text(text, askama_nodes);
-                    tree.leaves.push(Leaf::from_html_raw_text(&processed));
-                }
-                _ => {
-                    let processed = html_node.clone().replace_placeholder(askama_nodes);
-                    tree.leaves.push(Leaf::from_html(&processed));
-                }
+                _ => {}
             }
         }
+
+        tree.leaves = leaves_with_pos.into_iter().map(|(_, leaf)| leaf).collect();
 
         // Initialize twigs with same index for each leaf
         tree.twigs = (0..tree.leaves.len()).map(Twig::from).collect();
 
-        // Update twigs for start tags that have matching end tags
-        for (html_idx, html_node) in html_nodes.iter().enumerate() {
+        // Update twigs for paired start/end tags
+        for html_node in html_nodes {
             if let HtmlNode::StartTag {
+                start_byte,
                 end_tag_idx: Some(end_html_idx),
                 ..
             } = html_node
-                && let (Some(&start_leaf_idx), Some(&end_leaf_idx)) = (
-                    html_to_leaf_map.get(&html_idx),
-                    html_to_leaf_map.get(end_html_idx),
-                )
+                && let Some(end_node) = html_nodes.get(*end_html_idx)
             {
-                tree.twigs[start_leaf_idx] = Twig(start_leaf_idx, end_leaf_idx);
+                let end_start_byte = end_node.start_byte();
+
+                if let (Some(&start_leaf_idx), Some(&end_leaf_idx)) = (
+                    byte_to_leaf_map.get(start_byte),
+                    byte_to_leaf_map.get(&end_start_byte),
+                ) {
+                    tree.twigs[start_leaf_idx] = Twig(start_leaf_idx, end_leaf_idx);
+                }
             }
         }
 
@@ -261,6 +257,178 @@ impl SakuraTree {
         }
 
         tree
+    }
+
+    // Merge Askama and HTML nodes by byte position, creating leaves directly
+    // All Askama nodes are separate leaves, HTML text is split at Askama boundaries
+    fn merge_nodes_by_position_to_leaves(
+        askama_nodes: &[AskamaNode],
+        html_nodes: &[HtmlNode],
+        source: &str,
+        config: &Config,
+    ) -> Vec<(usize, Leaf)> {
+        let mut leaves: Vec<(usize, Leaf)> = Vec::new();
+
+        // Add all Askama nodes (except expressions in tag attributes)
+        for node in askama_nodes {
+            let in_tag_attr = node.is_expr()
+                && html_nodes.iter().any(|html| {
+                    matches!(
+                        html,
+                        HtmlNode::StartTag { start_byte, end_byte, .. }
+                        | HtmlNode::Void { start_byte, end_byte, .. }
+                        | HtmlNode::SelfClosingTag { start_byte, end_byte, .. }
+                        if node.start_byte() >= *start_byte && node.end_byte() <= *end_byte
+                    )
+                });
+
+            if !in_tag_attr {
+                leaves.push((node.start_byte(), Leaf::from_askama(config, node)));
+            }
+        }
+
+        // Add HTML nodes, splitting text at Askama boundaries
+        for node in html_nodes {
+            match node {
+                HtmlNode::StartTag {
+                    start_byte,
+                    end_byte,
+                    name,
+                    ..
+                }
+                | HtmlNode::Void {
+                    start_byte,
+                    end_byte,
+                    name,
+                    ..
+                }
+                | HtmlNode::SelfClosingTag {
+                    start_byte,
+                    end_byte,
+                    name,
+                    ..
+                } => {
+                    let has_askama = askama_nodes
+                        .iter()
+                        .any(|a| a.start_byte() >= *start_byte && a.end_byte() <= *end_byte);
+
+                    if has_askama {
+                        let tag_content = &source[*start_byte..*end_byte];
+                        let leaf = match node {
+                            HtmlNode::StartTag { .. } => Leaf::HtmlStartTag {
+                                content: tag_content.to_string(),
+                                is_inline: html::is_inline_tag_name(name),
+                            },
+                            _ => Leaf::HtmlVoidTag {
+                                content: tag_content.to_string(),
+                                is_inline: html::is_inline_tag_name(name),
+                            },
+                        };
+                        leaves.push((*start_byte, leaf));
+                    } else {
+                        leaves.push((*start_byte, Leaf::from_html(node)));
+                    }
+                }
+                HtmlNode::Text {
+                    start_byte,
+                    end_byte,
+                    text,
+                    ..
+                } => {
+                    Self::split_text_at_askama(
+                        &mut leaves,
+                        *start_byte,
+                        *end_byte,
+                        text,
+                        askama_nodes,
+                        source,
+                        false,
+                    );
+                }
+                HtmlNode::RawText {
+                    start_byte,
+                    end_byte,
+                    text,
+                    ..
+                } => {
+                    Self::split_text_at_askama(
+                        &mut leaves,
+                        *start_byte,
+                        *end_byte,
+                        text,
+                        askama_nodes,
+                        source,
+                        true,
+                    );
+                }
+                _ => {
+                    leaves.push((node.start_byte(), Leaf::from_html(node)));
+                }
+            }
+        }
+
+        leaves.sort_by_key(|(pos, _)| *pos);
+        leaves
+    }
+
+    fn split_text_at_askama(
+        leaves: &mut Vec<(usize, Leaf)>,
+        text_start: usize,
+        text_end: usize,
+        text_content: &str,
+        askama_nodes: &[AskamaNode],
+        source: &str,
+        is_raw: bool,
+    ) {
+        let mut askama_in_range: Vec<_> = askama_nodes
+            .iter()
+            .filter(|a| a.start_byte() >= text_start && a.end_byte() <= text_end)
+            .collect();
+        askama_in_range.sort_by_key(|a| a.start_byte());
+
+        if askama_in_range.is_empty() {
+            if is_raw {
+                leaves.push((text_start, Leaf::from_html_raw_text(text_content)));
+            } else {
+                leaves.push((text_start, Leaf::HtmlText(text_content.to_string())));
+            }
+            return;
+        }
+
+        // Split text into fragments at Askama boundaries
+        let mut current_pos = text_start;
+
+        for askama in &askama_in_range {
+            if askama.start_byte() > current_pos {
+                let fragment = &source[current_pos..askama.start_byte()];
+                let normalized = crate::normalize_whitespace(fragment);
+
+                if !normalized.is_empty() {
+                    let leaf = if is_raw {
+                        Leaf::HtmlRawText(normalized)
+                    } else {
+                        Leaf::HtmlText(normalized)
+                    };
+                    leaves.push((current_pos, leaf));
+                }
+            }
+
+            current_pos = askama.end_byte();
+        }
+
+        if current_pos < text_end {
+            let fragment = &source[current_pos..text_end];
+            let normalized = crate::normalize_whitespace(fragment);
+
+            if !normalized.is_empty() {
+                let leaf = if is_raw {
+                    Leaf::HtmlRawText(normalized)
+                } else {
+                    Leaf::HtmlText(normalized)
+                };
+                leaves.push((current_pos, leaf));
+            }
+        }
     }
 
     // Grow concentric rings
@@ -283,7 +451,23 @@ impl SakuraTree {
                     .try_askama_block(idx, end_idx)
                     .unwrap_or_else(|| (self.with_single_leaf(idx), idx + 1)),
                 Leaf::HtmlStartTag { .. } => self.handle_start_tag(idx, end_idx),
-                Leaf::HtmlRawText(_) => (Ring::RawText(idx.into()), idx + 1),
+                Leaf::HtmlRawText(_) => {
+                    // Collect consecutive RawText and Askama leaves into one ring
+                    let mut last_idx = idx;
+                    let mut curr_idx = idx + 1;
+
+                    while curr_idx < end_idx {
+                        match &self.leaves[curr_idx] {
+                            Leaf::HtmlRawText(_) | Leaf::AskamaExpr(_) | Leaf::AskamaComment(_) => {
+                                last_idx = curr_idx;
+                                curr_idx += 1;
+                            }
+                            _ => break,
+                        }
+                    }
+
+                    (Ring::RawText((idx, last_idx).into()), curr_idx)
+                }
                 Leaf::HtmlText(_) | Leaf::AskamaExpr(_) => self
                     .try_text_sequence(idx, end_idx)
                     .unwrap_or_else(|| (self.with_single_leaf(idx), idx + 1)),
@@ -507,57 +691,6 @@ impl SakuraTree {
             let ring = Ring::TextSequence((start_idx, last_idx).into(), inner_rings);
             (ring, curr_idx)
         })
-    }
-
-    fn find_placeholders(
-        text: &str,
-        askama_nodes: &[AskamaNode],
-    ) -> BTreeMap<usize, (String, usize)> {
-        let mut placeholders = BTreeMap::new();
-
-        for (idx, askama_node) in askama_nodes.iter().enumerate() {
-            let placeholder = askama_node.placeholder(idx);
-
-            // Find all occurrences of this placeholder
-            let mut search_pos = 0;
-            while let Some(pos) = text[search_pos..].find(&placeholder) {
-                let absolute_pos = search_pos + pos;
-                placeholders.insert(absolute_pos, (placeholder.clone(), idx));
-                search_pos = absolute_pos + placeholder.len();
-            }
-        }
-
-        placeholders
-    }
-
-    fn replace_placeholders_in_text(
-        &mut self,
-        text: &str,
-        placeholders: BTreeMap<usize, (String, usize)>,
-        askama_nodes: &[AskamaNode],
-    ) {
-        let config = self.config.clone();
-        let mut last_end = 0;
-
-        for (pos, (placeholder, askama_idx)) in placeholders {
-            // Add text before this placeholder
-            if pos > last_end {
-                let text_segment = &text[last_end..pos];
-                self.leaves.push(Leaf::HtmlText(text_segment.to_string()));
-            }
-
-            // Add the Askama node
-            self.leaves
-                .push(Leaf::from_askama(&config, &askama_nodes[askama_idx]));
-
-            last_end = pos + placeholder.len();
-        }
-
-        // Add any remaining text after the last placeholder
-        if last_end < text.len() {
-            let remaining = &text[last_end..];
-            self.leaves.push(Leaf::HtmlText(remaining.to_string()));
-        }
     }
 }
 
