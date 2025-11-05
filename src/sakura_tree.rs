@@ -134,21 +134,6 @@ impl Leaf {
         }
     }
 
-    fn from_html_raw_text(text: &str) -> Self {
-        let trimmed = text.trim_matches('\n');
-        let normalized_content = if trimmed.is_empty() {
-            String::new()
-        } else {
-            trimmed
-                .lines()
-                .map(str::trim)
-                .collect::<Vec<_>>()
-                .join("\n")
-        };
-
-        Self::HtmlRawText(normalized_content)
-    }
-
     fn is_inline_level(&self) -> bool {
         match self {
             Self::HtmlStartTag { is_inline, .. } | Self::HtmlVoidTag { is_inline, .. } => {
@@ -183,8 +168,29 @@ impl Leaf {
         matches!(self, Self::AskamaExpr(_))
     }
 
+    fn is_text_or_expr(&self) -> bool {
+        matches!(self, Self::HtmlText(_) | Self::AskamaExpr(_))
+    }
+
     pub fn chars_count(&self) -> usize {
         self.content().chars().count()
+    }
+
+    fn from_text_fragment(fragment: &str, is_raw: bool) -> Self {
+        // Normalize raw text by trimming newlines and normalizing line-by-line
+        // Preserves blank lines (empty after trimming) to maintain user formatting
+        if is_raw {
+            Self::HtmlRawText(
+                fragment
+                    .trim_matches('\n')
+                    .lines()
+                    .map(str::trim)
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            )
+        } else {
+            Self::HtmlText(crate::normalize_whitespace(fragment))
+        }
     }
 }
 
@@ -213,12 +219,15 @@ impl SakuraTree {
             twigs: Vec::new(),
         };
 
-        let leaves_with_pos: Vec<(usize, Leaf)> =
-            Self::merge_nodes_by_position_to_leaves(askama_nodes, html_nodes, source, config);
+        // Collect Askama and HTML nodes and sort by byte position
+        let mut leaves: Vec<(usize, Leaf)> = Vec::new();
+        Self::leaves_from_askama(&mut leaves, askama_nodes, html_nodes, config);
+        Self::leaves_from_html(&mut leaves, html_nodes, askama_nodes, source, config);
+        leaves.sort_by_key(|(pos, _)| *pos);
 
         // Build byte-to-leaf map for HTML tags
         let mut byte_to_leaf_map: HashMap<usize, usize> = HashMap::new();
-        for (leaf_idx, (start_byte, leaf)) in leaves_with_pos.iter().enumerate() {
+        for (leaf_idx, (start_byte, leaf)) in leaves.iter().enumerate() {
             match leaf {
                 Leaf::HtmlStartTag { .. } | Leaf::HtmlVoidTag { .. } | Leaf::HtmlEndTag(_) => {
                     byte_to_leaf_map.insert(*start_byte, leaf_idx);
@@ -227,7 +236,7 @@ impl SakuraTree {
             }
         }
 
-        tree.leaves = leaves_with_pos.into_iter().map(|(_, leaf)| leaf).collect();
+        tree.leaves = leaves.into_iter().map(|(_, leaf)| leaf).collect();
 
         // Initialize twigs with same index for each leaf
         tree.twigs = (0..tree.leaves.len()).map(Twig::from).collect();
@@ -259,17 +268,13 @@ impl SakuraTree {
         tree
     }
 
-    // Merge Askama and HTML nodes by byte position, creating leaves directly
-    // All Askama nodes are separate leaves, HTML text is split at Askama boundaries
-    fn merge_nodes_by_position_to_leaves(
+    // Collect Askama nodes, excluding expressions within HTML tag attributes
+    fn leaves_from_askama(
+        leaves: &mut Vec<(usize, Leaf)>,
         askama_nodes: &[AskamaNode],
         html_nodes: &[HtmlNode],
-        source: &str,
         config: &Config,
-    ) -> Vec<(usize, Leaf)> {
-        let mut leaves: Vec<(usize, Leaf)> = Vec::new();
-
-        // Add all Askama nodes (except expressions in tag attributes)
+    ) {
         for node in askama_nodes {
             let in_tag_attr = node.is_expr()
                 && html_nodes.iter().any(|html| {
@@ -286,8 +291,16 @@ impl SakuraTree {
                 leaves.push((node.start_byte(), Leaf::from_askama(config, node)));
             }
         }
+    }
 
-        // Add HTML nodes, splitting text at Askama boundaries
+    // Collect HTML nodes, splitting text at Askama boundaries and reconstructing tags
+    fn leaves_from_html(
+        leaves: &mut Vec<(usize, Leaf)>,
+        html_nodes: &[HtmlNode],
+        askama_nodes: &[AskamaNode],
+        source: &str,
+        config: &Config,
+    ) {
         for node in html_nodes {
             match node {
                 HtmlNode::StartTag {
@@ -312,28 +325,26 @@ impl SakuraTree {
                         .iter()
                         .any(|a| a.start_byte() >= *start_byte && a.end_byte() <= *end_byte);
 
-                    if has_askama {
-                        let tag_content = Self::reconstruct_tag_with_askama(
+                    let leaf = if has_askama {
+                        let content = Self::reconstruct_tag_with_askama(
                             *start_byte,
                             *end_byte,
                             source,
                             askama_nodes,
                             config,
                         );
-                        let leaf = match node {
-                            HtmlNode::StartTag { .. } => Leaf::HtmlStartTag {
-                                content: tag_content,
-                                is_inline: html::is_inline_tag_name(name),
-                            },
-                            _ => Leaf::HtmlVoidTag {
-                                content: tag_content,
-                                is_inline: html::is_inline_tag_name(name),
-                            },
-                        };
-                        leaves.push((*start_byte, leaf));
+                        let is_inline = html::is_inline_tag_name(name);
+
+                        if matches!(node, HtmlNode::StartTag { .. }) {
+                            Leaf::HtmlStartTag { content, is_inline }
+                        } else {
+                            Leaf::HtmlVoidTag { content, is_inline }
+                        }
                     } else {
-                        leaves.push((*start_byte, Leaf::from_html(node)));
-                    }
+                        Leaf::from_html(node)
+                    };
+
+                    leaves.push((*start_byte, leaf));
                 }
                 HtmlNode::Text {
                     start_byte,
@@ -342,7 +353,7 @@ impl SakuraTree {
                     ..
                 } => {
                     Self::split_text_at_askama(
-                        &mut leaves,
+                        leaves,
                         *start_byte,
                         *end_byte,
                         text,
@@ -358,7 +369,7 @@ impl SakuraTree {
                     ..
                 } => {
                     Self::split_text_at_askama(
-                        &mut leaves,
+                        leaves,
                         *start_byte,
                         *end_byte,
                         text,
@@ -372,9 +383,6 @@ impl SakuraTree {
                 }
             }
         }
-
-        leaves.sort_by_key(|(pos, _)| *pos);
-        leaves
     }
 
     // Reconstruct tag content with properly formatted Askama expressions
@@ -412,33 +420,6 @@ impl SakuraTree {
         result
     }
 
-    fn process_text_fragment(fragment: &str, is_raw: bool) -> String {
-        if is_raw {
-            // For raw nodes, trim each line but preserve line structure
-            // This allows adding proper indentation later in `woodcut`
-            fragment
-                .lines()
-                .map(str::trim)
-                .filter(|line| !line.is_empty())
-                .collect::<Vec<_>>()
-                .join("\n")
-        } else {
-            crate::normalize_whitespace(fragment)
-        }
-    }
-
-    fn add_text_leaf(leaves: &mut Vec<(usize, Leaf)>, pos: usize, fragment: &str, is_raw: bool) {
-        let content = Self::process_text_fragment(fragment, is_raw);
-        if !content.is_empty() {
-            let leaf = if is_raw {
-                Leaf::HtmlRawText(content)
-            } else {
-                Leaf::HtmlText(content)
-            };
-            leaves.push((pos, leaf));
-        }
-    }
-
     fn split_text_at_askama(
         leaves: &mut Vec<(usize, Leaf)>,
         text_start: usize,
@@ -455,11 +436,8 @@ impl SakuraTree {
         askama_in_range.sort_by_key(|a| a.start_byte());
 
         if askama_in_range.is_empty() {
-            if is_raw {
-                leaves.push((text_start, Leaf::from_html_raw_text(text_content)));
-            } else {
-                leaves.push((text_start, Leaf::HtmlText(text_content.to_string())));
-            }
+            let leaf = Leaf::from_text_fragment(text_content, is_raw);
+            leaves.push((text_start, leaf));
             return;
         }
 
@@ -469,14 +447,16 @@ impl SakuraTree {
         for askama in &askama_in_range {
             if askama.start_byte() > current_pos {
                 let fragment = &source[current_pos..askama.start_byte()];
-                Self::add_text_leaf(leaves, current_pos, fragment, is_raw);
+                let leaf = Leaf::from_text_fragment(fragment, is_raw);
+                leaves.push((current_pos, leaf));
             }
             current_pos = askama.end_byte();
         }
 
         if current_pos < text_end {
             let fragment = &source[current_pos..text_end];
-            Self::add_text_leaf(leaves, current_pos, fragment, is_raw);
+            let leaf = Leaf::from_text_fragment(fragment, is_raw);
+            leaves.push((current_pos, leaf));
         }
     }
 
@@ -517,7 +497,7 @@ impl SakuraTree {
 
                     (Ring::RawText((idx, last_idx).into()), curr_idx)
                 }
-                Leaf::HtmlText(_) | Leaf::AskamaExpr(_) => self
+                leaf if leaf.is_text_or_expr() => self
                     .try_text_sequence(idx, end_idx)
                     .unwrap_or_else(|| (self.with_single_leaf(idx), idx + 1)),
                 _ => (self.with_single_leaf(idx), idx + 1),
@@ -551,7 +531,7 @@ impl SakuraTree {
             && self
                 .leaves
                 .get(self.twigs[idx].end() + 1)
-                .is_some_and(|next| matches!(next, Leaf::HtmlText(_) | Leaf::AskamaExpr(_)))
+                .is_some_and(Leaf::is_text_or_expr)
             && let Some(result) = self.try_text_sequence(idx, end_idx)
         {
             return result;

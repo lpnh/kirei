@@ -402,8 +402,7 @@ pub fn format_askama_node(config: &Config, node: &AskamaNode) -> String {
         format!("{}\n{}\n{}", open, formatted_lines.join("\n"), close)
     } else {
         // Inline format with enforced single space padding
-        let trimmed_inner = inner.trim();
-        format!("{} {} {}", open, trimmed_inner, close)
+        format!("{} {} {}", open, inner, close)
     }
 }
 
@@ -416,7 +415,10 @@ fn normalize_askama_node(node: &AskamaNode, config: &Config) -> (String, String,
     let close = raw_close.trim().to_string();
 
     // Normalize inner content
-    let inner = if node.is_comment() {
+    let inner = if node.is_expr() {
+        // Expressions just need simple trimming
+        raw_inner.trim().to_string()
+    } else if node.is_comment() {
         // Special treatment for comments
         normalize_askama_comment(raw_inner, config.max_width)
     } else {
