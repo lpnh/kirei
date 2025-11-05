@@ -43,20 +43,29 @@ impl AskamaFormatter {
             .parse(source, None)
             .context("Failed to parse Askama")?;
 
-        // 2. Extract and replace Askama nodes with placeholder
-        let (html, askama_nodes) = askama::extract_nodes(source, &ast_tree.root_node())
+        // 2. Extract Askama nodes and content ranges
+        let (askama_nodes, content_ranges) = askama::extract_nodes(source, &ast_tree.root_node())
             .context("Failed to extract Askama nodes")?;
 
-        // 3. Use tree-sitter-html to parse the restored input + placeholder
+        // 3. Use tree-sitter-html to parse with included ranges
+        if !content_ranges.is_empty() {
+            self.html_parser
+                .set_included_ranges(&content_ranges)
+                .context("Failed to set included ranges")?;
+        }
         let html_tree = self
             .html_parser
-            .parse(&html, None)
+            .parse(source, None)
             .context("Failed to parse HTML")?;
-        let html_nodes = html::parse_html_tree(&html_tree.root_node(), html.as_bytes())
-            .context("Failed to extract HTML nodes")?;
+        let html_nodes = html::parse_html_tree_with_ranges(
+            &html_tree.root_node(),
+            source.as_bytes(),
+            &content_ranges,
+        )
+        .context("Failed to extract HTML nodes")?;
 
         // 4. Grow a SakuraTree
-        let mut sakura_tree = SakuraTree::grow(&askama_nodes, &html_nodes, self.config.clone());
+        let mut sakura_tree = SakuraTree::grow(&askama_nodes, &html_nodes, source, &self.config);
 
         // 5. Wire
         wire::wire(&mut sakura_tree);

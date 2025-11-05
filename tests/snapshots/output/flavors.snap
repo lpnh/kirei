@@ -29,7 +29,7 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}Flavors - Ice Crea
 {% endmacro %}
 {% macro section_header(title, count, emoji = "🍦") %}
     <h3 style="color: var(--brand); margin: 16px 0 8px 0;">
-        {{ emoji }}{{ title }}
+        {{ emoji }} {{ title }}
         {% if count > 0 %}({{ count }}){% endif %}
     </h3>
 {% endmacro %}

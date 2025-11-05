@@ -120,63 +120,75 @@ fn ink_html_comment(inked_tree: &mut String, config: &Config, branch: &Branch, c
 fn ink_raw(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
     let mut curr_indent = branch.indent;
 
-    for leaf_idx in branch.twig.indices() {
-        process_raw_leaf(inked_tree, tree, leaf_idx, &mut curr_indent);
+    // Concatenate all leaves with proper spacing between expressions
+    let mut combined_content = String::new();
+    for (i, leaf_idx) in branch.twig.indices().enumerate() {
+        if let Some(leaf) = tree.leaves.get(leaf_idx) {
+            if i > 0 && should_add_space_before_leaf(tree, leaf_idx, branch.twig, i) {
+                combined_content.push(' ');
+            }
+            combined_content.push_str(leaf.content());
+        }
     }
+
+    process_raw_content(
+        inked_tree,
+        &combined_content,
+        &mut curr_indent,
+        &tree.config,
+    );
 }
 
-fn process_raw_leaf(
+fn process_raw_content(
     inked_tree: &mut String,
-    tree: &SakuraTree,
-    leaf_idx: usize,
+    content: &str,
     curr_indent: &mut i32,
+    config: &Config,
 ) {
-    if let Some(leaf) = tree.leaves.get(leaf_idx) {
-        let content = leaf.content();
+    if content.is_empty() {
+        return;
+    }
 
-        if !content.is_empty() {
-            for line in content.lines() {
-                if line.is_empty() {
-                    inked_tree.push('\n');
-                } else {
-                    let temp_indent_decrease = line.starts_with('}');
+    for line in content.lines() {
+        if line.is_empty() {
+            inked_tree.push('\n');
+        } else {
+            let temp_indent_decrease = line.starts_with('}');
 
-                    if temp_indent_decrease {
-                        *curr_indent = curr_indent.saturating_sub(1);
-                    }
+            if temp_indent_decrease {
+                *curr_indent = curr_indent.saturating_sub(1);
+            }
 
-                    let indent_str = indent_for(&tree.config, *curr_indent);
-                    inked_tree.push_str(&indent_str);
-                    inked_tree.push_str(line);
-                    inked_tree.push('\n');
+            let indent_str = indent_for(config, *curr_indent);
+            inked_tree.push_str(&indent_str);
+            inked_tree.push_str(line);
+            inked_tree.push('\n');
 
-                    if line.ends_with('{') {
-                        *curr_indent += 1;
-                    }
+            if line.ends_with('{') {
+                *curr_indent += 1;
+            }
 
-                    let open_braces = line.matches('{').count();
-                    let close_braces = line.matches('}').count();
-                    let net_change = open_braces as i32 - close_braces as i32;
+            let open_braces = line.matches('{').count();
+            let close_braces = line.matches('}').count();
+            let net_change = open_braces as i32 - close_braces as i32;
 
-                    let net_change = if line.ends_with('{') && net_change > 0 {
-                        net_change - 1
+            let net_change = if line.ends_with('{') && net_change > 0 {
+                net_change - 1
+            } else {
+                net_change
+            };
+
+            if net_change > 0 {
+                *curr_indent += net_change;
+            } else if net_change < 0 {
+                let decrease = (-net_change) as usize;
+                if !temp_indent_decrease || decrease > 1 {
+                    let actual_decrease = if temp_indent_decrease {
+                        decrease - 1
                     } else {
-                        net_change
+                        decrease
                     };
-
-                    if net_change > 0 {
-                        *curr_indent += net_change;
-                    } else if net_change < 0 {
-                        let decrease = (-net_change) as usize;
-                        if !temp_indent_decrease || decrease > 1 {
-                            let actual_decrease = if temp_indent_decrease {
-                                decrease - 1
-                            } else {
-                                decrease
-                            };
-                            *curr_indent = curr_indent.saturating_sub(actual_decrease as i32);
-                        }
-                    }
+                    *curr_indent = curr_indent.saturating_sub(actual_decrease as i32);
                 }
             }
         }
@@ -221,22 +233,25 @@ fn should_add_space_before_leaf(
     twig: Twig,
     position_in_branch: usize,
 ) -> bool {
-    if position_in_branch == 0 {
-        return false;
-    }
+    position_in_branch > 0 && {
+        let current = tree.leaves.get(curr_leaf_idx).unwrap();
+        let prev = tree
+            .leaves
+            .get(twig.indices().nth(position_in_branch - 1).unwrap())
+            .unwrap();
 
-    let current = tree.leaves.get(curr_leaf_idx).unwrap();
-    let prev_idx = twig.indices().nth(position_in_branch - 1).unwrap();
-    let prev = tree.leaves.get(prev_idx).unwrap();
-
-    match (prev, current) {
-        (Leaf::HtmlText(_), Leaf::HtmlEntity(_) | Leaf::HtmlStartTag { .. })
-        | (Leaf::HtmlEntity(_), Leaf::HtmlText(_)) => true,
-        (Leaf::AskamaControl { tag, .. }, _) => tag.is_match_arm(),
-        (Leaf::HtmlEndTag { .. }, _) => {
-            current.is_expr() || current.content().starts_with(char::is_alphabetic)
-        }
-        _ => false,
+        matches!(prev, Leaf::AskamaExpr { space_after: true, .. } if !current.is_ctrl())
+            || matches!(current, Leaf::AskamaExpr { space_before: true, .. } if !prev.is_ctrl())
+            || matches!(
+                (prev, current),
+                (
+                    Leaf::HtmlText(_),
+                    Leaf::HtmlEntity(_) | Leaf::HtmlStartTag { .. }
+                ) | (Leaf::HtmlEntity(_), Leaf::HtmlText(_))
+            )
+            || matches!(prev, Leaf::AskamaControl { tag, .. } if tag.is_match_arm())
+            || (matches!(prev, Leaf::HtmlEndTag { .. })
+                && (current.is_expr() || current.content().starts_with(char::is_alphabetic)))
     }
 }
 
@@ -261,15 +276,10 @@ fn push_indented_line(inked_tree: &mut String, indent_str: &str, content: &str) 
     inked_tree.push('\n');
 }
 
-fn get_leaf_at_position(tree: &SakuraTree, twig: Twig, position: usize) -> Option<&Leaf> {
-    twig.indices()
-        .nth(position)
-        .and_then(|idx| tree.leaves.get(idx))
-}
-
 fn is_askama_expr(tree: &SakuraTree, twig: Twig, position: usize, offset: isize) -> bool {
-    let target_pos = position.checked_add_signed(offset);
-    target_pos
-        .and_then(|pos| get_leaf_at_position(tree, twig, pos))
+    position
+        .checked_add_signed(offset)
+        .and_then(|pos| twig.indices().nth(pos))
+        .and_then(|idx| tree.leaves.get(idx))
         .is_some_and(Leaf::is_expr)
 }

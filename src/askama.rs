@@ -1,5 +1,5 @@
 use anyhow::Result;
-use tree_sitter::Node;
+use tree_sitter::{Node, Range};
 
 use crate::config::Config;
 
@@ -137,23 +137,37 @@ pub enum AskamaNode {
         dlmts: Delimiters,
         inner: String,
         ctrl_tag: ControlTag,
+        start: usize,
+        end: usize,
     },
     Expression {
         dlmts: Delimiters,
         inner: String,
+        start: usize,
+        end: usize,
     },
     Comment {
         dlmts: Delimiters,
         inner: String,
+        start: usize,
+        end: usize,
     },
 }
 
 impl AskamaNode {
-    pub fn placeholder(&self, idx: usize) -> String {
+    pub fn start(&self) -> usize {
         match self {
-            Self::Control { .. } => format!("__ASKAMA_CTRL_{}_ASKAMA_END__", idx),
-            Self::Expression { .. } => format!("__ASKAMA_EXPR_{}_ASKAMA_END__", idx),
-            Self::Comment { .. } => format!("__ASKAMA_COMMENT_{}_ASKAMA_END__", idx),
+            Self::Control { start, .. }
+            | Self::Expression { start, .. }
+            | Self::Comment { start, .. } => *start,
+        }
+    }
+
+    pub fn end(&self) -> usize {
+        match self {
+            Self::Control { end, .. }
+            | Self::Expression { end, .. }
+            | Self::Comment { end, .. } => *end,
         }
     }
 
@@ -175,16 +189,7 @@ impl AskamaNode {
 
     pub fn indent_delta(&self) -> (i32, i32) {
         match self {
-            Self::Control { ctrl_tag: tag, .. } => match tag {
-                ControlTag::Match(_) => (0, 2),
-                ControlTag::Endmatch(_) => (-2, 0),
-                _ => match tag.boundary() {
-                    Boundary::Open => (0, 1),
-                    Boundary::Clause | Boundary::Inner => (-1, 1),
-                    Boundary::Close => (-1, 0),
-                    Boundary::Standalone => (0, 0),
-                },
-            },
+            Self::Control { ctrl_tag, .. } => ctrl_tag.indent_delta(),
             _ => (0, 0),
         }
     }
@@ -212,47 +217,39 @@ impl AskamaNode {
     }
 }
 
-pub fn extract_nodes(source: &str, root: &Node) -> Result<(String, Vec<AskamaNode>)> {
-    let mut html = String::new();
+pub fn extract_nodes(source: &str, root: &Node) -> Result<(Vec<AskamaNode>, Vec<Range>)> {
     let mut nodes = Vec::new();
-    let mut pos = 0;
+    let mut content_ranges = Vec::new();
 
     let mut cursor = root.walk();
     for child in root.children(&mut cursor) {
-        let start = child.start_byte();
-        let end = child.end_byte();
-
-        if start > pos {
-            let text_between = &source[pos..start];
-            html.push_str(text_between);
-        }
+        let start_byte = child.start_byte();
+        let end_byte = child.end_byte();
 
         match child.kind() {
             "control_tag" | "render_expression" | "comment" => {
                 let node = parse_askama_node(child, source)?;
-                let placeholder = node.placeholder(nodes.len());
-                html.push_str(&placeholder);
                 nodes.push(node);
             }
-            _ => {
-                let text = child.utf8_text(source.as_bytes())?;
-                html.push_str(text);
+            "content" => {
+                content_ranges.push(Range {
+                    start_byte,
+                    end_byte,
+                    start_point: child.start_position(),
+                    end_point: child.end_position(),
+                });
             }
+            _ => {}
         }
-
-        pos = end;
     }
 
-    if pos < source.len() {
-        let remaining = &source[pos..];
-        html.push_str(remaining);
-    }
-
-    Ok((html, nodes))
+    Ok((nodes, content_ranges))
 }
 
 fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode> {
     let (dlmts, inner) = extract_delimiters(node, source)?;
+    let start = node.start_byte();
+    let end = node.end_byte();
 
     let askama_node = match node.kind() {
         "control_tag" => {
@@ -261,10 +258,22 @@ fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode> {
                 dlmts,
                 inner,
                 ctrl_tag,
+                start,
+                end,
             }
         }
-        "render_expression" => AskamaNode::Expression { dlmts, inner },
-        "comment" => AskamaNode::Comment { dlmts, inner },
+        "render_expression" => AskamaNode::Expression {
+            dlmts,
+            inner,
+            start,
+            end,
+        },
+        "comment" => AskamaNode::Comment {
+            dlmts,
+            inner,
+            start,
+            end,
+        },
         _ => anyhow::bail!("Unexpected node kind: {}", node.kind()),
     };
 
@@ -393,27 +402,8 @@ pub fn format_askama_node(config: &Config, node: &AskamaNode) -> String {
         format!("{}\n{}\n{}", open, formatted_lines.join("\n"), close)
     } else {
         // Inline format with enforced single space padding
-        let trimmed_inner = inner.trim();
-        format!("{} {} {}", open, trimmed_inner, close)
+        format!("{} {} {}", open, inner, close)
     }
-}
-
-pub fn replace_placeholder_in_raw_text(text: &str, nodes: &[AskamaNode]) -> String {
-    let mut result = text.to_string();
-    for (idx, node) in nodes.iter().enumerate() {
-        let placeholder = node.placeholder(idx);
-        if result.contains(&placeholder) {
-            let formatted = fmt_node_for_attr_or_raw_text(node);
-            result = result.replace(&placeholder, &formatted);
-        }
-    }
-    result
-}
-
-pub fn fmt_node_for_attr_or_raw_text(node: &AskamaNode) -> String {
-    let (open, close) = node.delimiters();
-    let inner = crate::normalize_whitespace(node.inner());
-    format!("{} {} {}", open, inner.trim(), close)
 }
 
 fn normalize_askama_node(node: &AskamaNode, config: &Config) -> (String, String, String) {
@@ -425,7 +415,10 @@ fn normalize_askama_node(node: &AskamaNode, config: &Config) -> (String, String,
     let close = raw_close.trim().to_string();
 
     // Normalize inner content
-    let inner = if node.is_comment() {
+    let inner = if node.is_expr() {
+        // Expressions just need simple trimming
+        raw_inner.trim().to_string()
+    } else if node.is_comment() {
         // Special treatment for comments
         normalize_askama_comment(raw_inner, config.max_width)
     } else {
