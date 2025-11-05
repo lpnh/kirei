@@ -412,6 +412,33 @@ impl SakuraTree {
         result
     }
 
+    fn process_text_fragment(fragment: &str, is_raw: bool) -> String {
+        if is_raw {
+            // For raw nodes, trim each line but preserve line structure
+            // This allows adding proper indentation later in `woodcut`
+            fragment
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n")
+        } else {
+            crate::normalize_whitespace(fragment)
+        }
+    }
+
+    fn add_text_leaf(leaves: &mut Vec<(usize, Leaf)>, pos: usize, fragment: &str, is_raw: bool) {
+        let content = Self::process_text_fragment(fragment, is_raw);
+        if !content.is_empty() {
+            let leaf = if is_raw {
+                Leaf::HtmlRawText(content)
+            } else {
+                Leaf::HtmlText(content)
+            };
+            leaves.push((pos, leaf));
+        }
+    }
+
     fn split_text_at_askama(
         leaves: &mut Vec<(usize, Leaf)>,
         text_start: usize,
@@ -442,55 +469,14 @@ impl SakuraTree {
         for askama in &askama_in_range {
             if askama.start_byte() > current_pos {
                 let fragment = &source[current_pos..askama.start_byte()];
-                let content = if is_raw {
-                    // For raw nodes, trim each line but preserve line structure
-                    // This allows adding proper indentation later in `woodcut`
-                    fragment
-                        .lines()
-                        .map(str::trim)
-                        .filter(|line| !line.is_empty())
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                } else {
-                    crate::normalize_whitespace(fragment)
-                };
-
-                if !content.is_empty() {
-                    let leaf = if is_raw {
-                        Leaf::HtmlRawText(content)
-                    } else {
-                        Leaf::HtmlText(content)
-                    };
-                    leaves.push((current_pos, leaf));
-                }
+                Self::add_text_leaf(leaves, current_pos, fragment, is_raw);
             }
-
             current_pos = askama.end_byte();
         }
 
         if current_pos < text_end {
             let fragment = &source[current_pos..text_end];
-            let content = if is_raw {
-                // For raw nodes, trim each line but preserve line structure
-                // This allows adding proper indentation later in `woodcut`
-                fragment
-                    .lines()
-                    .map(str::trim)
-                    .filter(|line| !line.is_empty())
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            } else {
-                crate::normalize_whitespace(fragment)
-            };
-
-            if !content.is_empty() {
-                let leaf = if is_raw {
-                    Leaf::HtmlRawText(content)
-                } else {
-                    Leaf::HtmlText(content)
-                };
-                leaves.push((current_pos, leaf));
-            }
+            Self::add_text_leaf(leaves, current_pos, fragment, is_raw);
         }
     }
 

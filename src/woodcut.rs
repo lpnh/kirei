@@ -270,15 +270,10 @@ fn push_indented_line(inked_tree: &mut String, indent_str: &str, content: &str) 
     inked_tree.push('\n');
 }
 
-fn get_leaf_at_position(tree: &SakuraTree, twig: Twig, position: usize) -> Option<&Leaf> {
-    twig.indices()
-        .nth(position)
-        .and_then(|idx| tree.leaves.get(idx))
-}
-
 fn is_askama_expr(tree: &SakuraTree, twig: Twig, position: usize, offset: isize) -> bool {
-    let target_pos = position.checked_add_signed(offset);
-    target_pos
-        .and_then(|pos| get_leaf_at_position(tree, twig, pos))
+    position
+        .checked_add_signed(offset)
+        .and_then(|pos| twig.indices().nth(pos))
+        .and_then(|idx| tree.leaves.get(idx))
         .is_some_and(Leaf::is_expr)
 }

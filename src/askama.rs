@@ -189,16 +189,7 @@ impl AskamaNode {
 
     pub fn indent_delta(&self) -> (i32, i32) {
         match self {
-            Self::Control { ctrl_tag: tag, .. } => match tag {
-                ControlTag::Match(_) => (0, 2),
-                ControlTag::Endmatch(_) => (-2, 0),
-                _ => match tag.boundary() {
-                    Boundary::Open => (0, 1),
-                    Boundary::Clause | Boundary::Inner => (-1, 1),
-                    Boundary::Close => (-1, 0),
-                    Boundary::Standalone => (0, 0),
-                },
-            },
+            Self::Control { ctrl_tag, .. } => ctrl_tag.indent_delta(),
             _ => (0, 0),
         }
     }
