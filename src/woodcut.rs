@@ -233,41 +233,25 @@ fn should_add_space_before_leaf(
     twig: Twig,
     position_in_branch: usize,
 ) -> bool {
-    if position_in_branch == 0 {
-        return false;
-    }
+    position_in_branch > 0 && {
+        let current = tree.leaves.get(curr_leaf_idx).unwrap();
+        let prev = tree
+            .leaves
+            .get(twig.indices().nth(position_in_branch - 1).unwrap())
+            .unwrap();
 
-    let current = tree.leaves.get(curr_leaf_idx).unwrap();
-    let prev_idx = twig.indices().nth(position_in_branch - 1).unwrap();
-    let prev = tree.leaves.get(prev_idx).unwrap();
-
-    // Existing spacing rules for HTML and mixed content
-    if (!prev.is_ctrl() && !current.is_ctrl())
-        && (matches!(
-            current,
-            Leaf::AskamaExpr {
-                space_before: true,
-                ..
-            }
-        ) || matches!(
-            prev,
-            Leaf::AskamaExpr {
-                space_after: true,
-                ..
-            }
-        ))
-    {
-        return true;
-    }
-
-    match (prev, current) {
-        (Leaf::HtmlText(_), Leaf::HtmlEntity(_) | Leaf::HtmlStartTag { .. })
-        | (Leaf::HtmlEntity(_), Leaf::HtmlText(_)) => true,
-        (Leaf::AskamaControl { tag, .. }, _) => tag.is_match_arm(),
-        (Leaf::HtmlEndTag { .. }, _) => {
-            current.is_expr() || current.content().starts_with(char::is_alphabetic)
-        }
-        _ => false,
+        matches!(prev, Leaf::AskamaExpr { space_after: true, .. } if !current.is_ctrl())
+            || matches!(current, Leaf::AskamaExpr { space_before: true, .. } if !prev.is_ctrl())
+            || matches!(
+                (prev, current),
+                (
+                    Leaf::HtmlText(_),
+                    Leaf::HtmlEntity(_) | Leaf::HtmlStartTag { .. }
+                ) | (Leaf::HtmlEntity(_), Leaf::HtmlText(_))
+            )
+            || matches!(prev, Leaf::AskamaControl { tag, .. } if tag.is_match_arm())
+            || (matches!(prev, Leaf::HtmlEndTag { .. })
+                && (current.is_expr() || current.content().starts_with(char::is_alphabetic)))
     }
 }
 
