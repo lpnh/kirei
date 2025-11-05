@@ -404,7 +404,9 @@ impl SakuraTree {
 
         for askama in askama_in_range {
             if askama.start_byte() > current_pos {
-                result.push_str(&source[current_pos..askama.start_byte()]);
+                let fragment = &source[current_pos..askama.start_byte()];
+                let normalized = Self::normalize_fragment(fragment);
+                result.push_str(&normalized);
             }
 
             let formatted = askama::format_askama_node(config, askama);
@@ -414,10 +416,25 @@ impl SakuraTree {
         }
 
         if current_pos < end_byte {
-            result.push_str(&source[current_pos..end_byte]);
+            let fragment = &source[current_pos..end_byte];
+            let normalized = Self::normalize_fragment(fragment);
+            result.push_str(&normalized);
         }
 
         result
+    }
+
+    // Normalize tag whitespace, preserving the closing delimiter
+    fn normalize_fragment(fragment: &str) -> String {
+        if let Some(rest) = fragment.strip_suffix('>') {
+            let normalized = crate::normalize_whitespace(rest);
+            format!("{}>", normalized.trim_end())
+        } else if let Some(rest) = fragment.strip_suffix("/>") {
+            let normalized = crate::normalize_whitespace(rest);
+            format!("{}/>", normalized.trim_end())
+        } else {
+            crate::normalize_whitespace(fragment)
+        }
     }
 
     fn split_text_at_askama(
