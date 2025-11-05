@@ -122,8 +122,8 @@ impl Leaf {
                 tag: *ctrl_tag,
             },
             AskamaNode::Expression { .. } => {
-                let start = askama_node.start_byte();
-                let end = askama_node.end_byte();
+                let start = askama_node.start();
+                let end = askama_node.end();
 
                 let space_before = start > 0
                     && source[..start]
@@ -262,10 +262,10 @@ impl SakuraTree {
 
         // Build byte-to-leaf map for HTML tags
         let mut byte_to_leaf_map: HashMap<usize, usize> = HashMap::new();
-        for (leaf_idx, (start_byte, leaf)) in leaves.iter().enumerate() {
+        for (leaf_idx, (start, leaf)) in leaves.iter().enumerate() {
             match leaf {
                 Leaf::HtmlStartTag { .. } | Leaf::HtmlVoidTag { .. } | Leaf::HtmlEndTag(_) => {
-                    byte_to_leaf_map.insert(*start_byte, leaf_idx);
+                    byte_to_leaf_map.insert(*start, leaf_idx);
                 }
                 _ => {}
             }
@@ -279,17 +279,17 @@ impl SakuraTree {
         // Update twigs for paired start/end tags
         for html_node in html_nodes {
             if let HtmlNode::StartTag {
-                start_byte,
+                start,
                 end_tag_idx: Some(end_html_idx),
                 ..
             } = html_node
                 && let Some(end_node) = html_nodes.get(*end_html_idx)
             {
-                let end_start_byte = end_node.start_byte();
+                let end_start = end_node.start();
 
                 if let (Some(&start_leaf_idx), Some(&end_leaf_idx)) = (
-                    byte_to_leaf_map.get(start_byte),
-                    byte_to_leaf_map.get(&end_start_byte),
+                    byte_to_leaf_map.get(start),
+                    byte_to_leaf_map.get(&end_start),
                 ) {
                     tree.twigs[start_leaf_idx] = Twig(start_leaf_idx, end_leaf_idx);
                 }
@@ -316,15 +316,15 @@ impl SakuraTree {
                 && html_nodes.iter().any(|html| {
                     matches!(
                         html,
-                        HtmlNode::StartTag { start_byte, end_byte, .. }
-                        | HtmlNode::Void { start_byte, end_byte, .. }
-                        | HtmlNode::SelfClosingTag { start_byte, end_byte, .. }
-                        if node.start_byte() >= *start_byte && node.end_byte() <= *end_byte
+                        HtmlNode::StartTag { start, end, .. }
+                        | HtmlNode::Void { start, end, .. }
+                        | HtmlNode::SelfClosingTag { start, end, .. }
+                        if node.start() >= *start && node.end() <= *end
                     )
                 });
 
             if !in_tag_attr {
-                leaves.push((node.start_byte(), Leaf::from_askama(config, node, source)));
+                leaves.push((node.start(), Leaf::from_askama(config, node, source)));
             }
         }
     }
@@ -340,35 +340,21 @@ impl SakuraTree {
         for node in html_nodes {
             match node {
                 HtmlNode::StartTag {
-                    start_byte,
-                    end_byte,
-                    name,
-                    ..
+                    start, end, name, ..
                 }
                 | HtmlNode::Void {
-                    start_byte,
-                    end_byte,
-                    name,
-                    ..
+                    start, end, name, ..
                 }
                 | HtmlNode::SelfClosingTag {
-                    start_byte,
-                    end_byte,
-                    name,
-                    ..
+                    start, end, name, ..
                 } => {
                     let has_askama = askama_nodes
                         .iter()
-                        .any(|a| a.start_byte() >= *start_byte && a.end_byte() <= *end_byte);
+                        .any(|a| a.start() >= *start && a.end() <= *end);
 
                     let leaf = if has_askama {
-                        let content = Self::reconstruct_tag_with_askama(
-                            *start_byte,
-                            *end_byte,
-                            source,
-                            askama_nodes,
-                            config,
-                        );
+                        let content =
+                            Self::reconstruct_tag(*start, *end, source, askama_nodes, config);
                         let is_inline = html::is_inline_tag_name(name);
 
                         if matches!(node, HtmlNode::StartTag { .. }) {
@@ -380,42 +366,20 @@ impl SakuraTree {
                         Leaf::from_html(node)
                     };
 
-                    leaves.push((*start_byte, leaf));
+                    leaves.push((*start, leaf));
                 }
                 HtmlNode::Text {
-                    start_byte,
-                    end_byte,
-                    text,
-                    ..
+                    start, end, text, ..
                 } => {
-                    Self::split_text_at_askama(
-                        leaves,
-                        *start_byte,
-                        *end_byte,
-                        text,
-                        askama_nodes,
-                        source,
-                        false,
-                    );
+                    Self::split_text(leaves, *start, *end, text, askama_nodes, source, false);
                 }
                 HtmlNode::RawText {
-                    start_byte,
-                    end_byte,
-                    text,
-                    ..
+                    start, end, text, ..
                 } => {
-                    Self::split_text_at_askama(
-                        leaves,
-                        *start_byte,
-                        *end_byte,
-                        text,
-                        askama_nodes,
-                        source,
-                        true,
-                    );
+                    Self::split_text(leaves, *start, *end, text, askama_nodes, source, true);
                 }
                 _ => {
-                    leaves.push((node.start_byte(), Leaf::from_html(node)));
+                    leaves.push((node.start(), Leaf::from_html(node)));
                 }
             }
         }
@@ -423,24 +387,24 @@ impl SakuraTree {
 
     // Reconstruct tag content with properly formatted Askama expressions
     // Used when HTML tags contain Askama expressions in attributes
-    fn reconstruct_tag_with_askama(
-        start_byte: usize,
-        end_byte: usize,
+    fn reconstruct_tag(
+        start: usize,
+        end: usize,
         source: &str,
         askama_nodes: &[AskamaNode],
         config: &Config,
     ) -> String {
         let mut result = String::new();
-        let mut current_pos = start_byte;
+        let mut current_pos = start;
 
         let askama_in_range: Vec<_> = askama_nodes
             .iter()
-            .filter(|a| a.start_byte() >= start_byte && a.end_byte() <= end_byte)
+            .filter(|a| a.start() >= start && a.end() <= end)
             .collect();
 
         for askama in askama_in_range {
-            if askama.start_byte() > current_pos {
-                let fragment = &source[current_pos..askama.start_byte()];
+            if askama.start() > current_pos {
+                let fragment = &source[current_pos..askama.start()];
                 let normalized = Self::normalize_fragment(fragment);
                 result.push_str(&normalized);
             }
@@ -448,11 +412,11 @@ impl SakuraTree {
             let formatted = askama::format_askama_node(config, askama);
             result.push_str(&formatted);
 
-            current_pos = askama.end_byte();
+            current_pos = askama.end();
         }
 
-        if current_pos < end_byte {
-            let fragment = &source[current_pos..end_byte];
+        if current_pos < end {
+            let fragment = &source[current_pos..end];
             let normalized = Self::normalize_fragment(fragment);
             result.push_str(&normalized);
         }
@@ -473,7 +437,7 @@ impl SakuraTree {
         }
     }
 
-    fn split_text_at_askama(
+    fn split_text(
         leaves: &mut Vec<(usize, Leaf)>,
         text_start: usize,
         text_end: usize,
@@ -484,9 +448,9 @@ impl SakuraTree {
     ) {
         let mut askama_in_range: Vec<_> = askama_nodes
             .iter()
-            .filter(|a| a.start_byte() >= text_start && a.end_byte() <= text_end)
+            .filter(|a| a.start() >= text_start && a.end() <= text_end)
             .collect();
-        askama_in_range.sort_by_key(|a| a.start_byte());
+        askama_in_range.sort_by_key(|a| a.start());
 
         if askama_in_range.is_empty() {
             let leaf = Leaf::from_text_fragment(text_content, is_raw);
@@ -498,12 +462,12 @@ impl SakuraTree {
         let mut current_pos = text_start;
 
         for askama in &askama_in_range {
-            if askama.start_byte() > current_pos {
-                let fragment = &source[current_pos..askama.start_byte()];
+            if askama.start() > current_pos {
+                let fragment = &source[current_pos..askama.start()];
                 let leaf = Leaf::from_text_fragment(fragment, is_raw);
                 leaves.push((current_pos, leaf));
             }
-            current_pos = askama.end_byte();
+            current_pos = askama.end();
         }
 
         if current_pos < text_end {

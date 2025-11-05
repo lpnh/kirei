@@ -137,37 +137,37 @@ pub enum AskamaNode {
         dlmts: Delimiters,
         inner: String,
         ctrl_tag: ControlTag,
-        start_byte: usize,
-        end_byte: usize,
+        start: usize,
+        end: usize,
     },
     Expression {
         dlmts: Delimiters,
         inner: String,
-        start_byte: usize,
-        end_byte: usize,
+        start: usize,
+        end: usize,
     },
     Comment {
         dlmts: Delimiters,
         inner: String,
-        start_byte: usize,
-        end_byte: usize,
+        start: usize,
+        end: usize,
     },
 }
 
 impl AskamaNode {
-    pub fn start_byte(&self) -> usize {
+    pub fn start(&self) -> usize {
         match self {
-            Self::Control { start_byte, .. }
-            | Self::Expression { start_byte, .. }
-            | Self::Comment { start_byte, .. } => *start_byte,
+            Self::Control { start, .. }
+            | Self::Expression { start, .. }
+            | Self::Comment { start, .. } => *start,
         }
     }
 
-    pub fn end_byte(&self) -> usize {
+    pub fn end(&self) -> usize {
         match self {
-            Self::Control { end_byte, .. }
-            | Self::Expression { end_byte, .. }
-            | Self::Comment { end_byte, .. } => *end_byte,
+            Self::Control { end, .. }
+            | Self::Expression { end, .. }
+            | Self::Comment { end, .. } => *end,
         }
     }
 
@@ -223,8 +223,8 @@ pub fn extract_nodes(source: &str, root: &Node) -> Result<(Vec<AskamaNode>, Vec<
 
     let mut cursor = root.walk();
     for child in root.children(&mut cursor) {
-        let start = child.start_byte();
-        let end = child.end_byte();
+        let start_byte = child.start_byte();
+        let end_byte = child.end_byte();
 
         match child.kind() {
             "control_tag" | "render_expression" | "comment" => {
@@ -233,8 +233,8 @@ pub fn extract_nodes(source: &str, root: &Node) -> Result<(Vec<AskamaNode>, Vec<
             }
             "content" => {
                 content_ranges.push(Range {
-                    start_byte: start,
-                    end_byte: end,
+                    start_byte,
+                    end_byte,
                     start_point: child.start_position(),
                     end_point: child.end_position(),
                 });
@@ -248,8 +248,8 @@ pub fn extract_nodes(source: &str, root: &Node) -> Result<(Vec<AskamaNode>, Vec<
 
 fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode> {
     let (dlmts, inner) = extract_delimiters(node, source)?;
-    let start_byte = node.start_byte();
-    let end_byte = node.end_byte();
+    let start = node.start_byte();
+    let end = node.end_byte();
 
     let askama_node = match node.kind() {
         "control_tag" => {
@@ -258,21 +258,21 @@ fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode> {
                 dlmts,
                 inner,
                 ctrl_tag,
-                start_byte,
-                end_byte,
+                start,
+                end,
             }
         }
         "render_expression" => AskamaNode::Expression {
             dlmts,
             inner,
-            start_byte,
-            end_byte,
+            start,
+            end,
         },
         "comment" => AskamaNode::Comment {
             dlmts,
             inner,
-            start_byte,
-            end_byte,
+            start,
+            end,
         },
         _ => anyhow::bail!("Unexpected node kind: {}", node.kind()),
     };

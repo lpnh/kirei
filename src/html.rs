@@ -7,69 +7,69 @@ pub enum HtmlNode {
         name: String,
         attr: String,
         end_tag_idx: Option<usize>,
-        start_byte: usize,
-        end_byte: usize,
+        start: usize,
+        end: usize,
     },
     Void {
         name: String,
         attr: String,
-        start_byte: usize,
-        end_byte: usize,
+        start: usize,
+        end: usize,
     },
     SelfClosingTag {
         name: String,
         attr: String,
-        start_byte: usize,
-        end_byte: usize,
+        start: usize,
+        end: usize,
     },
     EndTag {
         name: String,
-        start_byte: usize,
+        start: usize,
     },
 
     Text {
         text: String,
-        start_byte: usize,
-        end_byte: usize,
+        start: usize,
+        end: usize,
     },
     RawText {
         text: String,
-        start_byte: usize,
-        end_byte: usize,
+        start: usize,
+        end: usize,
     },
 
     Doctype {
         text: String,
-        start_byte: usize,
+        start: usize,
     },
     Entity {
         text: String,
-        start_byte: usize,
+        start: usize,
     },
     Comment {
         text: String,
-        start_byte: usize,
+        start: usize,
     },
 
     ErroneousEndTag {
         name: String,
-        start_byte: usize,
+        start: usize,
     },
 }
 
 impl HtmlNode {
-    pub fn start_byte(&self) -> usize {
+    pub fn start(&self) -> usize {
         match self {
-            Self::StartTag { start_byte, .. }
-            | Self::Void { start_byte, .. }
-            | Self::SelfClosingTag { start_byte, .. }
-            | Self::EndTag { start_byte, .. }
-            | Self::ErroneousEndTag { start_byte, .. }
-            | Self::Text { start_byte, .. }
-            | Self::RawText { start_byte, .. }
-            | Self::Doctype { start_byte, .. }
-            | Self::Entity { start_byte, .. }
-            | Self::Comment { start_byte, .. } => *start_byte,
+            Self::StartTag { start, .. }
+            | Self::Void { start, .. }
+            | Self::SelfClosingTag { start, .. }
+            | Self::EndTag { start, .. }
+            | Self::ErroneousEndTag { start, .. }
+            | Self::Text { start, .. }
+            | Self::RawText { start, .. }
+            | Self::Doctype { start, .. }
+            | Self::Entity { start, .. }
+            | Self::Comment { start, .. } => *start,
         }
     }
 
@@ -232,7 +232,7 @@ fn parse_html_node_recursive(
             let text = node.utf8_text(source)?.to_string();
             html_nodes.push(HtmlNode::Doctype {
                 text,
-                start_byte: node.start_byte(),
+                start: node.start_byte(),
             });
         }
         "start_tag" => html_nodes.push(parse_start_tag(node, source, content_ranges)),
@@ -244,22 +244,22 @@ fn parse_html_node_recursive(
             let normalized = format_comment(&text);
             html_nodes.push(HtmlNode::Comment {
                 text: normalized,
-                start_byte: node.start_byte(),
+                start: node.start_byte(),
             });
         }
         "entity" => {
             let text = node.utf8_text(source)?.to_string();
             html_nodes.push(HtmlNode::Entity {
                 text,
-                start_byte: node.start_byte(),
+                start: node.start_byte(),
             });
         }
         "text" => {
             let text = extract_text_from_ranges(node, source, content_ranges)?;
             html_nodes.push(HtmlNode::Text {
                 text,
-                start_byte: node.start_byte(),
-                end_byte: node.end_byte(),
+                start: node.start_byte(),
+                end: node.end_byte(),
             });
         }
         "element" | "script_element" | "style_element" => {
@@ -305,8 +305,8 @@ fn parse_html_node_recursive(
             if !text.trim().is_empty() {
                 html_nodes.push(HtmlNode::RawText {
                     text: text.to_string(),
-                    start_byte: node.start_byte(),
-                    end_byte: node.end_byte(),
+                    start: node.start_byte(),
+                    end: node.end_byte(),
                 });
             }
         }
@@ -327,8 +327,8 @@ fn parse_html_node_recursive(
                 let text = node.utf8_text(source)?.to_string();
                 html_nodes.push(HtmlNode::Text {
                     text,
-                    start_byte: node.start_byte(),
-                    end_byte: node.end_byte(),
+                    start: node.start_byte(),
+                    end: node.end_byte(),
                 });
             }
         }
@@ -345,16 +345,16 @@ fn parse_start_tag(node: &Node, source: &[u8], content_ranges: &[Range]) -> Html
         HtmlNode::Void {
             name: tag_name,
             attr,
-            start_byte: node.start_byte(),
-            end_byte: node.end_byte(),
+            start: node.start_byte(),
+            end: node.end_byte(),
         }
     } else {
         HtmlNode::StartTag {
             name: tag_name,
             attr,
             end_tag_idx: None,
-            start_byte: node.start_byte(),
-            end_byte: node.end_byte(),
+            start: node.start_byte(),
+            end: node.end_byte(),
         }
     }
 }
@@ -366,8 +366,8 @@ fn parse_self_closing_tag(node: &Node, source: &[u8], content_ranges: &[Range]) 
     HtmlNode::SelfClosingTag {
         name: tag_name,
         attr,
-        start_byte: node.start_byte(),
-        end_byte: node.end_byte(),
+        start: node.start_byte(),
+        end: node.end_byte(),
     }
 }
 
@@ -375,7 +375,7 @@ fn parse_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
     let tag_name = extract_tag_name(node, source, "tag_name");
     HtmlNode::EndTag {
         name: tag_name,
-        start_byte: node.start_byte(),
+        start: node.start_byte(),
     }
 }
 
@@ -383,7 +383,7 @@ fn parse_erroneous_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
     let tag_name = extract_tag_name(node, source, "erroneous_end_tag_name");
     HtmlNode::ErroneousEndTag {
         name: tag_name,
-        start_byte: node.start_byte(),
+        start: node.start_byte(),
     }
 }
 
