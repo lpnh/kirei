@@ -25,7 +25,6 @@ pub enum HtmlNode {
     EndTag {
         name: String,
         start_byte: usize,
-        end_byte: usize,
     },
 
     Text {
@@ -42,23 +41,19 @@ pub enum HtmlNode {
     Doctype {
         text: String,
         start_byte: usize,
-        end_byte: usize,
     },
     Entity {
         text: String,
         start_byte: usize,
-        end_byte: usize,
     },
     Comment {
         text: String,
         start_byte: usize,
-        end_byte: usize,
     },
 
     ErroneousEndTag {
         name: String,
         start_byte: usize,
-        end_byte: usize,
     },
 }
 
@@ -75,21 +70,6 @@ impl HtmlNode {
             | Self::Doctype { start_byte, .. }
             | Self::Entity { start_byte, .. }
             | Self::Comment { start_byte, .. } => *start_byte,
-        }
-    }
-
-    pub fn end_byte(&self) -> usize {
-        match self {
-            Self::StartTag { end_byte, .. }
-            | Self::Void { end_byte, .. }
-            | Self::SelfClosingTag { end_byte, .. }
-            | Self::EndTag { end_byte, .. }
-            | Self::ErroneousEndTag { end_byte, .. }
-            | Self::Text { end_byte, .. }
-            | Self::RawText { end_byte, .. }
-            | Self::Doctype { end_byte, .. }
-            | Self::Entity { end_byte, .. }
-            | Self::Comment { end_byte, .. } => *end_byte,
         }
     }
 
@@ -253,7 +233,6 @@ fn parse_html_node_recursive(
             html_nodes.push(HtmlNode::Doctype {
                 text,
                 start_byte: node.start_byte(),
-                end_byte: node.end_byte(),
             });
         }
         "start_tag" => html_nodes.push(parse_start_tag(node, source, content_ranges)),
@@ -266,7 +245,6 @@ fn parse_html_node_recursive(
             html_nodes.push(HtmlNode::Comment {
                 text: normalized,
                 start_byte: node.start_byte(),
-                end_byte: node.end_byte(),
             });
         }
         "entity" => {
@@ -274,7 +252,6 @@ fn parse_html_node_recursive(
             html_nodes.push(HtmlNode::Entity {
                 text,
                 start_byte: node.start_byte(),
-                end_byte: node.end_byte(),
             });
         }
         "text" => {
@@ -399,7 +376,6 @@ fn parse_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
     HtmlNode::EndTag {
         name: tag_name,
         start_byte: node.start_byte(),
-        end_byte: node.end_byte(),
     }
 }
 
@@ -408,7 +384,6 @@ fn parse_erroneous_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
     HtmlNode::ErroneousEndTag {
         name: tag_name,
         start_byte: node.start_byte(),
-        end_byte: node.end_byte(),
     }
 }
 
