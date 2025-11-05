@@ -19,12 +19,25 @@ pub struct SakuraTree {
 
 #[derive(Debug, Clone)]
 pub enum Leaf {
-    AskamaControl { content: String, tag: ControlTag },
-    AskamaExpr(String),
+    AskamaControl {
+        content: String,
+        tag: ControlTag,
+    },
+    AskamaExpr {
+        content: String,
+        space_before: bool,
+        space_after: bool,
+    },
     AskamaComment(String),
 
-    HtmlStartTag { content: String, is_inline: bool },
-    HtmlVoidTag { content: String, is_inline: bool },
+    HtmlStartTag {
+        content: String,
+        is_inline: bool,
+    },
+    HtmlVoidTag {
+        content: String,
+        is_inline: bool,
+    },
     HtmlEndTag(String),
 
     HtmlText(String),
@@ -100,14 +113,36 @@ pub enum BranchStyle {
 }
 
 impl Leaf {
-    fn from_askama(config: &Config, askama_node: &AskamaNode) -> Self {
+    fn from_askama(config: &Config, askama_node: &AskamaNode, source: &str) -> Self {
         let content = askama::format_askama_node(config, askama_node);
+
         match askama_node {
             AskamaNode::Control { ctrl_tag, .. } => Self::AskamaControl {
                 content,
                 tag: *ctrl_tag,
             },
-            AskamaNode::Expression { .. } => Self::AskamaExpr(content),
+            AskamaNode::Expression { .. } => {
+                let start = askama_node.start_byte();
+                let end = askama_node.end_byte();
+
+                let space_before = start > 0
+                    && source[..start]
+                        .chars()
+                        .last()
+                        .is_some_and(char::is_whitespace);
+
+                let space_after = end < source.len()
+                    && source[end..]
+                        .chars()
+                        .next()
+                        .is_some_and(char::is_whitespace);
+
+                Self::AskamaExpr {
+                    content,
+                    space_before,
+                    space_after,
+                }
+            }
             AskamaNode::Comment { .. } => Self::AskamaComment(content),
         }
     }
@@ -147,7 +182,7 @@ impl Leaf {
     pub fn content(&self) -> &str {
         match self {
             Self::AskamaControl { content, .. }
-            | Self::AskamaExpr(content)
+            | Self::AskamaExpr { content, .. }
             | Self::AskamaComment(content)
             | Self::HtmlStartTag { content, .. }
             | Self::HtmlVoidTag { content, .. }
@@ -165,11 +200,11 @@ impl Leaf {
     }
 
     pub fn is_expr(&self) -> bool {
-        matches!(self, Self::AskamaExpr(_))
+        matches!(self, Self::AskamaExpr { .. })
     }
 
     fn is_text_or_expr(&self) -> bool {
-        matches!(self, Self::HtmlText(_) | Self::AskamaExpr(_))
+        matches!(self, Self::HtmlText(_) | Self::AskamaExpr { .. })
     }
 
     pub fn chars_count(&self) -> usize {
@@ -177,9 +212,9 @@ impl Leaf {
     }
 
     fn from_text_fragment(fragment: &str, is_raw: bool) -> Self {
-        // Normalize raw text by trimming newlines and normalizing line-by-line
-        // Preserves blank lines (empty after trimming) to maintain user formatting
         if is_raw {
+            // Normalize raw text by trimming newlines and normalizing line-by-line
+            // Preserves blank lines (empty after trimming) to maintain user formatting
             Self::HtmlRawText(
                 fragment
                     .trim_matches('\n')
@@ -221,7 +256,7 @@ impl SakuraTree {
 
         // Collect Askama and HTML nodes and sort by byte position
         let mut leaves: Vec<(usize, Leaf)> = Vec::new();
-        Self::leaves_from_askama(&mut leaves, askama_nodes, html_nodes, config);
+        Self::leaves_from_askama(&mut leaves, askama_nodes, html_nodes, source, config);
         Self::leaves_from_html(&mut leaves, html_nodes, askama_nodes, source, config);
         leaves.sort_by_key(|(pos, _)| *pos);
 
@@ -273,6 +308,7 @@ impl SakuraTree {
         leaves: &mut Vec<(usize, Leaf)>,
         askama_nodes: &[AskamaNode],
         html_nodes: &[HtmlNode],
+        source: &str,
         config: &Config,
     ) {
         for node in askama_nodes {
@@ -288,7 +324,7 @@ impl SakuraTree {
                 });
 
             if !in_tag_attr {
-                leaves.push((node.start_byte(), Leaf::from_askama(config, node)));
+                leaves.push((node.start_byte(), Leaf::from_askama(config, node, source)));
             }
         }
     }
@@ -504,7 +540,9 @@ impl SakuraTree {
 
                     while curr_idx < end_idx {
                         match &self.leaves[curr_idx] {
-                            Leaf::HtmlRawText(_) | Leaf::AskamaExpr(_) | Leaf::AskamaComment(_) => {
+                            Leaf::HtmlRawText(_)
+                            | Leaf::AskamaExpr { .. }
+                            | Leaf::AskamaComment(_) => {
                                 last_idx = curr_idx;
                                 curr_idx += 1;
                             }

@@ -120,10 +120,13 @@ fn ink_html_comment(inked_tree: &mut String, config: &Config, branch: &Branch, c
 fn ink_raw(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
     let mut curr_indent = branch.indent;
 
-    // Concatenate all leaves to preserve inline Askama expressions
+    // Concatenate all leaves with proper spacing between expressions
     let mut combined_content = String::new();
-    for leaf_idx in branch.twig.indices() {
+    for (i, leaf_idx) in branch.twig.indices().enumerate() {
         if let Some(leaf) = tree.leaves.get(leaf_idx) {
+            if i > 0 && should_add_space_before_leaf(tree, leaf_idx, branch.twig, i) {
+                combined_content.push(' ');
+            }
             combined_content.push_str(leaf.content());
         }
     }
@@ -237,6 +240,25 @@ fn should_add_space_before_leaf(
     let current = tree.leaves.get(curr_leaf_idx).unwrap();
     let prev_idx = twig.indices().nth(position_in_branch - 1).unwrap();
     let prev = tree.leaves.get(prev_idx).unwrap();
+
+    // Existing spacing rules for HTML and mixed content
+    if (!prev.is_ctrl() && !current.is_ctrl())
+        && (matches!(
+            current,
+            Leaf::AskamaExpr {
+                space_before: true,
+                ..
+            }
+        ) || matches!(
+            prev,
+            Leaf::AskamaExpr {
+                space_after: true,
+                ..
+            }
+        ))
+    {
+        return true;
+    }
 
     match (prev, current) {
         (Leaf::HtmlText(_), Leaf::HtmlEntity(_) | Leaf::HtmlStartTag { .. })

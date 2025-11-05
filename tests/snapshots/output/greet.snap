@@ -27,8 +27,7 @@ description: "{% extends \"_layout.html\" %}\n{%- block title -%}\n{%- match lan
             {%- when Lang::de -%}
                 Hallo, <strong>{{ name }}</strong>, schön dich kennenzulernen!
                 {#-~#}
-                Ich bin eine
-                <a href="https://askama.readthedocs.io/">Askama</a>
+                Ich bin eine <a href="https://askama.readthedocs.io/">Askama</a>
                 -Beispielanwendung.
             {%- when Lang::fr -%}
                 Bonjour, <strong>{{ name }}</strong>, ravi de vous rencontrer !
