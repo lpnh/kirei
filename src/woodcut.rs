@@ -120,63 +120,72 @@ fn ink_html_comment(inked_tree: &mut String, config: &Config, branch: &Branch, c
 fn ink_raw(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
     let mut curr_indent = branch.indent;
 
+    // Concatenate all leaves to preserve inline Askama expressions
+    let mut combined_content = String::new();
     for leaf_idx in branch.twig.indices() {
-        process_raw_leaf(inked_tree, tree, leaf_idx, &mut curr_indent);
+        if let Some(leaf) = tree.leaves.get(leaf_idx) {
+            combined_content.push_str(leaf.content());
+        }
     }
+
+    process_raw_content(
+        inked_tree,
+        &combined_content,
+        &mut curr_indent,
+        &tree.config,
+    );
 }
 
-fn process_raw_leaf(
+fn process_raw_content(
     inked_tree: &mut String,
-    tree: &SakuraTree,
-    leaf_idx: usize,
+    content: &str,
     curr_indent: &mut i32,
+    config: &Config,
 ) {
-    if let Some(leaf) = tree.leaves.get(leaf_idx) {
-        let content = leaf.content();
+    if content.is_empty() {
+        return;
+    }
 
-        if !content.is_empty() {
-            for line in content.lines() {
-                if line.is_empty() {
-                    inked_tree.push('\n');
-                } else {
-                    let temp_indent_decrease = line.starts_with('}');
+    for line in content.lines() {
+        if line.is_empty() {
+            inked_tree.push('\n');
+        } else {
+            let temp_indent_decrease = line.starts_with('}');
 
-                    if temp_indent_decrease {
-                        *curr_indent = curr_indent.saturating_sub(1);
-                    }
+            if temp_indent_decrease {
+                *curr_indent = curr_indent.saturating_sub(1);
+            }
 
-                    let indent_str = indent_for(&tree.config, *curr_indent);
-                    inked_tree.push_str(&indent_str);
-                    inked_tree.push_str(line);
-                    inked_tree.push('\n');
+            let indent_str = indent_for(config, *curr_indent);
+            inked_tree.push_str(&indent_str);
+            inked_tree.push_str(line);
+            inked_tree.push('\n');
 
-                    if line.ends_with('{') {
-                        *curr_indent += 1;
-                    }
+            if line.ends_with('{') {
+                *curr_indent += 1;
+            }
 
-                    let open_braces = line.matches('{').count();
-                    let close_braces = line.matches('}').count();
-                    let net_change = open_braces as i32 - close_braces as i32;
+            let open_braces = line.matches('{').count();
+            let close_braces = line.matches('}').count();
+            let net_change = open_braces as i32 - close_braces as i32;
 
-                    let net_change = if line.ends_with('{') && net_change > 0 {
-                        net_change - 1
+            let net_change = if line.ends_with('{') && net_change > 0 {
+                net_change - 1
+            } else {
+                net_change
+            };
+
+            if net_change > 0 {
+                *curr_indent += net_change;
+            } else if net_change < 0 {
+                let decrease = (-net_change) as usize;
+                if !temp_indent_decrease || decrease > 1 {
+                    let actual_decrease = if temp_indent_decrease {
+                        decrease - 1
                     } else {
-                        net_change
+                        decrease
                     };
-
-                    if net_change > 0 {
-                        *curr_indent += net_change;
-                    } else if net_change < 0 {
-                        let decrease = (-net_change) as usize;
-                        if !temp_indent_decrease || decrease > 1 {
-                            let actual_decrease = if temp_indent_decrease {
-                                decrease - 1
-                            } else {
-                                decrease
-                            };
-                            *curr_indent = curr_indent.saturating_sub(actual_decrease as i32);
-                        }
-                    }
+                    *curr_indent = curr_indent.saturating_sub(actual_decrease as i32);
                 }
             }
         }

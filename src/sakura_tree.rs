@@ -313,14 +313,20 @@ impl SakuraTree {
                         .any(|a| a.start_byte() >= *start_byte && a.end_byte() <= *end_byte);
 
                     if has_askama {
-                        let tag_content = &source[*start_byte..*end_byte];
+                        let tag_content = Self::reconstruct_tag_with_askama(
+                            *start_byte,
+                            *end_byte,
+                            source,
+                            askama_nodes,
+                            config,
+                        );
                         let leaf = match node {
                             HtmlNode::StartTag { .. } => Leaf::HtmlStartTag {
-                                content: tag_content.to_string(),
+                                content: tag_content,
                                 is_inline: html::is_inline_tag_name(name),
                             },
                             _ => Leaf::HtmlVoidTag {
-                                content: tag_content.to_string(),
+                                content: tag_content,
                                 is_inline: html::is_inline_tag_name(name),
                             },
                         };
@@ -371,6 +377,41 @@ impl SakuraTree {
         leaves
     }
 
+    // Reconstruct tag content with properly formatted Askama expressions
+    // Used when HTML tags contain Askama expressions in attributes
+    fn reconstruct_tag_with_askama(
+        start_byte: usize,
+        end_byte: usize,
+        source: &str,
+        askama_nodes: &[AskamaNode],
+        config: &Config,
+    ) -> String {
+        let mut result = String::new();
+        let mut current_pos = start_byte;
+
+        let askama_in_range: Vec<_> = askama_nodes
+            .iter()
+            .filter(|a| a.start_byte() >= start_byte && a.end_byte() <= end_byte)
+            .collect();
+
+        for askama in askama_in_range {
+            if askama.start_byte() > current_pos {
+                result.push_str(&source[current_pos..askama.start_byte()]);
+            }
+
+            let formatted = askama::format_askama_node(config, askama);
+            result.push_str(&formatted);
+
+            current_pos = askama.end_byte();
+        }
+
+        if current_pos < end_byte {
+            result.push_str(&source[current_pos..end_byte]);
+        }
+
+        result
+    }
+
     fn split_text_at_askama(
         leaves: &mut Vec<(usize, Leaf)>,
         text_start: usize,
@@ -401,13 +442,24 @@ impl SakuraTree {
         for askama in &askama_in_range {
             if askama.start_byte() > current_pos {
                 let fragment = &source[current_pos..askama.start_byte()];
-                let normalized = crate::normalize_whitespace(fragment);
+                let content = if is_raw {
+                    // For raw nodes, trim each line but preserve line structure
+                    // This allows adding proper indentation later in `woodcut`
+                    fragment
+                        .lines()
+                        .map(str::trim)
+                        .filter(|line| !line.is_empty())
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                } else {
+                    crate::normalize_whitespace(fragment)
+                };
 
-                if !normalized.is_empty() {
+                if !content.is_empty() {
                     let leaf = if is_raw {
-                        Leaf::HtmlRawText(normalized)
+                        Leaf::HtmlRawText(content)
                     } else {
-                        Leaf::HtmlText(normalized)
+                        Leaf::HtmlText(content)
                     };
                     leaves.push((current_pos, leaf));
                 }
@@ -418,13 +470,24 @@ impl SakuraTree {
 
         if current_pos < text_end {
             let fragment = &source[current_pos..text_end];
-            let normalized = crate::normalize_whitespace(fragment);
+            let content = if is_raw {
+                // For raw nodes, trim each line but preserve line structure
+                // This allows adding proper indentation later in `woodcut`
+                fragment
+                    .lines()
+                    .map(str::trim)
+                    .filter(|line| !line.is_empty())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            } else {
+                crate::normalize_whitespace(fragment)
+            };
 
-            if !normalized.is_empty() {
+            if !content.is_empty() {
                 let leaf = if is_raw {
-                    Leaf::HtmlRawText(normalized)
+                    Leaf::HtmlRawText(content)
                 } else {
-                    Leaf::HtmlText(normalized)
+                    Leaf::HtmlText(content)
                 };
                 leaves.push((current_pos, leaf));
             }
