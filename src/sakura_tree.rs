@@ -354,7 +354,7 @@ impl SakuraTree {
 
                     let leaf = if has_askama {
                         let content =
-                            Self::reconstruct_tag(*start, *end, source, askama_nodes, config);
+                            html::reconstruct_tag(*start, *end, source, askama_nodes, config);
                         let is_inline = html::is_inline_tag_name(name);
 
                         if matches!(node, HtmlNode::StartTag { .. }) {
@@ -382,58 +382,6 @@ impl SakuraTree {
                     leaves.push((node.start(), Leaf::from_html(node)));
                 }
             }
-        }
-    }
-
-    // Reconstruct tag content with properly formatted Askama expressions
-    // Used when HTML tags contain Askama expressions in attributes
-    fn reconstruct_tag(
-        start: usize,
-        end: usize,
-        source: &str,
-        askama_nodes: &[AskamaNode],
-        config: &Config,
-    ) -> String {
-        let mut result = String::new();
-        let mut current_pos = start;
-
-        let askama_in_range: Vec<_> = askama_nodes
-            .iter()
-            .filter(|a| a.start() >= start && a.end() <= end)
-            .collect();
-
-        for askama in askama_in_range {
-            if askama.start() > current_pos {
-                let fragment = &source[current_pos..askama.start()];
-                let normalized = Self::normalize_fragment(fragment);
-                result.push_str(&normalized);
-            }
-
-            let formatted = askama::format_askama_node(config, askama);
-            result.push_str(&formatted);
-
-            current_pos = askama.end();
-        }
-
-        if current_pos < end {
-            let fragment = &source[current_pos..end];
-            let normalized = Self::normalize_fragment(fragment);
-            result.push_str(&normalized);
-        }
-
-        result
-    }
-
-    // Normalize tag whitespace, preserving the closing delimiter
-    fn normalize_fragment(fragment: &str) -> String {
-        if let Some(rest) = fragment.strip_suffix('>') {
-            let normalized = crate::normalize_whitespace(rest);
-            format!("{}>", normalized.trim_end())
-        } else if let Some(rest) = fragment.strip_suffix("/>") {
-            let normalized = crate::normalize_whitespace(rest);
-            format!("{}/>", normalized.trim_end())
-        } else {
-            crate::normalize_whitespace(fragment)
         }
     }
 

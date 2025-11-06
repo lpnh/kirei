@@ -1,6 +1,11 @@
 use anyhow::Result;
 use tree_sitter::{Node, Range};
 
+use crate::{
+    askama::{AskamaNode, format_askama_node},
+    config::Config,
+};
+
 #[derive(Debug, Clone)]
 pub enum HtmlNode {
     StartTag {
@@ -542,4 +547,78 @@ fn contains_error_recursive(node: &Node) -> bool {
     }
     node.children(&mut node.walk())
         .any(|child| contains_error_recursive(&child))
+}
+
+// Reconstruct tag content with properly formatted Askama expressions
+pub fn reconstruct_tag(
+    start: usize,
+    end: usize,
+    source: &str,
+    askama_nodes: &[AskamaNode],
+    config: &Config,
+) -> String {
+    let mut result = String::new();
+    let mut current_pos = start;
+
+    let askama_in_range: Vec<_> = askama_nodes
+        .iter()
+        .filter(|a| a.start() >= start && a.end() <= end)
+        .collect();
+
+    for askama in askama_in_range {
+        if askama.start() > current_pos {
+            let fragment = &source[current_pos..askama.start()];
+            let normalized = normalize_fragment(fragment);
+            result.push_str(&normalized);
+        }
+
+        let formatted = format_askama_node(config, askama);
+        result.push_str(&formatted);
+
+        current_pos = askama.end();
+    }
+
+    if current_pos < end {
+        let fragment = &source[current_pos..end];
+        let normalized = normalize_fragment(fragment);
+        result.push_str(&normalized);
+    }
+
+    result
+}
+
+// Normalize tag whitespace, preserving the closing delimiter
+fn normalize_fragment(fragment: &str) -> String {
+    if let Some(rest) = fragment.strip_suffix('>') {
+        let normalized = normalize_preserving_ends(rest);
+        format!("{}>", normalized.trim_end())
+    } else if let Some(rest) = fragment.strip_suffix("/>") {
+        let normalized = normalize_preserving_ends(rest);
+        format!("{}/>", normalized.trim_end())
+    } else {
+        normalize_preserving_ends(fragment)
+    }
+}
+
+// Normalize whitespace preserving leading/trailing spaces
+fn normalize_preserving_ends(text: &str) -> String {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return if text.is_empty() {
+            String::new()
+        } else {
+            " ".to_string()
+        };
+    }
+
+    let has_leading = text.starts_with(char::is_whitespace);
+    let has_trailing = text.ends_with(char::is_whitespace);
+    let normalized = crate::normalize_whitespace(trimmed);
+
+    match (has_leading, has_trailing) {
+        (true, true) => format!(" {} ", normalized),
+        (true, false) => format!(" {}", normalized),
+        (false, true) => format!("{} ", normalized),
+        (false, false) => normalized,
+    }
 }

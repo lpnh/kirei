@@ -29,6 +29,11 @@ fn head() {
 }
 
 #[test]
+fn mixed_attr() {
+    format_and_snapshot!("mixed/mixed_attr.html");
+}
+
+#[test]
 fn full_blown() {
     format_and_snapshot!("mixed/full_blown.html");
 }
