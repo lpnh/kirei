@@ -102,18 +102,6 @@ impl HtmlNode {
         )
     }
 
-    // Get the tag name if this is any kind of tag
-    fn get_tag_name(&self) -> Option<&str> {
-        match self {
-            Self::StartTag { name, .. }
-            | Self::Void { name, .. }
-            | Self::EndTag { name, .. }
-            | Self::SelfClosingTag { name, .. }
-            | Self::ErroneousEndTag { name, .. } => Some(name),
-            _ => None,
-        }
-    }
-
     pub fn to_string(&self) -> String {
         match self {
             Self::StartTag { name, attr, .. } => format_opening_tag(name, attr),
@@ -240,9 +228,9 @@ fn parse_html_node_recursive(
                 start: node.start_byte(),
             });
         }
-        "start_tag" => html_nodes.push(parse_start_tag(node, source, content_ranges)),
+        "start_tag" => html_nodes.push(parse_start_tag(node, source)),
         "end_tag" => html_nodes.push(parse_end_tag(node, source)),
-        "self_closing_tag" => html_nodes.push(parse_self_closing_tag(node, source, content_ranges)),
+        "self_closing_tag" => html_nodes.push(parse_self_closing_tag(node, source)),
         "erroneous_end_tag" => html_nodes.push(parse_erroneous_end_tag(node, source)),
         "comment" => {
             let text = node.utf8_text(source)?.to_string();
@@ -284,12 +272,18 @@ fn parse_html_node_recursive(
                 html_nodes.len().saturating_sub(1)
             };
 
-            // Validate that start and end tags match (detect malformed HTML)
+            // Validate that start and end tags match (detect unclosed elements)
             if !is_void_or_self_closing {
-                let start_tag_name = html_nodes.get(start_tag_idx).and_then(|n| n.get_tag_name());
-                let end_tag_name = html_nodes
-                    .get(elem_end_tag_idx)
-                    .and_then(|n| n.get_tag_name());
+                let start_tag_name = html_nodes.get(start_tag_idx).and_then(|n| match n {
+                    HtmlNode::StartTag { name, .. } => Some(name.as_str()),
+                    _ => None,
+                });
+                let end_tag_name = html_nodes.get(elem_end_tag_idx).and_then(|n| match n {
+                    HtmlNode::EndTag { name, .. } | HtmlNode::ErroneousEndTag { name, .. } => {
+                        Some(name.as_str())
+                    }
+                    _ => None,
+                });
 
                 if let (Some(start_name), Some(end_name)) = (start_tag_name, end_tag_name)
                     && start_name != end_name
@@ -315,35 +309,14 @@ fn parse_html_node_recursive(
                 });
             }
         }
-        _ => {
-            // For nodes representing a syntax error...
-            if node.child_count() > 0 {
-                for child in node.children(&mut node.walk()) {
-                    parse_html_node_recursive(
-                        &child,
-                        source,
-                        content_ranges,
-                        html_nodes,
-                        depth + 1,
-                    )?;
-                }
-            } else {
-                // Fallback to HtmlNode::Text
-                let text = node.utf8_text(source)?.to_string();
-                html_nodes.push(HtmlNode::Text {
-                    text,
-                    start: node.start_byte(),
-                    end: node.end_byte(),
-                });
-            }
-        }
+        _ => unreachable!(),
     }
     Ok(())
 }
 
-fn parse_start_tag(node: &Node, source: &[u8], content_ranges: &[Range]) -> HtmlNode {
+fn parse_start_tag(node: &Node, source: &[u8]) -> HtmlNode {
     let tag_name = extract_tag_name(node, source, "tag_name");
-    let attr = extract_attr(node, source, content_ranges);
+    let attr = extract_attr(node, source);
 
     // Check if this is a void element and create the appropriate variant
     if HtmlNode::is_void_element_name(&tag_name) {
@@ -364,9 +337,9 @@ fn parse_start_tag(node: &Node, source: &[u8], content_ranges: &[Range]) -> Html
     }
 }
 
-fn parse_self_closing_tag(node: &Node, source: &[u8], content_ranges: &[Range]) -> HtmlNode {
+fn parse_self_closing_tag(node: &Node, source: &[u8]) -> HtmlNode {
     let tag_name = extract_tag_name(node, source, "tag_name");
-    let attr = extract_attr(node, source, content_ranges);
+    let attr = extract_attr(node, source);
 
     HtmlNode::SelfClosingTag {
         name: tag_name,
@@ -396,11 +369,11 @@ fn extract_tag_name(node: &Node, source: &[u8], kind: &str) -> String {
     node.children(&mut node.walk())
         .find(|c| c.kind() == kind)
         .and_then(|n| n.utf8_text(source).ok())
-        .unwrap_or("")
+        .expect("tag name must exist")
         .to_string()
 }
 
-fn extract_attr(node: &Node, source: &[u8], content_ranges: &[Range]) -> String {
+fn extract_attr(node: &Node, source: &[u8]) -> String {
     let attr_nodes: Vec<_> = node
         .children(&mut node.walk())
         .filter(|c| c.kind() == "attribute")
@@ -410,92 +383,26 @@ fn extract_attr(node: &Node, source: &[u8], content_ranges: &[Range]) -> String 
         return String::new();
     }
 
-    // Check for malformed attributes
-    let has_errors = attr_nodes.iter().any(|attr| contains_error_recursive(attr));
-
-    // If any error return source as is (but respecting content ranges)
-    if has_errors && let (Some(first), Some(last)) = (attr_nodes.first(), attr_nodes.last()) {
-        let start = first.start_byte();
-        let end = last.end_byte();
-
-        // Extract only from content ranges
-        if !content_ranges.is_empty() {
-            let mut result = String::new();
-            for range in content_ranges {
-                if range.start_byte < end && range.end_byte > start {
-                    let text_start = range.start_byte.max(start);
-                    let text_end = range.end_byte.min(end);
-                    if text_start < text_end {
-                        result.push_str(
-                            std::str::from_utf8(&source[text_start..text_end]).unwrap_or(""),
-                        );
-                    }
-                }
-            }
-            return result;
-        }
-
-        return std::str::from_utf8(&source[start..end])
-            .unwrap_or("")
-            .to_string();
-    }
-
-    // Parse otherwise
     let formatted_attrs: Vec<String> = attr_nodes
         .iter()
-        .filter_map(|attr_node| {
-            let mut name = None;
-            let mut value = None;
+        .map(|attr_node| {
+            let name = attr_node
+                .children(&mut attr_node.walk())
+                .find(|c| c.kind() == "attribute_name")
+                .and_then(|n| n.utf8_text(source).ok())
+                .expect("attribute must have name");
 
-            for child in attr_node.children(&mut attr_node.walk()) {
-                match child.kind() {
-                    "attribute_name" => {
-                        name = extract_text_from_node(&child, source, content_ranges);
-                    }
-                    "attribute_value" | "quoted_attribute_value" => {
-                        if let Some(text) = extract_text_from_node(&child, source, content_ranges) {
-                            value = Some(strip_quotes(&text));
-                        }
-                    }
-                    _ => {}
-                }
-            }
+            let value = attr_node
+                .children(&mut attr_node.walk())
+                .find(|c| matches!(c.kind(), "attribute_value" | "quoted_attribute_value"))
+                .and_then(|n| n.utf8_text(source).ok())
+                .map(strip_quotes);
 
-            name.map(|n| format_single_attr(&n, value.as_deref()))
+            format_single_attr(name, value.as_deref())
         })
         .collect();
 
     formatted_attrs.join(" ")
-}
-
-// Extract text from a node respecting content ranges
-fn extract_text_from_node(node: &Node, source: &[u8], content_ranges: &[Range]) -> Option<String> {
-    let start = node.start_byte();
-    let end = node.end_byte();
-
-    if content_ranges.is_empty() {
-        return node.utf8_text(source).ok().map(String::from);
-    }
-
-    // Extract text only from content ranges
-    let mut result = String::new();
-    for range in content_ranges {
-        if range.start_byte < end && range.end_byte > start {
-            let text_start = range.start_byte.max(start);
-            let text_end = range.end_byte.min(end);
-            if text_start < text_end
-                && let Ok(text) = std::str::from_utf8(&source[text_start..text_end])
-            {
-                result.push_str(text);
-            }
-        }
-    }
-
-    if result.is_empty() {
-        None
-    } else {
-        Some(result)
-    }
 }
 
 fn strip_quotes(text: &str) -> String {
@@ -539,14 +446,6 @@ fn format_comment(content: &str) -> String {
     } else {
         format!("{} {} {}", open, normalized, close)
     }
-}
-
-fn contains_error_recursive(node: &Node) -> bool {
-    if node.is_error() {
-        return true;
-    }
-    node.children(&mut node.walk())
-        .any(|child| contains_error_recursive(&child))
 }
 
 // Reconstruct tag content with properly formatted Askama expressions

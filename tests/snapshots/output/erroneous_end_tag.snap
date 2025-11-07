@@ -2,8 +2,4 @@
 source: tests/snapshots/html.rs
 description: "<div><p>Some text</foo></bar>\n"
 ---
-<div>
-    <p>
-        Some text
-    </foo>
-</bar>
+<div><p>Some text</foo></bar>

@@ -43,18 +43,17 @@ impl AskamaFormatter {
             .parse(source, None)
             .context("Failed to parse Askama")?;
 
-        // 2. Check for any syntax error
+        // Save Point: return the source unchanged for any syntax error in the Askama AST
         if ast_tree.root_node().has_error() {
-            // Return the source as is
             return Ok(source.to_string());
         }
 
-        // 3. Extract Askama nodes and content node ranges
+        // 2. Extract Askama nodes and content node ranges
         let (askama_nodes, content_node_ranges) =
             askama::extract_askama_nodes(&ast_tree.root_node(), source)
                 .context("Failed to extract Askama nodes")?;
 
-        // 4. Use tree-sitter-html to parse the included ranges
+        // 3. Use tree-sitter-html to parse the included ranges
         if !content_node_ranges.is_empty() {
             self.html_parser
                 .set_included_ranges(&content_node_ranges)
@@ -65,7 +64,12 @@ impl AskamaFormatter {
             .parse(source, None)
             .context("Failed to parse HTML")?;
 
-        // 5. Extract Html nodes
+        // Save Point: return the source unchanged for any syntax error in the Html AST
+        if html_tree.root_node().has_error() {
+            return Ok(source.to_string());
+        }
+
+        // 4. Extract Html nodes
         let html_nodes = html::extract_html_nodes(
             &html_tree.root_node(),
             source.as_bytes(),
@@ -73,13 +77,13 @@ impl AskamaFormatter {
         )
         .context("Failed to extract HTML nodes")?;
 
-        // 6. Grow a SakuraTree
+        // 5. Grow a SakuraTree
         let mut sakura_tree = SakuraTree::grow(&askama_nodes, &html_nodes, source, &self.config);
 
-        // 7. Wire
+        // 6. Wire
         wire::wire(&mut sakura_tree);
 
-        // 8. Print
+        // 7. Print
         Ok(woodcut::print(&sakura_tree))
     }
 }

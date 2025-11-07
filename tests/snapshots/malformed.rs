@@ -14,6 +14,11 @@ fn unclosed_attr_quote() {
 }
 
 #[test]
+fn mixed_unclosed_attr_quote() {
+    format_and_snapshot!("malformed/mixed_unclosed_attr_quote.html");
+}
+
+#[test]
 fn unclosed_block() {
     format_and_snapshot!("malformed/unclosed_block.html");
 }
