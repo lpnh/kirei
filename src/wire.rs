@@ -53,7 +53,7 @@ fn wire_branch(tree: &mut SakuraTree, ring: &Ring, indent_map: &[i32]) {
         Ring::TextSequence(twig, inner) => {
             if fits {
                 push_branch(tree, twig, BranchStyle::Inline, indent_map);
-            } else if is_text_sequence(inner, tree) {
+            } else if is_text_and_entity(inner, tree) {
                 push_branch(tree, twig, BranchStyle::WrappedText, indent_map);
             } else {
                 split_text_sequence(tree, twig, inner, indent_map);
@@ -114,7 +114,7 @@ fn get_indent(indent_map: &[i32], twig: &Twig) -> i32 {
     indent_map.get(twig.start()).copied().unwrap_or(0)
 }
 
-fn is_text_sequence(inner: &[Ring], tree: &SakuraTree) -> bool {
+fn is_text_and_entity(inner: &[Ring], tree: &SakuraTree) -> bool {
     inner.iter().all(|ring| {
         let twig = ring.twig();
         if !twig.has_same_idx() {
