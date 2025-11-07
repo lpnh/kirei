@@ -9,11 +9,21 @@ fn unclosed_div() {
 }
 
 #[test]
+fn unclosed_attr_quote() {
+    format_and_snapshot!("malformed/unclosed_attr_quote.html");
+}
+
+#[test]
 fn unclosed_block() {
     format_and_snapshot!("malformed/unclosed_block.html");
 }
 
 #[test]
-fn unclosed_attr_quote() {
-    format_and_snapshot!("malformed/unclosed_attr_quote.html");
+fn invalid_block() {
+    format_and_snapshot!("malformed/invalid_block.html");
+}
+
+#[test]
+fn invalid_nested_block() {
+    format_and_snapshot!("malformed/invalid_nested_block.html");
 }

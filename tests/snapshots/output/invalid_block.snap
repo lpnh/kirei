@@ -1,0 +1,5 @@
+---
+source: tests/snapshots/malformed.rs
+description: "{% blop %}<p>A cool paragraph</p>\n"
+---
+{% blop %}<p>A cool paragraph</p>

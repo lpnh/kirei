@@ -43,6 +43,12 @@ impl AskamaFormatter {
             .parse(source, None)
             .context("Failed to parse Askama")?;
 
+        // Check for any syntax error
+        if ast_tree.root_node().has_error() {
+            // Return the source as is
+            return Ok(source.to_string());
+        }
+
         // 2. Extract Askama nodes and content ranges
         let (askama_nodes, content_ranges) = askama::extract_nodes(source, &ast_tree.root_node())
             .context("Failed to extract Askama nodes")?;

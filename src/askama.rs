@@ -239,7 +239,7 @@ pub fn extract_nodes(source: &str, root: &Node) -> Result<(Vec<AskamaNode>, Vec<
                     end_point: child.end_position(),
                 });
             }
-            _ => {}
+            _ => unreachable!(),
         }
     }
 
@@ -274,7 +274,7 @@ fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode> {
             start,
             end,
         },
-        _ => anyhow::bail!("Unexpected node kind: {}", node.kind()),
+        _ => unreachable!(),
     };
 
     Ok(askama_node)
