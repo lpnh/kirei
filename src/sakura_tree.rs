@@ -258,16 +258,16 @@ impl SakuraTree {
         let mut leaves: Vec<(usize, Leaf)> = Vec::new();
         Self::leaves_from_askama(&mut leaves, askama_nodes, html_nodes, source, config);
         Self::leaves_from_html(&mut leaves, html_nodes, askama_nodes, source, config);
-        leaves.sort_by_key(|(pos, _)| *pos);
+        leaves.sort_unstable_by_key(|(pos, _)| *pos);
 
         // Build byte-to-leaf map for HTML tags
         let mut byte_to_leaf_map: HashMap<usize, usize> = HashMap::new();
         for (leaf_idx, (start, leaf)) in leaves.iter().enumerate() {
-            match leaf {
-                Leaf::HtmlStartTag { .. } | Leaf::HtmlVoidTag { .. } | Leaf::HtmlEndTag(_) => {
-                    byte_to_leaf_map.insert(*start, leaf_idx);
-                }
-                _ => {}
+            if matches!(
+                leaf,
+                Leaf::HtmlStartTag { .. } | Leaf::HtmlVoidTag { .. } | Leaf::HtmlEndTag(_)
+            ) {
+                byte_to_leaf_map.insert(*start, leaf_idx);
             }
         }
 
@@ -348,19 +348,17 @@ impl SakuraTree {
                 | HtmlNode::SelfClosingTag {
                     start, end, name, ..
                 } => {
-                    let has_askama = askama_nodes
+                    let leaf = if askama_nodes
                         .iter()
-                        .any(|a| a.start() >= *start && a.end() <= *end);
-
-                    let leaf = if has_askama {
+                        .any(|a| a.start() >= *start && a.end() <= *end)
+                    {
                         let content =
                             html::reconstruct_tag(*start, *end, source, askama_nodes, config);
                         let is_inline = html::is_inline_tag_name(name);
 
-                        if matches!(node, HtmlNode::StartTag { .. }) {
-                            Leaf::HtmlStartTag { content, is_inline }
-                        } else {
-                            Leaf::HtmlVoidTag { content, is_inline }
+                        match node {
+                            HtmlNode::StartTag { .. } => Leaf::HtmlStartTag { content, is_inline },
+                            _ => Leaf::HtmlVoidTag { content, is_inline },
                         }
                     } else {
                         Leaf::from_html(node)
@@ -398,7 +396,7 @@ impl SakuraTree {
             .iter()
             .filter(|a| a.start() >= text_start && a.end() <= text_end)
             .collect();
-        askama_in_range.sort_by_key(|a| a.start());
+        askama_in_range.sort_unstable_by_key(|a| a.start());
 
         if askama_in_range.is_empty() {
             let leaf = Leaf::from_text_fragment(text_content, is_raw);
