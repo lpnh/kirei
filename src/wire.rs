@@ -53,6 +53,8 @@ fn wire_branch(tree: &mut SakuraTree, ring: &Ring, indent_map: &[i32]) {
         Ring::TextSequence(twig, inner) => {
             if fits {
                 push_branch(tree, twig, BranchStyle::Inline, indent_map);
+            } else if is_text_sequence(inner, tree) {
+                push_branch(tree, twig, BranchStyle::WrappedText, indent_map);
             } else {
                 split_text_sequence(tree, twig, inner, indent_map);
             }
@@ -66,14 +68,6 @@ fn wire_branch(tree: &mut SakuraTree, ring: &Ring, indent_map: &[i32]) {
                 BranchStyle::Inline
             } else {
                 BranchStyle::MultilineComment
-            };
-            push_branch(tree, twig, style, indent_map);
-        }
-        Ring::InlineText(twig) => {
-            let style = if fits {
-                BranchStyle::Inline
-            } else {
-                BranchStyle::SingleHtmlText
             };
             push_branch(tree, twig, style, indent_map);
         }
@@ -120,6 +114,18 @@ fn get_indent(indent_map: &[i32], twig: &Twig) -> i32 {
     indent_map.get(twig.start()).copied().unwrap_or(0)
 }
 
+fn is_text_sequence(inner: &[Ring], tree: &SakuraTree) -> bool {
+    inner.iter().all(|ring| {
+        let twig = ring.twig();
+        if !twig.has_same_idx() {
+            return false;
+        }
+        tree.leaves
+            .get(twig.start())
+            .is_some_and(|leaf| matches!(leaf, Leaf::HtmlText(_) | Leaf::HtmlEntity(_)))
+    })
+}
+
 fn split_text_sequence(tree: &mut SakuraTree, twig: &Twig, inner: &[Ring], indent_map: &[i32]) {
     let indent = get_indent(indent_map, twig);
     let indent_width = (indent as usize) * tree.config.indent_size;
@@ -135,34 +141,6 @@ fn split_text_sequence(tree: &mut SakuraTree, twig: &Twig, inner: &[Ring], inden
         let total_width = line_width + space_width + ring_width;
 
         if total_width > available_width && line_width > 0 {
-            // Check if this ring is wrappable text
-            if matches!(ring, Ring::InlineText(_)) && ring_width > available_width / 2 {
-                // Emit current line if not empty
-                if line_width > 0 {
-                    tree.branches.push(Branch::grow(
-                        (line_start, line_end).into(),
-                        BranchStyle::Inline,
-                        indent,
-                    ));
-                }
-                // Emit the text as wrapped
-                tree.branches.push(Branch::grow(
-                    ring.twig(),
-                    BranchStyle::SingleHtmlText,
-                    indent,
-                ));
-                // Reset for next line
-                if let Some(next_ring) = inner.get(i + 1) {
-                    line_start = next_ring.twig().start();
-                    line_end = next_ring.twig().start();
-                } else {
-                    line_start = tree.leaves.len();
-                    line_end = tree.leaves.len();
-                }
-                line_width = 0;
-                continue;
-            }
-
             // Emit current line
             tree.branches.push(Branch::grow(
                 (line_start, line_end).into(),

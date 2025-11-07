@@ -58,7 +58,6 @@ pub enum Ring {
     // Atomic
     RawText(Twig),
     Comment(Twig),
-    InlineText(Twig),
     Other(Twig),
 }
 
@@ -107,7 +106,7 @@ pub struct Branch {
 pub enum BranchStyle {
     Inline,
     OpenClose,
-    SingleHtmlText,
+    WrappedText,
     MultilineComment,
     Raw,
 }
@@ -480,7 +479,6 @@ impl SakuraTree {
         let twig = idx.into();
 
         match leaf {
-            Leaf::HtmlText(_) | Leaf::HtmlEntity(_) => Ring::InlineText(twig),
             Leaf::HtmlRawText(_) => Ring::RawText(twig),
             Leaf::HtmlComment(_) | Leaf::AskamaComment(_) => Ring::Comment(twig),
             _ => Ring::Other(twig),
@@ -681,7 +679,7 @@ impl SakuraTree {
             }
         }
 
-        (last_idx > start_idx).then(|| {
+        (last_idx >= start_idx).then(|| {
             let ring = Ring::TextSequence((start_idx, last_idx).into(), inner_rings);
             (ring, curr_idx)
         })
@@ -726,7 +724,6 @@ impl Ring {
             | Self::ControlBlock(twig, _)
             | Self::RawText(twig)
             | Self::Comment(twig)
-            | Self::InlineText(twig)
             | Self::Other(twig)
             | Self::MatchArm(twig, None) => *twig,
             Self::MatchArm(twig, Some(inner)) => {

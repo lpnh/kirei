@@ -15,7 +15,7 @@ pub fn print(tree: &SakuraTree) -> String {
         match branch.style {
             BranchStyle::Inline => ink_inline(&mut inked_tree, tree, branch),
             BranchStyle::OpenClose => ink_open_close(&mut inked_tree, tree, branch),
-            BranchStyle::SingleHtmlText => ink_wrapped_text(&mut inked_tree, tree, branch),
+            BranchStyle::WrappedText => ink_wrapped_text(&mut inked_tree, tree, branch),
             BranchStyle::MultilineComment => ink_multiline_comment(&mut inked_tree, tree, branch),
             BranchStyle::Raw => ink_raw(&mut inked_tree, tree, branch),
         }
@@ -54,15 +54,22 @@ fn ink_open_close(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
 }
 
 fn ink_wrapped_text(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
-    debug_assert!(branch.twig.has_same_idx());
-    let leaf_idx = branch.twig.start();
+    let mut text_content = String::new();
 
-    if let Some(leaf) = tree.leaves.get(leaf_idx) {
-        let content = content_normalized(leaf);
-        let wrapped_content = wrap_inline_content(&tree.config, &content, branch.indent);
-        inked_tree.push_str(&wrapped_content);
-        inked_tree.push('\n');
+    for (i, leaf_idx) in branch.twig.indices().enumerate() {
+        if let Some(leaf) = tree.leaves.get(leaf_idx) {
+            let content = content_normalized_with_context(tree, leaf, branch.twig, i);
+
+            if i > 0 && should_add_space_before_leaf(tree, leaf_idx, branch.twig, i) {
+                text_content.push(' ');
+            }
+            text_content.push_str(&content);
+        }
     }
+
+    let wrapped_content = wrap_inline_content(&tree.config, &text_content, branch.indent);
+    inked_tree.push_str(&wrapped_content);
+    inked_tree.push('\n');
 }
 
 fn ink_multiline_comment(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {

@@ -295,8 +295,7 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 <p>
                     Scoops &#38; Dreams: Where <sup>super</sup> meets
                     <sub>creamy</sub>! We've been serving <small>(big)</small>
-                    smiles since 1985. Mathematical proof: Ice Cream + Love =
-                    ∞ Happiness!
+                    smiles since 1985. Mathematical proof: Ice Cream + Love = ∞ Happiness!
                 </p>
                 <!-- Keyboard and sample elements -->
                 <p>
@@ -367,9 +366,8 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
             </address>
             <p style="margin-top: 20px;">
                 <small>
-                    © 2024 Scoops &#38;
-                    Dreams. All rights reserved. No ice cream was melted in the
-                    making of this website.
+                    © 2024 Scoops &#38; Dreams. All rights reserved. No ice
+                    cream was melted in the making of this website.
                 </small>
             </p>
         </footer>
