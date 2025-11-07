@@ -180,7 +180,7 @@ pub fn is_inline_tag_name(name: &str) -> bool {
     )
 }
 
-pub fn parse_html_tree_with_ranges(
+pub fn extract_html_nodes(
     root_node: &Node,
     source: &[u8],
     content_ranges: &[Range],

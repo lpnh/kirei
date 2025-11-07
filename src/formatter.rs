@@ -43,40 +43,43 @@ impl AskamaFormatter {
             .parse(source, None)
             .context("Failed to parse Askama")?;
 
-        // Check for any syntax error
+        // 2. Check for any syntax error
         if ast_tree.root_node().has_error() {
             // Return the source as is
             return Ok(source.to_string());
         }
 
-        // 2. Extract Askama nodes and content ranges
-        let (askama_nodes, content_ranges) = askama::extract_nodes(source, &ast_tree.root_node())
-            .context("Failed to extract Askama nodes")?;
+        // 3. Extract Askama nodes and content node ranges
+        let (askama_nodes, content_node_ranges) =
+            askama::extract_askama_nodes(&ast_tree.root_node(), source)
+                .context("Failed to extract Askama nodes")?;
 
-        // 3. Use tree-sitter-html to parse with included ranges
-        if !content_ranges.is_empty() {
+        // 4. Use tree-sitter-html to parse the included ranges
+        if !content_node_ranges.is_empty() {
             self.html_parser
-                .set_included_ranges(&content_ranges)
+                .set_included_ranges(&content_node_ranges)
                 .context("Failed to set included ranges")?;
         }
         let html_tree = self
             .html_parser
             .parse(source, None)
             .context("Failed to parse HTML")?;
-        let html_nodes = html::parse_html_tree_with_ranges(
+
+        // 5. Extract Html nodes
+        let html_nodes = html::extract_html_nodes(
             &html_tree.root_node(),
             source.as_bytes(),
-            &content_ranges,
+            &content_node_ranges,
         )
         .context("Failed to extract HTML nodes")?;
 
-        // 4. Grow a SakuraTree
+        // 6. Grow a SakuraTree
         let mut sakura_tree = SakuraTree::grow(&askama_nodes, &html_nodes, source, &self.config);
 
-        // 5. Wire
+        // 7. Wire
         wire::wire(&mut sakura_tree);
 
-        // 6. Print
+        // 8. Print
         Ok(woodcut::print(&sakura_tree))
     }
 }

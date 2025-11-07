@@ -217,9 +217,9 @@ impl AskamaNode {
     }
 }
 
-pub fn extract_nodes(source: &str, root: &Node) -> Result<(Vec<AskamaNode>, Vec<Range>)> {
+pub fn extract_askama_nodes(root: &Node, source: &str) -> Result<(Vec<AskamaNode>, Vec<Range>)> {
     let mut nodes = Vec::new();
-    let mut content_ranges = Vec::new();
+    let mut content_node_ranges = Vec::new();
 
     let mut cursor = root.walk();
     for child in root.children(&mut cursor) {
@@ -232,7 +232,7 @@ pub fn extract_nodes(source: &str, root: &Node) -> Result<(Vec<AskamaNode>, Vec<
                 nodes.push(node);
             }
             "content" => {
-                content_ranges.push(Range {
+                content_node_ranges.push(Range {
                     start_byte,
                     end_byte,
                     start_point: child.start_position(),
@@ -243,7 +243,7 @@ pub fn extract_nodes(source: &str, root: &Node) -> Result<(Vec<AskamaNode>, Vec<
         }
     }
 
-    Ok((nodes, content_ranges))
+    Ok((nodes, content_node_ranges))
 }
 
 fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode> {
