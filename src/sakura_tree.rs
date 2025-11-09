@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::ops::RangeInclusive;
+use std::ops::{Range, RangeInclusive};
 
 use crate::{
     askama::{self, AskamaNode, ControlTag},
@@ -13,7 +13,6 @@ pub struct SakuraTree {
     pub leaves: Vec<Leaf>,
     pub rings: Vec<Ring>,
     pub branches: Vec<Branch>,
-    // Maps start_leaf index to end_leaf index
     twigs: Vec<Twig>,
 }
 
@@ -61,6 +60,7 @@ pub enum Ring {
     Other(Twig),
 }
 
+// Maps start_leaf index to end_leaf index
 #[derive(Debug, Clone, Copy)]
 pub struct Twig(usize, usize);
 
@@ -113,9 +113,9 @@ pub enum BranchStyle {
 
 // Askama and HTML nodes relationship map
 struct PruneMap {
-    askama_in_attrs: HashSet<usize>,                     // Askama indices
-    tags_with_askama: HashSet<usize>,                    // Html tag indices
-    askama_in_text: HashMap<(usize, usize), Vec<usize>>, // Askama indices
+    askama_in_attrs: HashSet<usize>,                   // Askama indices
+    tags_with_askama: HashSet<usize>,                  // Html tag indices
+    askama_in_text: HashMap<Range<usize>, Vec<usize>>, // Askama indices
 }
 
 impl PruneMap {
@@ -138,17 +138,17 @@ impl PruneMap {
         html_nodes
             .iter()
             .filter_map(|node| match node {
-                HtmlNode::StartTag { start, end, .. }
-                | HtmlNode::Void { start, end, .. }
-                | HtmlNode::SelfClosingTag { start, end, .. } => Some((*start, *end)),
+                HtmlNode::StartTag { range, .. }
+                | HtmlNode::Void { range, .. }
+                | HtmlNode::SelfClosingTag { range, .. } => Some(range.clone()),
                 _ => None,
             })
-            .flat_map(|(tag_start, tag_end)| {
+            .flat_map(|tag| {
                 askama_nodes
                     .iter()
                     .enumerate()
                     .filter(move |(_, a)| {
-                        a.is_expr() && a.start() >= tag_start && a.end() <= tag_end
+                        a.is_expr() && a.start() >= tag.start && a.end() <= tag.end
                     })
                     .map(|(idx, _)| idx)
             })
@@ -163,12 +163,12 @@ impl PruneMap {
             .iter()
             .enumerate()
             .filter_map(|(html_idx, node)| match node {
-                HtmlNode::StartTag { start, end, .. }
-                | HtmlNode::Void { start, end, .. }
-                | HtmlNode::SelfClosingTag { start, end, .. } => {
+                HtmlNode::StartTag { range, .. }
+                | HtmlNode::Void { range, .. }
+                | HtmlNode::SelfClosingTag { range, .. } => {
                     let has_askama = askama_nodes
                         .iter()
-                        .any(|a| a.start() >= *start && a.end() <= *end);
+                        .any(|a| a.start() >= range.start && a.end() <= range.end);
                     has_askama.then_some(html_idx)
                 }
                 _ => None,
@@ -179,24 +179,24 @@ impl PruneMap {
     fn find_askama_in_text(
         askama_nodes: &[AskamaNode],
         html_nodes: &[HtmlNode],
-    ) -> HashMap<(usize, usize), Vec<usize>> {
+    ) -> HashMap<Range<usize>, Vec<usize>> {
         html_nodes
             .iter()
             .filter_map(|node| match node {
-                HtmlNode::Text { start, end, .. } | HtmlNode::RawText { start, end, .. } => {
-                    Some((*start, *end))
+                HtmlNode::Text { range, .. } | HtmlNode::RawText { range, .. } => {
+                    Some(range.clone())
                 }
                 _ => None,
             })
-            .filter_map(|(text_start, text_end)| {
+            .filter_map(|range| {
                 let indices: Vec<usize> = askama_nodes
                     .iter()
                     .enumerate()
-                    .filter(|(_, a)| a.start() >= text_start && a.end() <= text_end)
+                    .filter(|(_, a)| a.start() >= range.start && a.end() <= range.end)
                     .map(|(idx, _)| idx)
                     .collect();
 
-                (!indices.is_empty()).then_some(((text_start, text_end), indices))
+                (!indices.is_empty()).then_some((range, indices))
             })
             .collect()
     }
@@ -378,7 +378,7 @@ impl SakuraTree {
         // Update twigs for paired start/end tags
         for html_node in html_nodes {
             if let HtmlNode::StartTag {
-                start,
+                range,
                 end_tag_idx: Some(end_html_idx),
                 ..
             } = html_node
@@ -387,7 +387,7 @@ impl SakuraTree {
                 let end_start = end_node.start();
 
                 if let (Some(&start_leaf_idx), Some(&end_leaf_idx)) = (
-                    byte_to_leaf_map.get(start),
+                    byte_to_leaf_map.get(&range.start),
                     byte_to_leaf_map.get(&end_start),
                 ) {
                     tree.twigs[start_leaf_idx] = Twig(start_leaf_idx, end_leaf_idx);
@@ -426,18 +426,11 @@ impl SakuraTree {
     ) {
         for (idx, node) in html_nodes.iter().enumerate() {
             match node {
-                HtmlNode::StartTag {
-                    start, end, name, ..
-                }
-                | HtmlNode::Void {
-                    start, end, name, ..
-                }
-                | HtmlNode::SelfClosingTag {
-                    start, end, name, ..
-                } => {
+                HtmlNode::StartTag { range, name, .. }
+                | HtmlNode::Void { range, name, .. }
+                | HtmlNode::SelfClosingTag { range, name, .. } => {
                     let leaf = if prune_map.tags_with_askama.contains(&idx) {
-                        let content =
-                            html::reconstruct_tag(*start, *end, source, askama_nodes, config);
+                        let content = html::reconstruct_tag(range, source, askama_nodes, config);
                         let is_inline = html::is_inline_tag_name(name);
                         match node {
                             HtmlNode::StartTag { .. } => Leaf::HtmlStartTag { content, is_inline },
@@ -446,35 +439,13 @@ impl SakuraTree {
                     } else {
                         Leaf::from_html(node)
                     };
-                    leaves.insert(*start, leaf);
+                    leaves.insert(range.start, leaf);
                 }
-                HtmlNode::Text {
-                    start, end, text, ..
-                } => {
-                    Self::split_text(
-                        leaves,
-                        *start,
-                        *end,
-                        text,
-                        askama_nodes,
-                        prune_map,
-                        source,
-                        false,
-                    );
+                HtmlNode::Text { range, text, .. } => {
+                    Self::split_text(leaves, range, text, askama_nodes, prune_map, source, false);
                 }
-                HtmlNode::RawText {
-                    start, end, text, ..
-                } => {
-                    Self::split_text(
-                        leaves,
-                        *start,
-                        *end,
-                        text,
-                        askama_nodes,
-                        prune_map,
-                        source,
-                        true,
-                    );
+                HtmlNode::RawText { range, text, .. } => {
+                    Self::split_text(leaves, range, text, askama_nodes, prune_map, source, true);
                 }
                 _ => {
                     leaves.insert(node.start(), Leaf::from_html(node));
@@ -485,20 +456,19 @@ impl SakuraTree {
 
     fn split_text(
         leaves: &mut BTreeMap<usize, Leaf>,
-        text_start: usize,
-        text_end: usize,
-        text_content: &str,
+        range: &Range<usize>,
+        content: &str,
         askama_nodes: &[AskamaNode],
         prune_map: &PruneMap,
         source: &str,
         is_raw: bool,
     ) {
-        let Some(askama_indices) = prune_map.askama_in_text.get(&(text_start, text_end)) else {
-            leaves.insert(text_start, Leaf::from_text_fragment(text_content, is_raw));
+        let Some(askama_indices) = prune_map.askama_in_text.get(range) else {
+            leaves.insert(range.start, Leaf::from_text_fragment(content, is_raw));
             return;
         };
 
-        let mut current_pos = text_start;
+        let mut current_pos = range.start;
         for &idx in askama_indices {
             let askama = &askama_nodes[idx];
             if askama.start() > current_pos {
@@ -508,8 +478,8 @@ impl SakuraTree {
             current_pos = askama.end();
         }
 
-        if current_pos < text_end {
-            let fragment = &source[current_pos..text_end];
+        if current_pos < range.end {
+            let fragment = &source[current_pos..range.end];
             leaves.insert(current_pos, Leaf::from_text_fragment(fragment, is_raw));
         }
     }

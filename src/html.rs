@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::ops;
 use tree_sitter::{Node, Range};
 
 use crate::{
@@ -12,20 +13,17 @@ pub enum HtmlNode {
         name: String,
         attr: String,
         end_tag_idx: Option<usize>,
-        start: usize,
-        end: usize,
+        range: ops::Range<usize>,
     },
     Void {
         name: String,
         attr: String,
-        start: usize,
-        end: usize,
+        range: ops::Range<usize>,
     },
     SelfClosingTag {
         name: String,
         attr: String,
-        start: usize,
-        end: usize,
+        range: ops::Range<usize>,
     },
     EndTag {
         name: String,
@@ -34,13 +32,11 @@ pub enum HtmlNode {
 
     Text {
         text: String,
-        start: usize,
-        end: usize,
+        range: ops::Range<usize>,
     },
     RawText {
         text: String,
-        start: usize,
-        end: usize,
+        range: ops::Range<usize>,
     },
 
     Doctype {
@@ -65,13 +61,13 @@ pub enum HtmlNode {
 impl HtmlNode {
     pub fn start(&self) -> usize {
         match self {
-            Self::StartTag { start, .. }
-            | Self::Void { start, .. }
-            | Self::SelfClosingTag { start, .. }
-            | Self::EndTag { start, .. }
+            Self::StartTag { range, .. }
+            | Self::Void { range, .. }
+            | Self::SelfClosingTag { range, .. }
+            | Self::Text { range, .. }
+            | Self::RawText { range, .. } => range.start,
+            Self::EndTag { start, .. }
             | Self::ErroneousEndTag { start, .. }
-            | Self::Text { start, .. }
-            | Self::RawText { start, .. }
             | Self::Doctype { start, .. }
             | Self::Entity { start, .. }
             | Self::Comment { start, .. } => *start,
@@ -251,8 +247,7 @@ fn parse_html_node_recursive(
             let text = extract_text_from_ranges(node, source, content_ranges)?;
             html_nodes.push(HtmlNode::Text {
                 text,
-                start: node.start_byte(),
-                end: node.end_byte(),
+                range: node.start_byte()..node.end_byte(),
             });
         }
         "element" | "script_element" | "style_element" => {
@@ -304,8 +299,7 @@ fn parse_html_node_recursive(
             if !text.trim().is_empty() {
                 html_nodes.push(HtmlNode::RawText {
                     text: text.to_string(),
-                    start: node.start_byte(),
-                    end: node.end_byte(),
+                    range: node.start_byte()..node.end_byte(),
                 });
             }
         }
@@ -323,16 +317,14 @@ fn parse_start_tag(node: &Node, source: &[u8]) -> HtmlNode {
         HtmlNode::Void {
             name: tag_name,
             attr,
-            start: node.start_byte(),
-            end: node.end_byte(),
+            range: node.start_byte()..node.end_byte(),
         }
     } else {
         HtmlNode::StartTag {
             name: tag_name,
             attr,
             end_tag_idx: None,
-            start: node.start_byte(),
-            end: node.end_byte(),
+            range: node.start_byte()..node.end_byte(),
         }
     }
 }
@@ -344,8 +336,7 @@ fn parse_self_closing_tag(node: &Node, source: &[u8]) -> HtmlNode {
     HtmlNode::SelfClosingTag {
         name: tag_name,
         attr,
-        start: node.start_byte(),
-        end: node.end_byte(),
+        range: node.start_byte()..node.end_byte(),
     }
 }
 
@@ -450,18 +441,17 @@ fn format_comment(content: &str) -> String {
 
 // Reconstruct tag content with properly formatted Askama expressions
 pub fn reconstruct_tag(
-    start: usize,
-    end: usize,
+    range: &ops::Range<usize>,
     source: &str,
     askama_nodes: &[AskamaNode],
     config: &Config,
 ) -> String {
     let mut result = String::new();
-    let mut current_pos = start;
+    let mut current_pos = range.start;
 
     let askama_in_range: Vec<_> = askama_nodes
         .iter()
-        .filter(|a| a.start() >= start && a.end() <= end)
+        .filter(|a| a.start() >= range.start && a.end() <= range.end)
         .collect();
 
     for askama in askama_in_range {
@@ -477,8 +467,8 @@ pub fn reconstruct_tag(
         current_pos = askama.end();
     }
 
-    if current_pos < end {
-        let fragment = &source[current_pos..end];
+    if current_pos < range.end {
+        let fragment = &source[current_pos..range.end];
         let normalized = normalize_fragment(fragment);
         result.push_str(&normalized);
     }

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::ops;
 use tree_sitter::{Node, Range};
 
 use crate::config::Config;
@@ -137,37 +138,34 @@ pub enum AskamaNode {
         dlmts: Delimiters,
         inner: String,
         ctrl_tag: ControlTag,
-        start: usize,
-        end: usize,
+        range: ops::Range<usize>,
     },
     Expression {
         dlmts: Delimiters,
         inner: String,
-        start: usize,
-        end: usize,
+        range: ops::Range<usize>,
     },
     Comment {
         dlmts: Delimiters,
         inner: String,
-        start: usize,
-        end: usize,
+        range: ops::Range<usize>,
     },
 }
 
 impl AskamaNode {
     pub fn start(&self) -> usize {
         match self {
-            Self::Control { start, .. }
-            | Self::Expression { start, .. }
-            | Self::Comment { start, .. } => *start,
+            Self::Control { range, .. }
+            | Self::Expression { range, .. }
+            | Self::Comment { range, .. } => range.start,
         }
     }
 
     pub fn end(&self) -> usize {
         match self {
-            Self::Control { end, .. }
-            | Self::Expression { end, .. }
-            | Self::Comment { end, .. } => *end,
+            Self::Control { range, .. }
+            | Self::Expression { range, .. }
+            | Self::Comment { range, .. } => range.end,
         }
     }
 
@@ -248,8 +246,7 @@ pub fn extract_askama_nodes(root: &Node, source: &str) -> Result<(Vec<AskamaNode
 
 fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode> {
     let (dlmts, inner) = extract_delimiters(node, source)?;
-    let start = node.start_byte();
-    let end = node.end_byte();
+    let range = node.start_byte()..node.end_byte();
 
     let askama_node = match node.kind() {
         "control_tag" => {
@@ -258,21 +255,18 @@ fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode> {
                 dlmts,
                 inner,
                 ctrl_tag,
-                start,
-                end,
+                range,
             }
         }
         "render_expression" => AskamaNode::Expression {
             dlmts,
             inner,
-            start,
-            end,
+            range,
         },
         "comment" => AskamaNode::Comment {
             dlmts,
             inner,
-            start,
-            end,
+            range,
         },
         _ => unreachable!(),
     };
