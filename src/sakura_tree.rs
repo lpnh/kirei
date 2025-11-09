@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::RangeInclusive;
 
 use crate::{
@@ -109,6 +109,97 @@ pub enum BranchStyle {
     WrappedText,
     MultilineComment,
     Raw,
+}
+
+// Askama and HTML nodes relationship map
+struct PruneMap {
+    askama_in_attrs: HashSet<usize>,                     // Askama indices
+    tags_with_askama: HashSet<usize>,                    // Html tag indices
+    askama_in_text: HashMap<(usize, usize), Vec<usize>>, // Askama indices
+}
+
+impl PruneMap {
+    fn new(askama_nodes: &[AskamaNode], html_nodes: &[HtmlNode]) -> Self {
+        let askama_in_attrs = Self::find_askama_in_attrs(askama_nodes, html_nodes);
+        let tags_with_askama = Self::find_tags_with_askama(askama_nodes, html_nodes);
+        let askama_in_text = Self::find_askama_in_text(askama_nodes, html_nodes);
+
+        Self {
+            askama_in_attrs,
+            tags_with_askama,
+            askama_in_text,
+        }
+    }
+
+    fn find_askama_in_attrs(
+        askama_nodes: &[AskamaNode],
+        html_nodes: &[HtmlNode],
+    ) -> HashSet<usize> {
+        html_nodes
+            .iter()
+            .filter_map(|node| match node {
+                HtmlNode::StartTag { start, end, .. }
+                | HtmlNode::Void { start, end, .. }
+                | HtmlNode::SelfClosingTag { start, end, .. } => Some((*start, *end)),
+                _ => None,
+            })
+            .flat_map(|(tag_start, tag_end)| {
+                askama_nodes
+                    .iter()
+                    .enumerate()
+                    .filter(move |(_, a)| {
+                        a.is_expr() && a.start() >= tag_start && a.end() <= tag_end
+                    })
+                    .map(|(idx, _)| idx)
+            })
+            .collect()
+    }
+
+    fn find_tags_with_askama(
+        askama_nodes: &[AskamaNode],
+        html_nodes: &[HtmlNode],
+    ) -> HashSet<usize> {
+        html_nodes
+            .iter()
+            .enumerate()
+            .filter_map(|(html_idx, node)| match node {
+                HtmlNode::StartTag { start, end, .. }
+                | HtmlNode::Void { start, end, .. }
+                | HtmlNode::SelfClosingTag { start, end, .. } => {
+                    let has_askama = askama_nodes
+                        .iter()
+                        .any(|a| a.start() >= *start && a.end() <= *end);
+                    has_askama.then_some(html_idx)
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn find_askama_in_text(
+        askama_nodes: &[AskamaNode],
+        html_nodes: &[HtmlNode],
+    ) -> HashMap<(usize, usize), Vec<usize>> {
+        html_nodes
+            .iter()
+            .filter_map(|node| match node {
+                HtmlNode::Text { start, end, .. } | HtmlNode::RawText { start, end, .. } => {
+                    Some((*start, *end))
+                }
+                _ => None,
+            })
+            .filter_map(|(text_start, text_end)| {
+                let indices: Vec<usize> = askama_nodes
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, a)| a.start() >= text_start && a.end() <= text_end)
+                    .map(|(idx, _)| idx)
+                    .collect();
+
+                (!indices.is_empty()).then_some(((text_start, text_end), indices))
+            })
+            .collect()
+    }
 }
 
 impl Leaf {
@@ -253,24 +344,33 @@ impl SakuraTree {
             twigs: Vec::new(),
         };
 
-        // Collect Askama and HTML nodes and sort by byte position
-        let mut leaves: Vec<(usize, Leaf)> = Vec::new();
-        Self::leaves_from_askama(&mut leaves, askama_nodes, html_nodes, source, config);
-        Self::leaves_from_html(&mut leaves, html_nodes, askama_nodes, source, config);
-        leaves.sort_unstable_by_key(|(pos, _)| *pos);
+        let prune_map = PruneMap::new(askama_nodes, html_nodes);
+
+        let mut leaves: BTreeMap<usize, Leaf> = BTreeMap::new();
+        Self::leaves_from_askama(&mut leaves, askama_nodes, &prune_map, source, config);
+        Self::leaves_from_html(
+            &mut leaves,
+            html_nodes,
+            askama_nodes,
+            &prune_map,
+            source,
+            config,
+        );
 
         // Build byte-to-leaf map for HTML tags
-        let mut byte_to_leaf_map: HashMap<usize, usize> = HashMap::new();
-        for (leaf_idx, (start, leaf)) in leaves.iter().enumerate() {
-            if matches!(
-                leaf,
-                Leaf::HtmlStartTag { .. } | Leaf::HtmlVoidTag { .. } | Leaf::HtmlEndTag(_)
-            ) {
-                byte_to_leaf_map.insert(*start, leaf_idx);
-            }
-        }
+        let byte_to_leaf_map: HashMap<usize, usize> = leaves
+            .iter()
+            .enumerate()
+            .filter_map(|(leaf_idx, (start, leaf))| {
+                matches!(
+                    leaf,
+                    Leaf::HtmlStartTag { .. } | Leaf::HtmlVoidTag { .. } | Leaf::HtmlEndTag(_)
+                )
+                .then_some((*start, leaf_idx))
+            })
+            .collect();
 
-        tree.leaves = leaves.into_iter().map(|(_, leaf)| leaf).collect();
+        tree.leaves = leaves.into_values().collect();
 
         // Initialize twigs with same index for each leaf
         tree.twigs = (0..tree.leaves.len()).map(Twig::from).collect();
@@ -302,41 +402,29 @@ impl SakuraTree {
         tree
     }
 
-    // Collect Askama nodes, excluding expressions within HTML tag attributes
     fn leaves_from_askama(
-        leaves: &mut Vec<(usize, Leaf)>,
+        leaves: &mut BTreeMap<usize, Leaf>,
         askama_nodes: &[AskamaNode],
-        html_nodes: &[HtmlNode],
+        prune_map: &PruneMap,
         source: &str,
         config: &Config,
     ) {
-        for node in askama_nodes {
-            let in_tag_attr = node.is_expr()
-                && html_nodes.iter().any(|html| {
-                    matches!(
-                        html,
-                        HtmlNode::StartTag { start, end, .. }
-                        | HtmlNode::Void { start, end, .. }
-                        | HtmlNode::SelfClosingTag { start, end, .. }
-                        if node.start() >= *start && node.end() <= *end
-                    )
-                });
-
-            if !in_tag_attr {
-                leaves.push((node.start(), Leaf::from_askama(config, node, source)));
+        for (idx, node) in askama_nodes.iter().enumerate() {
+            if !prune_map.askama_in_attrs.contains(&idx) {
+                leaves.insert(node.start(), Leaf::from_askama(config, node, source));
             }
         }
     }
 
-    // Collect HTML nodes, splitting text at Askama boundaries and reconstructing tags
     fn leaves_from_html(
-        leaves: &mut Vec<(usize, Leaf)>,
+        leaves: &mut BTreeMap<usize, Leaf>,
         html_nodes: &[HtmlNode],
         askama_nodes: &[AskamaNode],
+        prune_map: &PruneMap,
         source: &str,
         config: &Config,
     ) {
-        for node in html_nodes {
+        for (idx, node) in html_nodes.iter().enumerate() {
             match node {
                 HtmlNode::StartTag {
                     start, end, name, ..
@@ -347,14 +435,10 @@ impl SakuraTree {
                 | HtmlNode::SelfClosingTag {
                     start, end, name, ..
                 } => {
-                    let leaf = if askama_nodes
-                        .iter()
-                        .any(|a| a.start() >= *start && a.end() <= *end)
-                    {
+                    let leaf = if prune_map.tags_with_askama.contains(&idx) {
                         let content =
                             html::reconstruct_tag(*start, *end, source, askama_nodes, config);
                         let is_inline = html::is_inline_tag_name(name);
-
                         match node {
                             HtmlNode::StartTag { .. } => Leaf::HtmlStartTag { content, is_inline },
                             _ => Leaf::HtmlVoidTag { content, is_inline },
@@ -362,63 +446,71 @@ impl SakuraTree {
                     } else {
                         Leaf::from_html(node)
                     };
-
-                    leaves.push((*start, leaf));
+                    leaves.insert(*start, leaf);
                 }
                 HtmlNode::Text {
                     start, end, text, ..
                 } => {
-                    Self::split_text(leaves, *start, *end, text, askama_nodes, source, false);
+                    Self::split_text(
+                        leaves,
+                        *start,
+                        *end,
+                        text,
+                        askama_nodes,
+                        prune_map,
+                        source,
+                        false,
+                    );
                 }
                 HtmlNode::RawText {
                     start, end, text, ..
                 } => {
-                    Self::split_text(leaves, *start, *end, text, askama_nodes, source, true);
+                    Self::split_text(
+                        leaves,
+                        *start,
+                        *end,
+                        text,
+                        askama_nodes,
+                        prune_map,
+                        source,
+                        true,
+                    );
                 }
                 _ => {
-                    leaves.push((node.start(), Leaf::from_html(node)));
+                    leaves.insert(node.start(), Leaf::from_html(node));
                 }
             }
         }
     }
 
     fn split_text(
-        leaves: &mut Vec<(usize, Leaf)>,
+        leaves: &mut BTreeMap<usize, Leaf>,
         text_start: usize,
         text_end: usize,
         text_content: &str,
         askama_nodes: &[AskamaNode],
+        prune_map: &PruneMap,
         source: &str,
         is_raw: bool,
     ) {
-        let mut askama_in_range: Vec<_> = askama_nodes
-            .iter()
-            .filter(|a| a.start() >= text_start && a.end() <= text_end)
-            .collect();
-        askama_in_range.sort_unstable_by_key(|a| a.start());
-
-        if askama_in_range.is_empty() {
-            let leaf = Leaf::from_text_fragment(text_content, is_raw);
-            leaves.push((text_start, leaf));
+        let Some(askama_indices) = prune_map.askama_in_text.get(&(text_start, text_end)) else {
+            leaves.insert(text_start, Leaf::from_text_fragment(text_content, is_raw));
             return;
-        }
+        };
 
-        // Split text into fragments at Askama boundaries
         let mut current_pos = text_start;
-
-        for askama in &askama_in_range {
+        for &idx in askama_indices {
+            let askama = &askama_nodes[idx];
             if askama.start() > current_pos {
                 let fragment = &source[current_pos..askama.start()];
-                let leaf = Leaf::from_text_fragment(fragment, is_raw);
-                leaves.push((current_pos, leaf));
+                leaves.insert(current_pos, Leaf::from_text_fragment(fragment, is_raw));
             }
             current_pos = askama.end();
         }
 
         if current_pos < text_end {
             let fragment = &source[current_pos..text_end];
-            let leaf = Leaf::from_text_fragment(fragment, is_raw);
-            leaves.push((current_pos, leaf));
+            leaves.insert(current_pos, Leaf::from_text_fragment(fragment, is_raw));
         }
     }
 
