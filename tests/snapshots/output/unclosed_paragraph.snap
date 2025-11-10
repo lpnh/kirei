@@ -1,5 +1,0 @@
----
-source: tests/snapshots/malformed.rs
-description: "<p>Hello!\n"
----
-<p>Hello!

@@ -1,1 +1,2 @@
-mod cli;
+mod error;
+mod success;

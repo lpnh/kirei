@@ -1,7 +1,7 @@
 use assert_cmd::{Command, cargo};
 use assert_fs::{TempDir, prelude::*};
 use predicates::str::contains;
-use std::fs::{read_to_string, write};
+use std::fs::read_to_string;
 
 #[test]
 fn formats_simple_template() {
@@ -97,37 +97,6 @@ fn passes_when_formatted() {
 }
 
 #[test]
-fn fails_when_unformatted() {
-    let temp = TempDir::new().unwrap();
-    let file = temp.child("test.html");
-    file.write_str("<div>  {% for item in items %}  {{ item }}  {% endfor %}  </div>")
-        .unwrap();
-
-    Command::new(cargo::cargo_bin!("kirei"))
-        .arg("--check")
-        .arg(file.path())
-        .assert()
-        .failure()
-        .code(1);
-}
-
-#[test]
-fn prints_error_to_stderr() {
-    let temp = TempDir::new().unwrap();
-    let file = temp.child("test.html");
-    file.write_str("{% if user.logged_in %}<p>  Welcome {{ user.name }}!  </p>{% endif %}")
-        .unwrap();
-
-    Command::new(cargo::cargo_bin!("kirei"))
-        .arg("--check")
-        .arg(file.path())
-        .assert()
-        .failure()
-        .code(1)
-        .stderr(contains("File needs formatting"));
-}
-
-#[test]
 fn stdin_passes_when_formatted() {
     Command::new(cargo::cargo_bin!("kirei"))
         .arg("-")
@@ -135,17 +104,6 @@ fn stdin_passes_when_formatted() {
         .write_stdin("<div></div>\n")
         .assert()
         .success();
-}
-
-#[test]
-fn stdin_fails_when_unformatted() {
-    Command::new(cargo::cargo_bin!("kirei"))
-        .arg("-")
-        .arg("--check")
-        .write_stdin("{% match status %}{% when Status::Active %}<span>Active</span>{% endmatch %}")
-        .assert()
-        .failure()
-        .code(1);
 }
 
 #[test]
@@ -181,56 +139,6 @@ fn write_with_stdin_prints_to_stdout() {
 }
 
 #[test]
-fn list_different_shows_unformatted() {
-    let temp = TempDir::new().unwrap();
-    let file = temp.child("test.html");
-    file.write_str("<ul>{% for user in users %}  <li>{{ user }}</li>  {% endfor %}</ul>")
-        .unwrap();
-
-    Command::new(cargo::cargo_bin!("kirei"))
-        .arg("--list-different")
-        .arg(file.path())
-        .assert()
-        .failure()
-        .code(1)
-        .stdout(contains("test.html"));
-}
-
-#[test]
-fn list_different_with_stdin_shows_stdin() {
-    Command::new(cargo::cargo_bin!("kirei"))
-        .arg("-")
-        .arg("--list-different")
-        .write_stdin("{% if show %}<div>  <p>{{ content }}</p>  </div>{% endif %}")
-        .assert()
-        .failure()
-        .code(1)
-        .stdout(contains("<stdin>"));
-}
-
-#[test]
-fn stdin_filepath_with_list_different() {
-    Command::new(cargo::cargo_bin!("kirei"))
-        .arg("-")
-        .arg("--list-different")
-        .arg("--stdin-filepath")
-        .arg("custom/path.html")
-        .write_stdin("{% for i in items %}<div>  {{ i.name }}  </div>{% endfor %}")
-        .assert()
-        .failure()
-        .code(1)
-        .stdout(contains("custom/path.html"));
-}
-
-#[test]
-fn fails_on_missing_file() {
-    Command::new(cargo::cargo_bin!("kirei"))
-        .arg("this_file_does_not_exist.html")
-        .assert()
-        .failure();
-}
-
-#[test]
 fn handles_empty_files() {
     let temp = TempDir::new().unwrap();
     let file = temp.child("empty.html");
@@ -255,47 +163,10 @@ fn handles_whitespace_only() {
 }
 
 #[test]
-fn handles_malformed_tmpl() {
-    let temp = TempDir::new().unwrap();
-    let file = temp.child("malformed_tmpl.html");
-    file.write_str("{% block foo %}{% endblock").unwrap();
-
-    Command::new(cargo::cargo_bin!("kirei"))
-        .arg(file.path())
-        .assert()
-        .success();
-}
-
-#[test]
-fn handles_malformed_html() {
-    let temp = TempDir::new().unwrap();
-    let file = temp.child("malformed_html.html");
-    file.write_str("<div").unwrap();
-
-    Command::new(cargo::cargo_bin!("kirei"))
-        .arg(file.path())
-        .assert()
-        .success();
-}
-
-#[test]
-fn fails_on_invalid_utf8() {
-    let temp = TempDir::new().unwrap();
-    let file = temp.child("invalid.html");
-
-    write(file.path(), [0xFF, 0xFE, 0xFD]).unwrap();
-
-    Command::new(cargo::cargo_bin!("kirei"))
-        .arg(file.path())
-        .assert()
-        .failure();
-}
-
-#[test]
-fn handles_utf8_special_chars() {
+fn handles_utf8_replacement_char() {
     let temp = TempDir::new().unwrap();
     let file = temp.child("utf8.html");
-    file.write_str("<div>\u{FFFD}\u{0000}</div>").unwrap();
+    file.write_str("<div>\u{FFFD}</div>").unwrap();
 
     Command::new(cargo::cargo_bin!("kirei"))
         .arg(file.path())

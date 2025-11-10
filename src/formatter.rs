@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use tree_sitter::Parser;
 use tree_sitter_askama::LANGUAGE as ASKAMA_LANGUAGE;
 use tree_sitter_html::LANGUAGE as HTML_LANGUAGE;
@@ -43,9 +43,9 @@ impl AskamaFormatter {
             .parse(source, None)
             .context("Failed to parse Askama")?;
 
-        // Save Point: return the source unchanged for any syntax error in the Askama AST
+        // Save Point: check for any syntax error in the Askama AST
         if ast_tree.root_node().has_error() {
-            return Ok(source.to_string());
+            return Err(anyhow!("failed to parse Askama: syntax error"));
         }
 
         // 2. Extract Askama nodes and content node ranges
@@ -64,9 +64,9 @@ impl AskamaFormatter {
             .parse(source, None)
             .context("Failed to parse HTML")?;
 
-        // Save Point: return the source unchanged for any syntax error in the Html AST
+        // Save Point: check for any syntax error in the Html AST
         if html_tree.root_node().has_error() {
-            return Ok(source.to_string());
+            return Err(anyhow!("failed to parse HTML: syntax error"));
         }
 
         // 4. Extract Html nodes

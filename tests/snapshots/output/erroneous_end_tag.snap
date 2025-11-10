@@ -1,5 +1,5 @@
 ---
 source: tests/snapshots/html.rs
-description: "<div><p>Some text</foo></bar>\n"
+description: "<div><foo>Some text</bar></div>\n"
 ---
-<div><p>Some text</foo></bar>
+<div><foo>Some text</bar></div>

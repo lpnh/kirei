@@ -1,5 +1,0 @@
----
-source: tests/snapshots/malformed.rs
-description: "<body>{% block first %}{% blop %}<p>A cool paragraph</p>{% endblock %}{% endblock %}</body>\n"
----
-<body>{% block first %}{% blop %}<p>A cool paragraph</p>{% endblock %}{% endblock %}</body>

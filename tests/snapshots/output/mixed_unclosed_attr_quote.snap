@@ -1,5 +1,0 @@
----
-source: tests/snapshots/malformed.rs
-description: "<div class=\"{{ color }}>something</div>\n"
----
-<div class="{{ color }}>something</div>
