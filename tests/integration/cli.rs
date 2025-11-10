@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd::{Command, cargo};
 use assert_fs::{TempDir, prelude::*};
 use predicates::str::contains;
 use std::fs::{read_to_string, write};
@@ -9,8 +9,7 @@ fn formats_simple_template() {
     let file = temp.child("template.html");
     file.write_str("{# A Comment #}\n{% if let Some(user) = user %}<i>Bonjour</i> {{ user.name }} !{% endif %}").unwrap();
 
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg(file.path())
         .assert()
         .success()
@@ -24,8 +23,7 @@ fn formats_simple_template() {
 
 #[test]
 fn reads_from_stdin() {
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg("-")
         .write_stdin("{% if active %}<div><p>{{ message }}</p></div>{% endif %}")
         .assert()
@@ -41,7 +39,7 @@ fn output_ends_with_newline() {
     file.write_str("{% for n in numbers %}<span>{{ n }}</span>{% endfor %}")
         .unwrap();
 
-    let mut cmd = Command::cargo_bin("kirei").unwrap();
+    let mut cmd = Command::new(cargo::cargo_bin!("kirei"));
     let output = cmd.arg(file.path()).output().unwrap();
     let formatted = String::from_utf8(output.stdout).unwrap();
 
@@ -57,8 +55,7 @@ fn format_is_idempotent() {
     )
     .unwrap();
 
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg("--write")
         .arg(file.path())
         .assert()
@@ -66,8 +63,7 @@ fn format_is_idempotent() {
 
     let first_format = read_to_string(file.path()).unwrap();
 
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg("--write")
         .arg(file.path())
         .assert()
@@ -87,14 +83,13 @@ fn passes_when_formatted() {
     let file = temp.child("test.html");
     file.write_str("").unwrap();
 
-    let mut cmd = Command::cargo_bin("kirei").unwrap();
+    let mut cmd = Command::new(cargo::cargo_bin!("kirei"));
     let output = cmd.arg(file.path()).output().unwrap();
     let formatted = String::from_utf8(output.stdout).unwrap();
 
     file.write_str(&formatted).unwrap();
 
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg("--check")
         .arg(file.path())
         .assert()
@@ -108,8 +103,7 @@ fn fails_when_unformatted() {
     file.write_str("<div>  {% for item in items %}  {{ item }}  {% endfor %}  </div>")
         .unwrap();
 
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg("--check")
         .arg(file.path())
         .assert()
@@ -124,8 +118,7 @@ fn prints_error_to_stderr() {
     file.write_str("{% if user.logged_in %}<p>  Welcome {{ user.name }}!  </p>{% endif %}")
         .unwrap();
 
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg("--check")
         .arg(file.path())
         .assert()
@@ -136,8 +129,7 @@ fn prints_error_to_stderr() {
 
 #[test]
 fn stdin_passes_when_formatted() {
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg("-")
         .arg("--check")
         .write_stdin("<div></div>\n")
@@ -147,8 +139,7 @@ fn stdin_passes_when_formatted() {
 
 #[test]
 fn stdin_fails_when_unformatted() {
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg("-")
         .arg("--check")
         .write_stdin("{% match status %}{% when Status::Active %}<span>Active</span>{% endmatch %}")
@@ -165,8 +156,7 @@ fn write_modifies_file() {
         "{% if let Some(user) = user %}<div>  <p>{{ user.name }}</p>  </div>{% endif %}";
     file.write_str(unformatted).unwrap();
 
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg("--write")
         .arg(file.path())
         .assert()
@@ -180,8 +170,7 @@ fn write_modifies_file() {
 
 #[test]
 fn write_with_stdin_prints_to_stdout() {
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg("-")
         .arg("--write")
         .write_stdin("{% for tag in tags %}<span>  {{ tag }}  </span>{% endfor %}")
@@ -198,8 +187,7 @@ fn list_different_shows_unformatted() {
     file.write_str("<ul>{% for user in users %}  <li>{{ user }}</li>  {% endfor %}</ul>")
         .unwrap();
 
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg("--list-different")
         .arg(file.path())
         .assert()
@@ -210,8 +198,7 @@ fn list_different_shows_unformatted() {
 
 #[test]
 fn list_different_with_stdin_shows_stdin() {
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg("-")
         .arg("--list-different")
         .write_stdin("{% if show %}<div>  <p>{{ content }}</p>  </div>{% endif %}")
@@ -223,8 +210,7 @@ fn list_different_with_stdin_shows_stdin() {
 
 #[test]
 fn stdin_filepath_with_list_different() {
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg("-")
         .arg("--list-different")
         .arg("--stdin-filepath")
@@ -238,8 +224,7 @@ fn stdin_filepath_with_list_different() {
 
 #[test]
 fn fails_on_missing_file() {
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg("this_file_does_not_exist.html")
         .assert()
         .failure();
@@ -251,8 +236,7 @@ fn handles_empty_files() {
     let file = temp.child("empty.html");
     file.write_str("").unwrap();
 
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg(file.path())
         .assert()
         .success();
@@ -264,8 +248,7 @@ fn handles_whitespace_only() {
     let file = temp.child("whitespace_only.html");
     file.write_str(" \t \n \t \n").unwrap();
 
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg(file.path())
         .assert()
         .success();
@@ -277,8 +260,7 @@ fn handles_malformed_tmpl() {
     let file = temp.child("malformed_tmpl.html");
     file.write_str("{% block foo %}{% endblock").unwrap();
 
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg(file.path())
         .assert()
         .success();
@@ -290,8 +272,7 @@ fn handles_malformed_html() {
     let file = temp.child("malformed_html.html");
     file.write_str("<div").unwrap();
 
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg(file.path())
         .assert()
         .success();
@@ -304,8 +285,7 @@ fn fails_on_invalid_utf8() {
 
     write(file.path(), [0xFF, 0xFE, 0xFD]).unwrap();
 
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg(file.path())
         .assert()
         .failure();
@@ -317,8 +297,7 @@ fn handles_utf8_special_chars() {
     let file = temp.child("utf8.html");
     file.write_str("<div>\u{FFFD}\u{0000}</div>").unwrap();
 
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg(file.path())
         .assert()
         .success();
@@ -326,8 +305,7 @@ fn handles_utf8_special_chars() {
 
 #[test]
 fn version_flag_works() {
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg("--version")
         .assert()
         .success()
@@ -336,8 +314,7 @@ fn version_flag_works() {
 
 #[test]
 fn help_shows_description() {
-    Command::cargo_bin("kirei")
-        .unwrap()
+    Command::new(cargo::cargo_bin!("kirei"))
         .arg("--help")
         .assert()
         .success()
