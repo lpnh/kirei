@@ -42,3 +42,8 @@ fn full_blown() {
 fn simple_template() {
     format_and_snapshot!("mixed/simple_template.html");
 }
+
+#[test]
+fn mixed_html_comment() {
+    format_and_snapshot!("mixed/mixed_html_comment.html");
+}

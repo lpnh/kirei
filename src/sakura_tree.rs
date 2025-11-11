@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::ops::{Range, RangeInclusive};
 
 use crate::{
@@ -111,84 +111,94 @@ pub enum BranchStyle {
     Raw,
 }
 
-// Askama and HTML nodes relationship map
+// Maps relationships between Askama and Html node ranges
 struct PruneMap {
-    askama_in_attrs: HashSet<usize>,                   // Askama indices
-    tags_with_askama: HashSet<usize>,                  // Html tag indices
-    askama_in_text: HashMap<Range<usize>, Vec<usize>>, // Askama indices
+    // Maps Html node index → Askama indices
+    // These Askama nodes will be reconstructed as part of the Html node's content
+    // `<div class="{{ foo }}">` → single HtmlStartTag leaf with embedded Askama
+    askama_in_consumers: HashMap<usize, Vec<usize>>,
+
+    // Maps Html text range → Askama indices
+    // These Askama nodes will become separate leaves alongside text fragments
+    // "Hello {{ name }}!" → splits into 3 leaves: `HtmlText`, `AskamaExpr`, `HtmlText`
+    askama_in_splitters: HashMap<Range<usize>, Vec<usize>>,
 }
 
 impl PruneMap {
     fn new(askama_nodes: &[AskamaNode], html_nodes: &[HtmlNode]) -> Self {
-        let askama_in_attrs = Self::find_askama_in_attrs(askama_nodes, html_nodes);
-        let tags_with_askama = Self::find_tags_with_askama(askama_nodes, html_nodes);
-        let askama_in_text = Self::find_askama_in_text(askama_nodes, html_nodes);
+        let askama_in_consumers = Self::find_consumers(askama_nodes, html_nodes);
+        let askama_in_splitters = Self::find_splitters(askama_nodes, html_nodes);
 
         Self {
-            askama_in_attrs,
-            tags_with_askama,
-            askama_in_text,
+            askama_in_consumers,
+            askama_in_splitters,
         }
     }
 
-    fn find_askama_in_attrs(
-        askama_nodes: &[AskamaNode],
-        html_nodes: &[HtmlNode],
-    ) -> HashSet<usize> {
-        html_nodes
-            .iter()
-            .filter_map(|node| match node {
-                HtmlNode::StartTag { range, .. }
-                | HtmlNode::Void { range, .. }
-                | HtmlNode::SelfClosingTag { range, .. } => Some(range.clone()),
-                _ => None,
-            })
-            .flat_map(|tag| {
-                askama_nodes
-                    .iter()
-                    .enumerate()
-                    .filter(move |(_, a)| {
-                        a.is_expr() && a.start() >= tag.start && a.end() <= tag.end
-                    })
-                    .map(|(idx, _)| idx)
-            })
-            .collect()
+    // Check if this Askama node will be consumed by an Html node
+    fn will_be_consumed(&self, askama_idx: usize) -> bool {
+        self.askama_in_consumers
+            .values()
+            .any(|indices| indices.contains(&askama_idx))
     }
 
-    fn find_tags_with_askama(
+    // Check if this Html node consumes Askama (needs reconstruction)
+    fn is_consumer(&self, html_idx: usize) -> bool {
+        self.askama_in_consumers.contains_key(&html_idx)
+    }
+
+    // Check if this text range should be split (contains Askama)
+    fn is_splitter(&self, range: &Range<usize>) -> bool {
+        self.askama_in_splitters.contains_key(range)
+    }
+
+    // Find all consuming Html nodes (tags, comments) and the Askama they contain
+    fn find_consumers(
         askama_nodes: &[AskamaNode],
         html_nodes: &[HtmlNode],
-    ) -> HashSet<usize> {
+    ) -> HashMap<usize, Vec<usize>> {
         html_nodes
             .iter()
             .enumerate()
-            .filter_map(|(html_idx, node)| match node {
-                HtmlNode::StartTag { range, .. }
+            .filter_map(|(html_idx, node)| {
+                // Extract range from consuming nodes
+                let (HtmlNode::StartTag { range, .. }
                 | HtmlNode::Void { range, .. }
-                | HtmlNode::SelfClosingTag { range, .. } => {
-                    let has_askama = askama_nodes
-                        .iter()
-                        .any(|a| a.start() >= range.start && a.end() <= range.end);
-                    has_askama.then_some(html_idx)
-                }
-                _ => None,
+                | HtmlNode::SelfClosingTag { range, .. }
+                | HtmlNode::Comment { range, .. }) = node
+                else {
+                    return None; // Not a consumer
+                };
+
+                // Find all Askama nodes within this Html node's range
+                let askama_indices: Vec<usize> = askama_nodes
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, a)| a.start() >= range.start && a.end() <= range.end)
+                    .map(|(idx, _)| idx)
+                    .collect();
+
+                (!askama_indices.is_empty()).then_some((html_idx, askama_indices))
             })
             .collect()
     }
 
-    fn find_askama_in_text(
+    // Find all splitting text nodes and the Askama they contain
+    fn find_splitters(
         askama_nodes: &[AskamaNode],
         html_nodes: &[HtmlNode],
     ) -> HashMap<Range<usize>, Vec<usize>> {
         html_nodes
             .iter()
             .filter_map(|node| match node {
+                // Only Text and RawText nodes split their content
                 HtmlNode::Text { range, .. } | HtmlNode::RawText { range, .. } => {
                     Some(range.clone())
                 }
-                _ => None,
+                _ => None, // Not a splitter
             })
             .filter_map(|range| {
+                // Find all Askama nodes within this text range
                 let indices: Vec<usize> = askama_nodes
                     .iter()
                     .enumerate()
@@ -410,7 +420,8 @@ impl SakuraTree {
         config: &Config,
     ) {
         for (idx, node) in askama_nodes.iter().enumerate() {
-            if !prune_map.askama_in_attrs.contains(&idx) {
+            // Only create standalone leaves for Askama that will not be consumed by Html nodes
+            if !prune_map.will_be_consumed(idx) {
                 leaves.insert(node.start(), Leaf::from_askama(config, node, source));
             }
         }
@@ -429,7 +440,8 @@ impl SakuraTree {
                 HtmlNode::StartTag { range, name, .. }
                 | HtmlNode::Void { range, name, .. }
                 | HtmlNode::SelfClosingTag { range, name, .. } => {
-                    let leaf = if prune_map.tags_with_askama.contains(&idx) {
+                    // Tags are consumers. Check if this one contains Askama
+                    let leaf = if prune_map.is_consumer(idx) {
                         let content = html::reconstruct_tag(range, source, askama_nodes, config);
                         let is_inline = html::is_inline_tag_name(name);
                         match node {
@@ -442,12 +454,34 @@ impl SakuraTree {
                     leaves.insert(range.start, leaf);
                 }
                 HtmlNode::Text { range, text, .. } => {
-                    Self::split_text(leaves, range, text, askama_nodes, prune_map, source, false);
+                    // Text are splitters. Check if this one contains Askama
+                    if prune_map.is_splitter(range) {
+                        Self::split_text(leaves, range, askama_nodes, prune_map, source, false);
+                    } else {
+                        leaves.insert(range.start, Leaf::from_text_fragment(text, false));
+                    }
                 }
                 HtmlNode::RawText { range, text, .. } => {
-                    Self::split_text(leaves, range, text, askama_nodes, prune_map, source, true);
+                    // RawText are splitters. Check if this one contains Askama
+                    if prune_map.is_splitter(range) {
+                        Self::split_text(leaves, range, askama_nodes, prune_map, source, true);
+                    } else {
+                        leaves.insert(range.start, Leaf::from_text_fragment(text, true));
+                    }
+                }
+                HtmlNode::Comment { range, .. } => {
+                    // Comments are consumers. Check if this one contains Askama
+                    let leaf = if prune_map.is_consumer(idx) {
+                        let content =
+                            html::reconstruct_comment(range, source, askama_nodes, config);
+                        Leaf::HtmlComment(content)
+                    } else {
+                        Leaf::from_html(node)
+                    };
+                    leaves.insert(range.start, leaf);
                 }
                 _ => {
+                    // Other node types (Doctype, Entity, EndTag) don't contain Askama
                     leaves.insert(node.start(), Leaf::from_html(node));
                 }
             }
@@ -457,20 +491,20 @@ impl SakuraTree {
     fn split_text(
         leaves: &mut BTreeMap<usize, Leaf>,
         range: &Range<usize>,
-        content: &str,
         askama_nodes: &[AskamaNode],
         prune_map: &PruneMap,
         source: &str,
         is_raw: bool,
     ) {
-        let Some(askama_indices) = prune_map.askama_in_text.get(range) else {
-            leaves.insert(range.start, Leaf::from_text_fragment(content, is_raw));
-            return;
-        };
+        let askama_indices = prune_map
+            .askama_in_splitters
+            .get(range)
+            .expect("text range should contain Askama");
 
         let mut current_pos = range.start;
         for &idx in askama_indices {
             let askama = &askama_nodes[idx];
+            // Insert text fragment before this Askama node (if any)
             if askama.start() > current_pos {
                 let fragment = &source[current_pos..askama.start()];
                 leaves.insert(current_pos, Leaf::from_text_fragment(fragment, is_raw));
@@ -478,6 +512,7 @@ impl SakuraTree {
             current_pos = askama.end();
         }
 
+        // Insert remaining text fragment after last Askama node (if any)
         if current_pos < range.end {
             let fragment = &source[current_pos..range.end];
             leaves.insert(current_pos, Leaf::from_text_fragment(fragment, is_raw));

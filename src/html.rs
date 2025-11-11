@@ -49,7 +49,7 @@ pub enum HtmlNode {
     },
     Comment {
         text: String,
-        start: usize,
+        range: ops::Range<usize>,
     },
 
     ErroneousEndTag {
@@ -65,12 +65,12 @@ impl HtmlNode {
             | Self::Void { range, .. }
             | Self::SelfClosingTag { range, .. }
             | Self::Text { range, .. }
-            | Self::RawText { range, .. } => range.start,
+            | Self::RawText { range, .. }
+            | Self::Comment { range, .. } => range.start,
             Self::EndTag { start, .. }
             | Self::ErroneousEndTag { start, .. }
             | Self::Doctype { start, .. }
-            | Self::Entity { start, .. }
-            | Self::Comment { start, .. } => *start,
+            | Self::Entity { start, .. } => *start,
         }
     }
 
@@ -233,7 +233,7 @@ fn parse_html_node_recursive(
             let normalized = format_comment(&text);
             html_nodes.push(HtmlNode::Comment {
                 text: normalized,
-                start: node.start_byte(),
+                range: node.start_byte()..node.end_byte(),
             });
         }
         "entity" => {
@@ -439,7 +439,7 @@ fn format_comment(content: &str) -> String {
     }
 }
 
-// Reconstruct tag content with properly formatted Askama expressions
+// Reconstruct tag content with formatted Askama expressions
 pub fn reconstruct_tag(
     range: &ops::Range<usize>,
     source: &str,
@@ -471,6 +471,39 @@ pub fn reconstruct_tag(
         let fragment = &source[current_pos..range.end];
         let normalized = normalize_fragment(fragment);
         result.push_str(&normalized);
+    }
+
+    result
+}
+
+// Reconstruct comment content with formatted Askama expressions
+pub fn reconstruct_comment(
+    range: &ops::Range<usize>,
+    source: &str,
+    askama_nodes: &[AskamaNode],
+    config: &Config,
+) -> String {
+    let mut result = String::new();
+    let mut current_pos = range.start;
+
+    let askama_in_range: Vec<_> = askama_nodes
+        .iter()
+        .filter(|a| a.start() >= range.start && a.end() <= range.end)
+        .collect();
+
+    for askama in askama_in_range {
+        if askama.start() > current_pos {
+            result.push_str(&source[current_pos..askama.start()]);
+        }
+
+        let formatted = format_askama_node(config, askama);
+        result.push_str(&formatted);
+
+        current_pos = askama.end();
+    }
+
+    if current_pos < range.end {
+        result.push_str(&source[current_pos..range.end]);
     }
 
     result
