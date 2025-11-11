@@ -26,9 +26,9 @@ fn generate_deeply_nested_tmpl() -> String {
     let depth = 50;
 
     for _ in 0..depth {
-        template.push_str("{{% block i %}}\n");
+        template.push_str("{% block i %}\n");
         template.push_str("Some text\n");
-        template.push_str("{{% if i != depth %}}\n");
+        template.push_str("{% if i != depth %}\n");
         template.push_str("{{ i }}\n");
     }
     template.push_str("{{ deep_content }}\n");
@@ -47,9 +47,9 @@ fn generate_deeply_nested_mixed() -> String {
     let depth = 50;
 
     for _ in 0..depth {
-        template.push_str("{{% block i %}}\n");
+        template.push_str("{% block i %}\n");
         template.push_str("Some text\n");
-        template.push_str("{{% if i != depth %}}\n");
+        template.push_str("{% if i != depth %}\n");
         template.push_str(r#"<div id="i">\n"#);
         template.push_str("<p>Oh, hi {{ username }} !</p>\n");
         template.push_str("Ah... I said that already?\n");
@@ -77,25 +77,19 @@ fn format_benchmark(c: &mut Criterion) {
     group.bench_function("html", |b| {
         let template = generate_deeply_nested_html();
         let mut formatter = AskamaFormatter::new().unwrap();
-        b.iter(|| {
-            formatter.format(black_box(&template)).unwrap()
-        });
+        b.iter(|| formatter.format(black_box(&template)).unwrap());
     });
 
     group.bench_function("askama", |b| {
         let template = generate_deeply_nested_tmpl();
         let mut formatter = AskamaFormatter::new().unwrap();
-        b.iter(|| {
-            formatter.format(black_box(&template)).unwrap()
-        });
+        b.iter(|| formatter.format(black_box(&template)).unwrap());
     });
 
     group.bench_function("mixed", |b| {
         let template = generate_deeply_nested_mixed();
         let mut formatter = AskamaFormatter::new().unwrap();
-        b.iter(|| {
-            formatter.format(black_box(&template)).unwrap()
-        });
+        b.iter(|| formatter.format(black_box(&template)).unwrap());
     });
 
     group.finish();
