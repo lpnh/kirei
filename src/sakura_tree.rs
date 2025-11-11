@@ -481,7 +481,7 @@ impl SakuraTree {
                     leaves.insert(range.start, leaf);
                 }
                 _ => {
-                    // Other node types (Doctype, Entity, EndTag) don't contain Askama
+                    // Let's pretend other node types don't contain Askama for now
                     leaves.insert(node.start(), Leaf::from_html(node));
                 }
             }
