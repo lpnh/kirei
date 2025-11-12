@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ page_title }}{% endblock %} - The Iconic HTTP Status</title>
+    <style>
+        {%~ include "teapot.css" ~%}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header {% if is_teapot %}role="banner"{% endif %}>
+            <div class="status-code">{{ status_code }}</div>
+            <div class="subtitle">{{ page_title }}</div>
+            <div class="protocol-badge {% if is_teapot %}active{% endif %}">
+                {{ protocol }}
+            </div>
+        </header>
+
+        <nav {% if is_teapot %}data-role="navigation"{% endif %} {% if brew_available %}data-brew="disabled"{% endif %}>
+            <!-- This navigation menu is {# dynamically generated #} based on site state -->
+            <ul>
+                <li><a href="#" class="{# main-nav-link #}{% if active_section == "home" %}active{% endif %}">Home</a></li>
+                <li><a href="#statistics" class="{% if active_section == "statistics" %}active{% endif %}">Statistics</a></li>
+                <li><a href="#teapots" class="{% if active_section == "teapots" %}active{% endif %}">Teapot Types</a></li>
+                <li><a href="#facts" class="{% if active_section == "facts" %}active{% endif %}">Fun Facts</a></li>
+                <li><a href="#history" class="{% if active_section == "history" %}active{% endif %}">History</a></li>
+                <li><a href="#coffee-incompatibility" class="{% if active_section == "coffee" %}active{% endif %}">Coffee Incompatibility</a></li>
+                <li><a href="#semantics" class="{% if active_section == "semantics" %}active{% endif %}">HTTP Semantics</a></li>
+                <li><a href="#status-code-details" class="{% if active_section == "status" %}active{% endif %}">Status Code Details</a></li>
+                <li><a href="#brewing-practices" class="{% if active_section == "brewing" %}active{% endif %}">Brewing Practices</a></li>
+            </ul>
+        </nav>
+
+        <!-- {% if is_teapot %}STATUS: Teapot mode active{% endif %} -->
+
+        <main>
+            {% block content %}
+            <!-- Content will be inserted here by extending templates -->
+            {% endblock %}
+        </main>
+
+        <footer>
+            <p>🫖 Built with tea and Askama templates 🫖</p>
+            <p style="margin-top: 0.5rem; font-size: 0.9rem; opacity: 0.8;">
+                RFC 2324 Forever | HTCPCP/1.0 | No Coffee Will Ever Be Brewed Here
+            </p>
+        </footer>
+    </div>
+</body>
+</html>

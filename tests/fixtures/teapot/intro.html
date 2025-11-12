@@ -1,0 +1,95 @@
+{% if is_teapot %}
+    <div class="hero">
+        <h1>🫖 I'm a Teapot! 🫖</h1>
+        <p style="font-size: 1.2rem; margin-bottom: 1rem;">
+            Welcome! Status <span class="highlight">418 I'm a teapot</span> is a real HTTP status code that exists to declare one simple truth: teapots don't brew coffee.
+        </p>
+        <p>
+            Born from an April Fools' joke in 1998, this status code somehow stuck around and became a quirky part of web development lore. Here we'll look at its history, explore the HTTP protocol bits that make it work, and see why it's still hanging around today.
+        </p>
+        <p style="margin-top: 1rem; font-style: italic; opacity: 0.9;">
+            Any attempt to brew coffee with a teapot should result in the error code <span class="highlight">"418 I'm a teapot"</span>. The resulting entity body MAY be short and stout.
+        </p>
+    </div>
+{% endif %}
+
+{% match error_message %}
+{% when Some(msg) %}
+    <!-- Error message content: {{ msg }} -->
+    <div class="error-box">
+        <div {% match error_message %}{% when Some(m) %}data-has-error="true"{% when None %}data-has-error="false"{% endmatch %}>
+            ⚠️ {{ msg }}
+        </div>
+    </div>
+{% when None %}
+{% endmatch %}
+
+<section id="statistics" class="section" {% let total_brews = brew_attempts + successful_teas %}>
+    <p style="text-align: center; margin-bottom: 2rem; font-size: 1.05rem; color: #666;">
+        But don't just take our word for it—let the numbers tell the story of our unwavering commitment to tea.
+    </p>
+    <h2>Our Track Record</h2>
+    <!-- Brew attempts: {{ brew_attempts }}, Successful teas: {{ successful_teas }} -->
+    <div class="stats-container">
+        {% for stat_index in 0..2 %}
+            <div class="stat-box">
+                {% if stat_index == 0 %}
+                    <div class="stat-number">{{ brew_attempts }}</div>
+                    <div class="stat-label">Brew Attempts</div>
+                {% elif stat_index == 1 %}
+                    <div class="stat-number">{{ successful_teas }}</div>
+                    <div class="stat-label">Successful Teas</div>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+
+    {% let success_rate = successful_teas * 100 / total_brews %}
+    <p style="text-align: center; margin-top: 2rem; font-size: 1.2rem;">
+        Tea Success Rate: <strong>{{ success_rate }}%</strong> | Coffee Success Rate: <strong>0%</strong> (as it should be!)
+    </p>
+</section>
+
+<!-- Teapot types section -->
+<section id="teapots" class="section">
+    <p style="text-align: center; margin-bottom: 2rem; color: #666;">
+        Of course, not all teapots are created equal. Let's meet some of the distinguished vessels that proudly uphold the 418 standard.
+    </p>
+    <h2>Distinguished Teapot Types</h2>
+    <div class="teapot-grid" {% for idx in 0..teapot_types.len() %}data-teapot-{{ idx }}="loaded" {% endfor %}>
+        {% for teapot in teapot_types %}
+            {% if !teapot.can_brew_coffee %}
+                <div class="teapot-card {% if is_teapot %}authentic{% endif %}">
+                    <div class="teapot-emoji">{{ teapot.emoji }}</div>
+                    <div class="teapot-name">{{ teapot.name }}</div>
+                    <div class="teapot-origin">Origin: {{ teapot.origin }}</div>
+                    <span class="badge badge-incompatible">✓ Coffee Incompatible</span>
+                </div>
+            {% else %}
+                <div class="teapot-card">
+                    <div class="teapot-emoji">{{ teapot.emoji }}</div>
+                    <div class="teapot-name">{{ teapot.name }}</div>
+                    <div class="teapot-origin">Origin: {{ teapot.origin }}</div>
+                    <span class="badge badge-imposter">⚠️ Not a Real Teapot</span>
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Fun Facts section -->
+<section id="facts" class="section">
+    <p style="text-align: center; margin-bottom: 2rem; color: #666;">
+        Beyond the teapots themselves, the 418 status code has a rich and entertaining backstory worth exploring.
+    </p>
+    <h2>Fun Facts About HTTP 418</h2>
+    <div class="facts-list">
+        {% if show_history %}
+            {% for fact in fun_facts %}
+                <div class="fact-item">
+                    🫖 {{ fact }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+</section>
