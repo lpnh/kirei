@@ -186,6 +186,7 @@ pub enum AskamaNode {
         inner: String,
         ctrl_tag: ControlTag,
         range: ops::Range<usize>,
+        close_tag: Option<usize>,
     },
     Expression {
         dlmts: Delimiters,
@@ -265,6 +266,7 @@ impl AskamaNode {
 pub fn extract_askama_nodes(root: &Node, source: &str) -> Result<(Vec<AskamaNode>, Vec<Range>)> {
     let mut nodes = Vec::new();
     let mut content_node_ranges = Vec::new();
+    let mut stack: Vec<(usize, ControlTag, usize)> = Vec::new();
 
     let mut cursor = root.walk();
     for child in root.children(&mut cursor) {
@@ -274,7 +276,31 @@ pub fn extract_askama_nodes(root: &Node, source: &str) -> Result<(Vec<AskamaNode
         match child.kind() {
             "control_tag" | "render_expression" | "comment" | "raw_statement"
             | "endraw_statement" => {
-                let node = parse_askama_node(child, source)?;
+                let mut node = parse_askama_node(child, source)?;
+                let idx = nodes.len();
+
+                // Pair opening and closing control blocks
+                if let AskamaNode::Control {
+                    ctrl_tag,
+                    close_tag,
+                    range,
+                    ..
+                } = &mut node
+                {
+                    if ctrl_tag.is_opening() {
+                        stack.push((idx, *ctrl_tag, range.start));
+                    } else if let Some(pos) = stack
+                        .iter()
+                        .rposition(|(_, open_tag, _)| open_tag.matching_close() == Some(*ctrl_tag))
+                    {
+                        let (open_idx, _, open_byte) = stack.remove(pos);
+                        *close_tag = Some(open_byte);
+                        if let AskamaNode::Control { close_tag, .. } = &mut nodes[open_idx] {
+                            *close_tag = Some(range.start);
+                        }
+                    }
+                }
+
                 nodes.push(node);
             }
             "content" | "raw_content" => {
@@ -304,6 +330,7 @@ fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode> {
                 inner,
                 ctrl_tag,
                 range,
+                close_tag: None,
             }
         }
         "render_expression" => AskamaNode::Expression {
@@ -316,12 +343,14 @@ fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode> {
             inner,
             ctrl_tag: ControlTag::Raw(Boundary::Open),
             range,
+            close_tag: None,
         },
         "endraw_statement" => AskamaNode::Control {
             dlmts,
             inner,
             ctrl_tag: ControlTag::Endraw(Boundary::Close),
             range,
+            close_tag: None,
         },
         "comment" => AskamaNode::Comment {
             dlmts,

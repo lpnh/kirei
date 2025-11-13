@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::{Range, RangeInclusive};
 
 use crate::{
@@ -367,23 +367,39 @@ impl SakuraTree {
             config,
         );
 
-        // Build byte-to-leaf map for HTML tags
+        // Map byte positions to leaf indices
         let byte_to_leaf_map: HashMap<usize, usize> = leaves
             .iter()
             .enumerate()
-            .filter_map(|(leaf_idx, (start, leaf))| {
-                matches!(
-                    leaf,
-                    Leaf::HtmlStartTag { .. } | Leaf::HtmlVoidTag { .. } | Leaf::HtmlEndTag(_)
-                )
-                .then_some((*start, leaf_idx))
-            })
+            .map(|(leaf_idx, (start, _))| (*start, leaf_idx))
             .collect();
 
         tree.leaves = leaves.into_values().collect();
 
         // Initialize twigs with same index for each leaf
         tree.twigs = (0..tree.leaves.len()).map(Twig::from).collect();
+
+        // Control block pairings and boundaries
+        let mut ctrl_boundaries = Vec::new();
+
+        for node in askama_nodes {
+            if let AskamaNode::Control {
+                ctrl_tag,
+                close_tag: Some(closing_byte),
+                range,
+                ..
+            } = node
+                && ctrl_tag.is_opening()
+                && let Some(&opening_idx) = byte_to_leaf_map.get(&range.start)
+                && let Some(&closing_idx) = byte_to_leaf_map.get(closing_byte)
+            {
+                tree.twigs[opening_idx] = Twig(opening_idx, closing_idx);
+                ctrl_boundaries.push((opening_idx, closing_idx));
+            }
+        }
+
+        // Track which end leaves are already claimed to detect overlapping ranges
+        let mut claimed_end_leaves = HashSet::new();
 
         // Update twigs for paired start/end tags
         for html_node in html_nodes {
@@ -400,7 +416,22 @@ impl SakuraTree {
                     byte_to_leaf_map.get(&range.start),
                     byte_to_leaf_map.get(&end_start),
                 ) {
+                    // Skip if this end leaf is already claimed (malformed Html)
+                    if claimed_end_leaves.contains(&end_leaf_idx) {
+                        continue;
+                    }
+
+                    // Skip if this Html element crosses a control block boundary
+                    if ctrl_boundaries.iter().any(|&(ctrl_start, ctrl_end)| {
+                        let start_inside = start_leaf_idx > ctrl_start && start_leaf_idx < ctrl_end;
+                        let end_inside = end_leaf_idx > ctrl_start && end_leaf_idx < ctrl_end;
+                        start_inside != end_inside
+                    }) {
+                        continue;
+                    }
+
                     tree.twigs[start_leaf_idx] = Twig(start_leaf_idx, end_leaf_idx);
+                    claimed_end_leaves.insert(end_leaf_idx);
                 }
             }
         }
@@ -536,27 +567,27 @@ impl SakuraTree {
                     self.match_arm_with_content(idx, end_idx)
                 }
                 Leaf::AskamaControl { .. } => self
-                    .try_askama_block(idx, end_idx)
+                    .try_askama_block(idx)
                     .unwrap_or_else(|| (self.with_single_leaf(idx), idx + 1)),
                 Leaf::HtmlStartTag { .. } => self.handle_start_tag(idx, end_idx),
                 Leaf::HtmlRawText(_) => {
                     // Collect consecutive RawText and Askama leaves into one ring
-                    let mut last_idx = idx;
-                    let mut curr_idx = idx + 1;
+                    let last_idx = self.leaves[idx..]
+                        .iter()
+                        .take(end_idx - idx)
+                        .take_while(|leaf| {
+                            matches!(
+                                leaf,
+                                Leaf::HtmlRawText(_)
+                                    | Leaf::AskamaExpr { .. }
+                                    | Leaf::AskamaComment(_)
+                            )
+                        })
+                        .count()
+                        + idx
+                        - 1;
 
-                    while curr_idx < end_idx {
-                        match &self.leaves[curr_idx] {
-                            Leaf::HtmlRawText(_)
-                            | Leaf::AskamaExpr { .. }
-                            | Leaf::AskamaComment(_) => {
-                                last_idx = curr_idx;
-                                curr_idx += 1;
-                            }
-                            _ => break,
-                        }
-                    }
-
-                    (Ring::RawText((idx, last_idx).into()), curr_idx)
+                    (Ring::RawText((idx, last_idx).into()), last_idx + 1)
                 }
                 leaf if leaf.is_text_or_expr() => self
                     .try_text_sequence(idx, end_idx)
@@ -603,67 +634,27 @@ impl SakuraTree {
     }
 
     fn try_complete_element(&self, start_leaf: usize) -> Option<(Ring, usize)> {
-        // Get the end_leaf for this element from twigs
         let twig = self.twigs[start_leaf];
-        if twig.has_same_idx() {
-            return None;
-        }
-        let end_leaf = twig.end();
-
-        // Recursively grow inner rings
-        let inner = self.grow_rings(start_leaf + 1, end_leaf);
-
-        let ring = Ring::Element(twig, inner);
-
-        // Next index for parent is after the end tag
-        Some((ring, end_leaf + 1))
+        (!twig.has_same_idx()).then(|| {
+            let end_leaf = twig.end();
+            let inner = self.grow_rings(start_leaf + 1, end_leaf);
+            (Ring::Element(twig, inner), end_leaf + 1)
+        })
     }
 
-    fn try_askama_block(&self, start_idx: usize, end_idx: usize) -> Option<(Ring, usize)> {
-        let Leaf::AskamaControl { tag: ctrl_tag, .. } = &self.leaves[start_idx] else {
+    fn try_askama_block(&self, start_idx: usize) -> Option<(Ring, usize)> {
+        let Leaf::AskamaControl { tag, .. } = &self.leaves[start_idx] else {
             return None;
         };
 
-        if !ctrl_tag.is_opening() {
-            return None;
-        }
-
-        let expected_close = ctrl_tag.matching_close()?;
-
-        // Look for matching close block, tracking nesting depth
-        let mut curr_idx = start_idx + 1;
-        let mut depth: u32 = 0;
-
-        while curr_idx < end_idx && depth < 200 {
-            let leaf = self.leaves.get(curr_idx)?;
-
-            // Check if this is another opening of the same type (nested block)
-            if let Leaf::AskamaControl { tag, .. } = leaf
-                && ctrl_tag.same_kind(*tag)
-                && tag.is_opening()
-            {
-                depth += 1;
-            } else if let Leaf::AskamaControl { tag, .. } = leaf
-                && *tag == expected_close
-            {
-                if depth == 0 {
-                    // Found our matching close at depth 0
-                    let end_leaf = curr_idx;
-
-                    // Recursively grow inner rings for leaves between open and close indices
-                    let inner = self.grow_rings(start_idx + 1, end_leaf);
-
-                    let twig = (start_idx, end_leaf).into();
-                    let ring = Ring::ControlBlock(twig, inner);
-                    return Some((ring, end_leaf + 1));
-                }
-                // This closes a nested block, decrement depth
-                depth = depth.saturating_sub(1);
-            }
-            curr_idx += 1;
-        }
-        // Didn't find a matching close tag
-        None
+        tag.is_opening()
+            .then(|| self.twigs[start_idx])
+            .filter(|twig| !twig.has_same_idx())
+            .map(|twig| {
+                let end_leaf = twig.end();
+                let inner = self.grow_rings(start_idx + 1, end_leaf);
+                (Ring::ControlBlock(twig, inner), end_leaf + 1)
+            })
     }
 
     // Build a when block with its inline content as inner rings
