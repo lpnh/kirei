@@ -5,10 +5,10 @@ description: "<div>\n    {% if first %}\n        <strong>\n    {% elif last %}\n
 <div>
     {% if first %}
         <strong>
-        {% elif last %}
-            <strong>
-                {{ foo }}<span>
-                {% else %}
+    {% elif last %}
+        <strong>
+        {{ foo }}<span>
+    {% else %}
     {% endif %}
-            </strong>
+</strong>
 </div>

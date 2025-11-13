@@ -340,6 +340,10 @@ impl Branch {
 }
 
 impl SakuraTree {
+    pub fn twig_has_same_idx(&self, idx: usize) -> bool {
+        self.twigs[idx].has_same_idx()
+    }
+
     pub fn grow(
         askama_nodes: &[AskamaNode],
         html_nodes: &[HtmlNode],

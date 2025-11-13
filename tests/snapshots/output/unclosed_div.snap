@@ -4,6 +4,6 @@ description: "<main> <div> <h2>Test</h2> <p> Where did that div go </p> </main>\
 ---
 <main>
     <div>
-        <h2>Test</h2>
-        <p>Where did that div go</p>
+    <h2>Test</h2>
+    <p>Where did that div go</p>
 </main>

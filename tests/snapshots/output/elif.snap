@@ -1,0 +1,42 @@
+---
+source: tests/snapshots/mixed.rs
+description: "<div>\n<div>\n{% if foo %}\n<p>Lorem ipsum dolor sit amet, qui minim {{ labore }} adipisicing minim sint cillum sint {{ consectetur }} cupidatat.</p>\n{% elif bar %}\n<p>Lorem ipsum dolor sit amet, qui minim {{ labore }} adipisicing minim sint cillum sint {{ consectetur }} cupidatat.</p>\n{% else %}\n<p>Lorem ipsum dolor sit amet, qui minim {{ labore }} adipisicing minim sint cillum sint {{ consectetur }} cupidatat.</p>\n{% endif %}\n</div>\n<div>\n{% if foo %}\n<p>Lorem ipsum dolor sit amet, qui minim {{ labore }} adipisicing minim sint cillum sint {{ consectetur }} cupidatat.</p>\n{% else if bar %}\n<p>Lorem ipsum dolor sit amet, qui minim {{ labore }} adipisicing minim sint cillum sint {{ consectetur }} cupidatat.</p>\n{% else %}\n<p>Lorem ipsum dolor sit amet, qui minim {{ labore }} adipisicing minim sint cillum sint {{ consectetur }} cupidatat.</p>\n{% endif %}\n</div>\n</div>\n"
+---
+<div>
+    <div>
+        {% if foo %}
+            <p>
+                Lorem ipsum dolor sit amet, qui minim {{ labore }}
+                adipisicing minim sint cillum sint {{ consectetur }} cupidatat.
+            </p>
+        {% elif bar %}
+            <p>
+                Lorem ipsum dolor sit amet, qui minim {{ labore }}
+                adipisicing minim sint cillum sint {{ consectetur }} cupidatat.
+            </p>
+        {% else %}
+            <p>
+                Lorem ipsum dolor sit amet, qui minim {{ labore }}
+                adipisicing minim sint cillum sint {{ consectetur }} cupidatat.
+            </p>
+        {% endif %}
+    </div>
+    <div>
+        {% if foo %}
+            <p>
+                Lorem ipsum dolor sit amet, qui minim {{ labore }}
+                adipisicing minim sint cillum sint {{ consectetur }} cupidatat.
+            </p>
+        {% else if bar %}
+            <p>
+                Lorem ipsum dolor sit amet, qui minim {{ labore }}
+                adipisicing minim sint cillum sint {{ consectetur }} cupidatat.
+            </p>
+        {% else %}
+            <p>
+                Lorem ipsum dolor sit amet, qui minim {{ labore }}
+                adipisicing minim sint cillum sint {{ consectetur }} cupidatat.
+            </p>
+        {% endif %}
+    </div>
+</div>
