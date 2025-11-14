@@ -39,9 +39,52 @@ pub enum ControlTag {
     Endmacro(Boundary),
     MacroCall(Boundary),
     Endcall(Boundary),
+    Raw(Boundary),
+    Endraw(Boundary),
 }
 
 impl ControlTag {
+    fn from_node(node: Node) -> Self {
+        let child = node.child(1).unwrap();
+        match child.kind() {
+            "if_statement" => Self::If(Boundary::Open),
+            "for_statement" => Self::For(Boundary::Open),
+            "block_statement" => Self::Block(Boundary::Open),
+            "filter_statement" => Self::Filter(Boundary::Open),
+            "match_statement" => Self::Match(Boundary::Open),
+            "macro_statement" => Self::Macro(Boundary::Open),
+            "macro_call_statement" => Self::MacroCall(Boundary::Open),
+
+            "else_statement" => {
+                let boundary = if belongs_to_match_statement(node) {
+                    Boundary::Inner
+                } else {
+                    Boundary::Clause
+                };
+                Self::Else(boundary)
+            }
+            "else_if_statement" => Self::ElseIf(Boundary::Clause),
+            "when_statement" => Self::When(Boundary::Inner),
+
+            "endif_statement" => Self::Endif(Boundary::Close),
+            "endfor_statement" => Self::Endfor(Boundary::Close),
+            "endblock_statement" => Self::Endblock(Boundary::Close),
+            "endfilter_statement" => Self::Endfilter(Boundary::Close),
+            "endmatch_statement" => Self::Endmatch(Boundary::Close),
+            "endmacro_statement" => Self::Endmacro(Boundary::Close),
+            "endcall_statement" => Self::Endcall(Boundary::Close),
+            "endwhen_statement" => Self::Endwhen(Boundary::Close),
+
+            "extends_statement" => Self::Extends(Boundary::Standalone),
+            "include_statement" => Self::Include(Boundary::Standalone),
+            "import_statement" => Self::Import(Boundary::Standalone),
+            "let_statement" => Self::Let(Boundary::Standalone),
+            "break_statement" => Self::Break(Boundary::Standalone),
+            "continue_statement" => Self::Continue(Boundary::Standalone),
+            _ => unreachable!(),
+        }
+    }
+
     pub fn boundary(self) -> Boundary {
         match self {
             Self::Block(b)
@@ -67,7 +110,9 @@ impl ControlTag {
             | Self::Macro(b)
             | Self::Endmacro(b)
             | Self::MacroCall(b)
-            | Self::Endcall(b) => b,
+            | Self::Endcall(b)
+            | Self::Raw(b)
+            | Self::Endraw(b) => b,
         }
     }
 
@@ -101,6 +146,7 @@ impl ControlTag {
             Self::Filter(_) => Some(Self::Endfilter(Boundary::Close)),
             Self::Macro(_) => Some(Self::Endmacro(Boundary::Close)),
             Self::MacroCall(_) => Some(Self::Endcall(Boundary::Close)),
+            Self::Raw(_) => Some(Self::Endraw(Boundary::Close)),
             _ => None,
         }
     }
@@ -117,6 +163,7 @@ impl ControlTag {
                 | (Self::When(_), Self::Endwhen(_))
                 | (Self::Macro(_), Self::Endmacro(_))
                 | (Self::MacroCall(_), Self::Endcall(_))
+                | (Self::Raw(_), Self::Endraw(_))
         )
     }
 
@@ -139,6 +186,7 @@ pub enum AskamaNode {
         inner: String,
         ctrl_tag: ControlTag,
         range: ops::Range<usize>,
+        close_tag: Option<usize>,
     },
     Expression {
         dlmts: Delimiters,
@@ -218,6 +266,7 @@ impl AskamaNode {
 pub fn extract_askama_nodes(root: &Node, source: &str) -> Result<(Vec<AskamaNode>, Vec<Range>)> {
     let mut nodes = Vec::new();
     let mut content_node_ranges = Vec::new();
+    let mut stack: Vec<(usize, ControlTag, usize)> = Vec::new();
 
     let mut cursor = root.walk();
     for child in root.children(&mut cursor) {
@@ -225,11 +274,36 @@ pub fn extract_askama_nodes(root: &Node, source: &str) -> Result<(Vec<AskamaNode
         let end_byte = child.end_byte();
 
         match child.kind() {
-            "control_tag" | "render_expression" | "comment" => {
-                let node = parse_askama_node(child, source)?;
+            "control_tag" | "render_expression" | "comment" | "raw_statement"
+            | "endraw_statement" => {
+                let mut node = parse_askama_node(child, source)?;
+                let idx = nodes.len();
+
+                // Pair opening and closing control blocks
+                if let AskamaNode::Control {
+                    ctrl_tag,
+                    close_tag,
+                    range,
+                    ..
+                } = &mut node
+                {
+                    if ctrl_tag.is_opening() {
+                        stack.push((idx, *ctrl_tag, range.start));
+                    } else if let Some(pos) = stack
+                        .iter()
+                        .rposition(|(_, open_tag, _)| open_tag.matching_close() == Some(*ctrl_tag))
+                    {
+                        let (open_idx, _, open_byte) = stack.remove(pos);
+                        *close_tag = Some(open_byte);
+                        if let AskamaNode::Control { close_tag, .. } = &mut nodes[open_idx] {
+                            *close_tag = Some(range.start);
+                        }
+                    }
+                }
+
                 nodes.push(node);
             }
-            "content" => {
+            "content" | "raw_content" => {
                 content_node_ranges.push(Range {
                     start_byte,
                     end_byte,
@@ -250,18 +324,33 @@ fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode> {
 
     let askama_node = match node.kind() {
         "control_tag" => {
-            let ctrl_tag = detect_block_type(node);
+            let ctrl_tag = ControlTag::from_node(node);
             AskamaNode::Control {
                 dlmts,
                 inner,
                 ctrl_tag,
                 range,
+                close_tag: None,
             }
         }
         "render_expression" => AskamaNode::Expression {
             dlmts,
             inner,
             range,
+        },
+        "raw_statement" => AskamaNode::Control {
+            dlmts,
+            inner,
+            ctrl_tag: ControlTag::Raw(Boundary::Open),
+            range,
+            close_tag: None,
+        },
+        "endraw_statement" => AskamaNode::Control {
+            dlmts,
+            inner,
+            ctrl_tag: ControlTag::Endraw(Boundary::Close),
+            range,
+            close_tag: None,
         },
         "comment" => AskamaNode::Comment {
             dlmts,
@@ -294,47 +383,6 @@ fn belongs_to_match_statement(node: Node) -> bool {
     prev_node
         .and_then(|prev| prev.child(1))
         .is_some_and(|child| child.kind() == "when_statement")
-}
-
-fn detect_block_type(node: Node) -> ControlTag {
-    let child = node.child(1).unwrap();
-    match child.kind() {
-        "if_statement" => ControlTag::If(Boundary::Open),
-        "for_statement" => ControlTag::For(Boundary::Open),
-        "block_statement" => ControlTag::Block(Boundary::Open),
-        "filter_statement" => ControlTag::Filter(Boundary::Open),
-        "match_statement" => ControlTag::Match(Boundary::Open),
-        "macro_statement" => ControlTag::Macro(Boundary::Open),
-        "macro_call_statement" => ControlTag::MacroCall(Boundary::Open),
-
-        "else_statement" => {
-            let boundary = if belongs_to_match_statement(node) {
-                Boundary::Inner
-            } else {
-                Boundary::Clause
-            };
-            ControlTag::Else(boundary)
-        }
-        "else_if_statement" => ControlTag::ElseIf(Boundary::Clause),
-        "when_statement" => ControlTag::When(Boundary::Inner),
-
-        "endif_statement" => ControlTag::Endif(Boundary::Close),
-        "endfor_statement" => ControlTag::Endfor(Boundary::Close),
-        "endblock_statement" => ControlTag::Endblock(Boundary::Close),
-        "endfilter_statement" => ControlTag::Endfilter(Boundary::Close),
-        "endmatch_statement" => ControlTag::Endmatch(Boundary::Close),
-        "endmacro_statement" => ControlTag::Endmacro(Boundary::Close),
-        "endcall_statement" => ControlTag::Endcall(Boundary::Close),
-        "endwhen_statement" => ControlTag::Endwhen(Boundary::Close),
-
-        "extends_statement" => ControlTag::Extends(Boundary::Standalone),
-        "include_statement" => ControlTag::Include(Boundary::Standalone),
-        "import_statement" => ControlTag::Import(Boundary::Standalone),
-        "let_statement" => ControlTag::Let(Boundary::Standalone),
-        "break_statement" => ControlTag::Break(Boundary::Standalone),
-        "continue_statement" => ControlTag::Continue(Boundary::Standalone),
-        _ => unreachable!(),
-    }
 }
 
 fn extract_delimiters(node: Node, source: &str) -> Result<(Delimiters, String)> {

@@ -29,6 +29,11 @@ fn head() {
 }
 
 #[test]
+fn elif() {
+    format_and_snapshot!("mixed/elif.html");
+}
+
+#[test]
 fn mixed_attr() {
     format_and_snapshot!("mixed/mixed_attr.html");
 }

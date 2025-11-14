@@ -871,9 +871,9 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-askama"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f504e008d38b766e725bcf33c9c50c33e7454d1e97ca9d103e2f36cc757d95c2"
+checksum = "3f2443c92756f2d45c0a67b4cb100d2fd927717d90fd458da82f1215cf1dd2af"
 dependencies = [
  "cc",
  "tree-sitter-language",

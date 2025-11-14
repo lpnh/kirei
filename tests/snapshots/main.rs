@@ -24,3 +24,4 @@ mod ice_cream_club;
 mod malformed;
 mod mixed;
 mod rules;
+mod teapot;

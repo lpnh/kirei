@@ -1,0 +1,162 @@
+---
+source: tests/snapshots/teapot.rs
+description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>The 418 Status Code in Detail</h2>\n    <p style=\"margin-bottom: 1rem;\">\n        Status code 418 started in HTCPCP (RFC 2324), but it's now referenced in the HTTP semantics spec <strong><a href=\"https://www.rfc-editor.org/rfc/rfc9110\" target=\"_blank\" style=\"color: var(--teapot-brown); text-decoration: underline;\">RFC 9110</a></strong> and officially reserved. Here are some technical details about how it's implemented.\n    </p>\n\n    <div style=\"display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin: 2rem 0;\">\n        <div style=\"background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px;\">\n            <h3 style=\"color: var(--teapot-brown); margin-top: 0;\">Feature Flags</h3>\n            <div style=\"background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);\">\n                {% let feature_flags = 13 %}\n                <p style=\"margin-bottom: 1rem; font-family: 'Courier New', monospace; background: var(--code-bg); color: white; padding: 0.5rem; border-radius: 4px;\">Binary: 0b{{ feature_flags }}</p>\n                <p style=\"padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;\">\n                    <strong>Tea Support:</strong>\n                    {% if feature_flags bitand 1 == 1 %}<span style=\"color: #28a745;\">✓ Enabled</span>{% else %}<span style=\"color: #dc3545;\">✗ Disabled</span>{% endif %}\n                </p>\n                <p style=\"padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;\">\n                    <strong>HTCPCP Compatible:</strong>\n                    {% if feature_flags bitand 4 == 4 %}<span style=\"color: #28a745;\">✓ Yes</span>{% else %}<span style=\"color: #dc3545;\">✗ No</span>{% endif %}\n                </p>\n                <p style=\"padding: 0.5rem 0;\">\n                    <strong>RFC 2324 Compliant:</strong>\n                    {% if feature_flags bitand 8 == 8 %}<span style=\"color: #28a745;\">✓ Yes</span>{% else %}<span style=\"color: #dc3545;\">✗ No</span>{% endif %}\n                </p>\n            </div>\n        </div>\n\n        <div style=\"background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px;\">\n            <h3 style=\"color: var(--teapot-brown); margin-top: 0;\">Resource Identification</h3>\n            <div style=\"background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);\">\n                {% let resource_type = \"teapot\" %}\n                {% let resource_ref = &resource_type %}\n                <p style=\"padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;\"><strong>Resource Type:</strong> <span style=\"color: var(--teapot-brown);\">{{ *resource_ref }}</span></p>\n                <p style=\"padding: 0.5rem 0;\"><strong>URI Scheme:</strong> <code style=\"background: #f8f9fa; padding: 0.2rem 0.5rem; border-radius: 4px;\">coffee://</code> <span style=\"color: var(--error-red);\">(incompatible with {{ *resource_ref }}s)</span></p>\n            </div>\n        </div>\n    </div>\n\n    <div style=\"background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;\">\n        <h3 style=\"color: var(--teapot-brown); margin-top: 0;\">Performance Metrics</h3>\n        <div style=\"background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);\">\n            <p style=\"padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;\"><strong>{#- Performance statistics for HTTP operations -#}Total{#~ operations ~#}Processed:</strong> <span style=\"color: var(--teapot-brown); font-size: 1.5rem; font-weight: bold;\">{{ (brew_attempts + successful_teas) * 2 / 10 }}</span></p>\n            <p style=\"padding: 0.5rem 0;\"><strong>Success Rate:</strong> <span style=\"color: #28a745;\">High for tea</span>, <span style=\"color: #dc3545;\">zero for coffee</span></p>\n        </div>\n    </div>\n\n    <div style=\"background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;\">\n        <h3 style=\"color: var(--teapot-brown); margin-top: 0;\">RFC 2324 Response Phrase</h3>\n        <div style=\"background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);\">\n            <p style=\"margin-bottom: 1rem; color: #6c757d;\">\n                Every HTTP status code has a canonical reason phrase—a brief, human-readable explanation of what it means. Status code 418 has a pretty memorable one.\n            </p>\n            {% match raw_status.canonical_reason() %}\n                {% when Some(reason) %}\n                    <p style=\"padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;\">\n                        <strong>Canonical Reason Phrase:</strong>\n                        <span style=\"color: var(--teapot-brown); font-family: monospace; font-size: 1.1rem;\">\"{{ reason }}\"</span>\n                    </p>\n                    <p style=\"padding: 0.5rem 0;\">\n                        <strong>Authenticity Check:</strong>\n                        {% if *reason == \"I'm a teapot\" %}\n                            <span style=\"color: #28a745;\">✓ This is the genuine RFC 2324 response!</span>\n                        {% else %}\n                            <span style=\"color: #dc3545;\">✗ Unexpected reason phrase detected</span>\n                        {% endif %}\n                    </p>\n                {% when None %}\n                    <p style=\"color: #dc3545;\">⚠️ No canonical reason phrase available</p>\n            {% endmatch %}\n        </div>\n    </div>\n\n    <div style=\"background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;\">\n        <h3 style=\"color: var(--teapot-brown); margin-top: 0;\">Status Code Analysis</h3>\n        <div style=\"background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);\">\n            <p style=\"margin-bottom: 1rem; color: #6c757d;\">\n                Understanding the structure and classification of HTTP status codes helps explain why 418 is so special. Let's analyze its numeric properties and category placement.\n            </p>\n            {% let status_u16 = raw_status.as_u16() %}\n            {% let status_category = status_u16 / 100 %}\n            <p style=\"padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;\">\n                <strong>Numeric Code:</strong> {{ status_u16 }}\n            </p>\n            <p style=\"padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;\">\n                <strong>Status Category:</strong> {{ status_category }}xx class\n                {% if status_category == 4 %}<span style=\"color: var(--error-red);\">(Client Error - you tried to make a teapot brew coffee!)</span>{% endif %}\n            </p>\n            <p style=\"padding: 0.5rem 0;\">\n                <strong>Teapot Verification:</strong>\n                {% if status_u16 == 418 %}\n                    <span style=\"color: #28a745;\">✓ Confirmed</span>\n                {% else %}\n                    <span style=\"color: #dc3545;\">✗ This is not the teapot you're looking for</span>\n                {% endif %}\n            </p>\n        </div>\n    </div>\n\n    <p style=\"text-align: center; margin-top: 2rem; padding: 1rem; background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); border-radius: 10px;\">\n        🫖 That covers the technical side. Now let's look at what teapots actually do: brew tea.\n    </p>\n\n</section>\n"
+---
+<section id="status-code-details" class="section">
+    <h2>The 418 Status Code in Detail</h2>
+    <p style="margin-bottom: 1rem;">
+        Status code 418 started in HTCPCP (RFC 2324), but it's now referenced in
+        the HTTP semantics spec
+        <strong>
+            <a href="https://www.rfc-editor.org/rfc/rfc9110" target="_blank" style="color: var(--teapot-brown); text-decoration: underline;">
+                RFC 9110
+            </a>
+        </strong>
+        and officially reserved. Here are some technical details about how it's
+        implemented.
+    </p>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin: 2rem 0;">
+        <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px;">
+            <h3 style="color: var(--teapot-brown); margin-top: 0;">Feature Flags</h3>
+            <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
+                {% let feature_flags = 13 %}
+                <p style="margin-bottom: 1rem; font-family: 'Courier New', monospace; background: var(--code-bg); color: white; padding: 0.5rem; border-radius: 4px;">
+                    Binary: 0b{{ feature_flags }}
+                </p>
+                <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
+                    <strong>Tea Support:</strong>
+                    {% if feature_flags bitand 1 == 1 %}
+                        <span style="color: #28a745;">✓ Enabled</span>
+                    {% else %}
+                        <span style="color: #dc3545;">✗ Disabled</span>
+                    {% endif %}
+                </p>
+                <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
+                    <strong>HTCPCP Compatible:</strong>
+                    {% if feature_flags bitand 4 == 4 %}
+                        <span style="color: #28a745;">✓ Yes</span>
+                    {% else %}
+                        <span style="color: #dc3545;">✗ No</span>
+                    {% endif %}
+                </p>
+                <p style="padding: 0.5rem 0;">
+                    <strong>RFC 2324 Compliant:</strong>
+                    {% if feature_flags bitand 8 == 8 %}
+                        <span style="color: #28a745;">✓ Yes</span>
+                    {% else %}
+                        <span style="color: #dc3545;">✗ No</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+        <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px;">
+            <h3 style="color: var(--teapot-brown); margin-top: 0;">
+                Resource Identification
+            </h3>
+            <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
+                {% let resource_type = "teapot" %}
+                {% let resource_ref = &resource_type %}
+                <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
+                    <strong>Resource Type:</strong>
+                    <span style="color: var(--teapot-brown);">{{ *resource_ref }}</span>
+                </p>
+                <p style="padding: 0.5rem 0;">
+                    <strong>URI Scheme:</strong>
+                    <code style="background: #f8f9fa; padding: 0.2rem 0.5rem; border-radius: 4px;">
+                        coffee://
+                    </code>
+                    <span style="color: var(--error-red);">
+                        (incompatible with {{ *resource_ref }}s)
+                    </span>
+                </p>
+            </div>
+        </div>
+    </div>
+    <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;">
+        <h3 style="color: var(--teapot-brown); margin-top: 0;">Performance Metrics</h3>
+        <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
+            <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
+                <strong>
+                    {#- Performance statistics for HTTP operations -#}
+                    Total
+                    {#~ operations ~#}
+                    Processed:
+                </strong>
+                <span style="color: var(--teapot-brown); font-size: 1.5rem; font-weight: bold;">
+                    {{ (brew_attempts + successful_teas) * 2 / 10 }}
+                </span>
+            </p>
+            <p style="padding: 0.5rem 0;">
+                <strong>Success Rate:</strong>
+                <span style="color: #28a745;">High for tea</span>,
+                <span style="color: #dc3545;">zero for coffee</span>
+            </p>
+        </div>
+    </div>
+    <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;">
+        <h3 style="color: var(--teapot-brown); margin-top: 0;">
+            RFC 2324 Response Phrase
+        </h3>
+        <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
+            <p style="margin-bottom: 1rem; color: #6c757d;">
+                Every HTTP status code has a canonical reason phrase—a brief,
+                human-readable explanation of what it means. Status code 418 has
+                a pretty memorable one.
+            </p>
+            {% match raw_status.canonical_reason() %}
+                {% when Some(reason) %}
+                    <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
+                        <strong>Canonical Reason Phrase:</strong>
+                        <span style="color: var(--teapot-brown); font-family: monospace; font-size: 1.1rem;">
+                            "{{ reason }}"
+                        </span>
+                    </p>
+                    <p style="padding: 0.5rem 0;">
+                        <strong>Authenticity Check:</strong>
+                        {% if *reason == "I'm a teapot" %}
+                            <span style="color: #28a745;">✓ This is the genuine RFC 2324 response!</span>
+                        {% else %}
+                            <span style="color: #dc3545;">✗ Unexpected reason phrase detected</span>
+                        {% endif %}
+                    </p>
+                {% when None %}
+                    <p style="color: #dc3545;">⚠️ No canonical reason phrase available</p>
+            {% endmatch %}
+        </div>
+    </div>
+    <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;">
+        <h3 style="color: var(--teapot-brown); margin-top: 0;">Status Code Analysis</h3>
+        <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
+            <p style="margin-bottom: 1rem; color: #6c757d;">
+                Understanding the structure and classification of HTTP status
+                codes helps explain why 418 is so special. Let's analyze its
+                numeric properties and category placement.
+            </p>
+            {% let status_u16 = raw_status.as_u16() %}
+            {% let status_category = status_u16 / 100 %}
+            <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
+                <strong>Numeric Code:</strong> {{ status_u16 }}
+            </p>
+            <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
+                <strong>Status Category:</strong> {{ status_category }}xx class
+                {% if status_category == 4 %}
+                    <span style="color: var(--error-red);">
+                        (Client Error - you tried to make a teapot brew coffee!)
+                    </span>
+                {% endif %}
+            </p>
+            <p style="padding: 0.5rem 0;">
+                <strong>Teapot Verification:</strong>
+                {% if status_u16 == 418 %}
+                    <span style="color: #28a745;">✓ Confirmed</span>
+                {% else %}
+                    <span style="color: #dc3545;">✗ This is not the teapot you're looking for</span>
+                {% endif %}
+            </p>
+        </div>
+    </div>
+    <p style="text-align: center; margin-top: 2rem; padding: 1rem; background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); border-radius: 10px;">
+        🫖 That covers the technical side. Now let's look at what teapots
+        actually do: brew tea.
+    </p>
+</section>

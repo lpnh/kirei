@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+    {# Teapot introduction: hero, statistics, teapot types, and fun facts #}
+    {% include "intro.html" %}
+
+    {# The story: history and coffee incompatibility #}
+    {% include "story.html" %}
+
+    {# HTTP protocol fundamentals: methods, status categories, protocol properties #}
+    {% include "http-protocol.html" %}
+
+    {# Status code 418 implementation details: feature flags, metrics, response phrase, and analysis #}
+    {% include "status-code-details.html" %}
+
+    {# Brewing best practices: macros, temperature control, brew status, and compatibility matrix #}
+    {% include "brewing-practices.html" %}
+{% endblock %}

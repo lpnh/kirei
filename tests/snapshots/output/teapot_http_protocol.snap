@@ -1,0 +1,140 @@
+---
+source: tests/snapshots/teapot.rs
+description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protocol Fundamentals</h2>\n    <p style=\"margin-bottom: 1rem;\">\n        To understand why status code 418 matters, let's look at how HTTP works. HTTP is the protocol that powers the web—it's stateless and handles communication between clients and servers using request methods and status codes.\n    </p>\n\n    {# HTTP Methods section {# with details about verbs #} for protocol operations #}\n    <div style=\"background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;\">\n        <h3 style=\"color: var(--teapot-brown); margin-top: 0;\">HTTP Request Methods</h3>\n        <p style=\"margin-bottom: 1rem;\">HTTP defines standard request methods (often called \"verbs\") that tell servers what to do with a resource. Each method has a specific meaning:</p>\n\n        <div {# comment between attributes #} style=\"background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);\">\n            <ul style=\"list-style: none; padding: 0; margin: 0;\">\n            {% for method in http_methods %}\n                {% if method.skip %}{% continue %}{% endif %}\n                <li style=\"padding: 0.75rem 0; border-bottom: 1px solid #e9ecef;\">\n                    {% if loop.first %}<strong style=\"color: var(--teapot-brown);\">→{% elif loop.last %}<span style=\"font-size: 1.2rem;\">🫖{% else %}<strong style=\"color: var(--teapot-brown);\">→{% endif %}</strong>\n                    <span style=\"font-weight: bold; color: var(--code-bg);\">{{ method.name ~ \":\" }}</span>\n                    {% if let Some(msg) = error_message %}\n                        {% if method.name == \"BREW\" %}<span style=\"color: var(--error-red);\"> (returns {{ status_code }}!) </span>{% endif %}\n                    {% endif %}\n                    <span style=\"color: #6c757d;\">{{ method.description }}</span>\n                </li>\n            {% endfor %}\n            </ul>\n        </div>\n    </div>\n\n    <div style=\"background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;\">\n        <h3{# comment at tag start #} style=\"color: var(--teapot-brown); margin-top: 0;\">Status Code Categories</h3>\n        <p style=\"margin-bottom: 1rem;\">\n            The {% if is_teapot -%}\n                {{ protocol | lower | capitalize }}\n            {%- endif %} protocol uses three-digit status codes to indicate what happened with a request. They're organized into five categories:\n        </p>\n\n        <div style=\"background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);\">\n            {% let status_labels = [\"Informational\", \"Success\", \"Redirection\", \"Client Error\", \"Server Error\"] %}\n            {% let category_index = (status_code / 100 - 1) as usize %}\n            <p style=\"padding: 0.5rem 0;\"><strong style=\"color: #17a2b8;\">1xx (Informational):</strong> Processing continues</p>\n            <p style=\"padding: 0.5rem 0;\"><strong style=\"color: #28a745;\">2xx (Success):</strong> Request succeeded</p>\n            <p style=\"padding: 0.5rem 0;\"><strong style=\"color: #ffc107;\">3xx (Redirection):</strong> Further action needed</p>\n            <p style=\"padding: 0.5rem 0;\"><strong style=\"color: #dc3545;\">4xx ({{ status_labels[*category_index] }}):</strong> Request contains bad syntax or cannot be fulfilled</p>\n            <p style=\"padding: 0.5rem 0;\"><strong style=\"color: #dc3545;\">5xx (Server Error):</strong> Server failed to fulfill request</p>\n        </div>\n    </div>\n\n    <div style=\"display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin: 2rem 0;\">\n        <div style=\"background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px;\">\n            <h3 style=\"color: var(--teapot-brown); margin-top: 0;\">Protocol Properties</h3>\n            <div style=\"background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);\">\n                <p style=\"padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;\">\n                    <strong>Stateless:</strong>\n                    {% if is_teapot is defined %}<span style=\"color: #28a745;\">✓ Confirmed</span>{% else %}<span style=\"color: #dc3545;\">✗ Unknown</span>{% endif %}\n                </p>\n                <p style=\"padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;\">\n                    <strong>Coffee Support:</strong>\n                    {% if coffee_support is not defined %}<span style=\"color: #dc3545;\">✗ Not Available (Teapot Mode)</span>{% else %}<span style=\"color: #28a745;\">✓ Available</span>{% endif %}\n                </p>\n                <p style=\"padding: 0.5rem 0;\">\n                    <strong>Request Model:</strong> {% if is_teapot ~%}\n                        Client/Server\n                    {%~ endif %}\n                </p>\n            </div>\n        </div>\n\n        <div style=\"background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px;\">\n            <h3 style=\"color: var(--teapot-brown); margin-top: 0;\">Beverage Compatibility</h3>\n            <div style=\"background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);\">\n                <p style=\"margin-bottom: 0.5rem; font-weight: bold;\">Coffee varieties available:</p>\n                {% for pot in teapot_types if pot.can_brew_coffee %}\n                    <p style=\"color: #28a745;\">✓ {{ pot.name }} from {{ pot.origin }}</p>\n                {% else %}\n                    <p style=\"color: var(--error-red); padding: 1rem; background: #ffe6e6; border-radius: 8px; text-align: center;\"><strong>⚠️ No coffee support</strong><br><small>This is a teapot implementation!</small></p>\n                {% endfor %}\n            </div>\n        </div>\n    </div>\n\n    <p style=\"text-align: center; margin-top: 2rem; padding: 1rem; background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); border-radius: 10px;\">\n        💡 Now that we've covered the basics, let's look at the technical details of how status code 418 actually works.\n    </p>\n\n</section>\n"
+---
+<section id="semantics" class="section">
+    <h2>HTTP Protocol Fundamentals</h2>
+    <p style="margin-bottom: 1rem;">
+        To understand why status code 418 matters, let's look at how HTTP works.
+        HTTP is the protocol that powers the web—it's stateless and handles
+        communication between clients and servers using request methods and
+        status codes.
+    </p>
+    {#
+        HTTP Methods section {# with details about verbs #} for protocol operations
+    #}
+    <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;">
+        <h3 style="color: var(--teapot-brown); margin-top: 0;">HTTP Request Methods</h3>
+        <p style="margin-bottom: 1rem;">
+            HTTP defines standard request methods (often called "verbs") that
+            tell servers what to do with a resource. Each method has a specific
+            meaning:
+        </p>
+        <div {# comment between attributes #} style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
+            <ul style="list-style: none; padding: 0; margin: 0;">
+                {% for method in http_methods %}
+                    {% if method.skip %}{% continue %}{% endif %}
+                    <li style="padding: 0.75rem 0; border-bottom: 1px solid #e9ecef;">
+                        {% if loop.first %}
+                            <strong style="color: var(--teapot-brown);">
+                            →
+                        {% elif loop.last %}
+                            <span style="font-size: 1.2rem;">
+                            🫖
+                        {% else %}
+                            <strong style="color: var(--teapot-brown);">
+                            →
+                        {% endif %}
+                    </strong>
+                    <span style="font-weight: bold; color: var(--code-bg);">
+                        {{ method.name ~ ":" }}
+                    </span>
+                    {% if let Some(msg) = error_message %}
+                        {% if method.name == "BREW" %}
+                            <span style="color: var(--error-red);">(returns {{ status_code }}!)</span>
+                        {% endif %}
+                    {% endif %}
+                    <span style="color: #6c757d;">{{ method.description }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+<div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;">
+    <h3{# comment at tag start #} style="color: var(--teapot-brown); margin-top: 0;">
+        Status Code Categories
+    </h3>
+    <p style="margin-bottom: 1rem;">
+        The
+        {% if is_teapot -%}{{ protocol | lower | capitalize }}{%- endif %}
+        protocol uses three-digit status codes to indicate what happened with a
+        request. They're organized into five categories:
+    </p>
+    <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
+        {%
+    let status_labels = ["Informational", "Success", "Redirection", "Client Error", "Server Error"]
+%}
+        {% let category_index = (status_code / 100 - 1) as usize %}
+        <p style="padding: 0.5rem 0;">
+            <strong style="color: #17a2b8;">1xx (Informational):</strong>
+            Processing continues
+        </p>
+        <p style="padding: 0.5rem 0;">
+            <strong style="color: #28a745;">2xx (Success):</strong> Request succeeded
+        </p>
+        <p style="padding: 0.5rem 0;">
+            <strong style="color: #ffc107;">3xx (Redirection):</strong> Further action needed
+        </p>
+        <p style="padding: 0.5rem 0;">
+            <strong style="color: #dc3545;">
+                4xx ({{ status_labels[*category_index] }}):
+            </strong>
+            Request contains bad syntax or cannot be fulfilled
+        </p>
+        <p style="padding: 0.5rem 0;">
+            <strong style="color: #dc3545;">5xx (Server Error):</strong>
+            Server failed to fulfill request
+        </p>
+    </div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin: 2rem 0;">
+    <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px;">
+        <h3 style="color: var(--teapot-brown); margin-top: 0;">Protocol Properties</h3>
+        <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
+            <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
+                <strong>Stateless:</strong>
+                {% if is_teapot is defined %}
+                    <span style="color: #28a745;">✓ Confirmed</span>
+                {% else %}
+                    <span style="color: #dc3545;">✗ Unknown</span>
+                {% endif %}
+            </p>
+            <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
+                <strong>Coffee Support:</strong>
+                {% if coffee_support is not defined %}
+                    <span style="color: #dc3545;">✗ Not Available (Teapot Mode)</span>
+                {% else %}
+                    <span style="color: #28a745;">✓ Available</span>
+                {% endif %}
+            </p>
+            <p style="padding: 0.5rem 0;">
+                <strong>Request Model:</strong>
+                {% if is_teapot ~%}Client/Server{%~ endif %}
+            </p>
+        </div>
+    </div>
+    <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px;">
+        <h3 style="color: var(--teapot-brown); margin-top: 0;">
+            Beverage Compatibility
+        </h3>
+        <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
+            <p style="margin-bottom: 0.5rem; font-weight: bold;">
+                Coffee varieties available:
+            </p>
+            {% for pot in teapot_types if pot.can_brew_coffee %}
+                <p style="color: #28a745;">✓ {{ pot.name }} from {{ pot.origin }}</p>
+            {% else %}
+                <p style="color: var(--error-red); padding: 1rem; background: #ffe6e6; border-radius: 8px; text-align: center;">
+                    <strong>⚠️ No coffee support</strong>
+                    <br />
+                    <small>This is a teapot implementation!</small>
+                </p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+<p style="text-align: center; margin-top: 2rem; padding: 1rem; background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); border-radius: 10px;">
+    💡 Now that we've covered the basics, let's look at the technical details of
+    how status code 418 actually works.
+</p>
+</section>

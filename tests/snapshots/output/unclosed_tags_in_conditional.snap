@@ -1,0 +1,14 @@
+---
+source: tests/snapshots/malformed.rs
+description: "<div>\n    {% if first %}\n        <strong>\n    {% elif last %}\n        <strong>{{ foo }}<span>\n    {% else %}\n    {% endif %}\n        </strong>\n</div>\n"
+---
+<div>
+    {% if first %}
+        <strong>
+    {% elif last %}
+        <strong>
+        {{ foo }}<span>
+    {% else %}
+    {% endif %}
+</strong>
+</div>

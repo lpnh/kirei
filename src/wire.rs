@@ -18,11 +18,16 @@ fn analyze_indentation_structure(tree: &SakuraTree) -> Vec<i32> {
             Leaf::AskamaControl { tag, .. } => tag.indent_delta(),
             _ => (0, 0),
         };
+
         curr_indent = (curr_indent + pre_delta).max(0);
         indent_map[i] = curr_indent;
         curr_indent = (curr_indent + post_delta).max(0);
 
-        if let Leaf::HtmlStartTag { .. } = leaf {
+        // Only increment indent if it has a matching end tag
+        // TODO: find better way to solve this
+        if let Leaf::HtmlStartTag { .. } = leaf
+            && !tree.twig_has_same_idx(i)
+        {
             curr_indent += 1;
         }
     }
