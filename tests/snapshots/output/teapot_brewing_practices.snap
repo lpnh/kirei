@@ -1,0 +1,123 @@
+---
+source: tests/snapshots/teapot.rs
+description: "<section id=\"brewing-practices\" class=\"section\">\n    <h2>Brewing Best Practices</h2>\n    <p style=\"margin-bottom: 1rem;\">\n        We've covered the history, the protocol, and the technical bits. Now let's get back to what teapots actually do: brew tea. Here's how temperature and compatibility factor in.\n    </p>\n\n    {% macro temperature_badge(temp, label=\"Unknown\") %}\n        <span style=\"display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.9rem; font-weight: bold; {% if *temp < 85 %}background: #d4edda; color: #155724;{% elif *temp < 95 %}background: #fff3cd; color: #856404;{% else %}background: #f8d7da; color: #721c24;{% endif %}\">\n            {{ label }}: {{ *temp }}°C\n        </span>\n    {% endmacro %}\n\n    <div style=\"background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;\">\n        <h3 style=\"color: var(--teapot-brown); margin-top: 0;\">Optimal Brewing Temperatures</h3>\n        <div style=\"background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);\">\n            {% for (tea_name, temp) in temperature_readings %}\n                <div style=\"padding: 0.75rem 0; {% if !loop.last %}border-bottom: 1px solid #e9ecef;{% endif %}\">\n                    <strong>{{ loop.index }}.</strong>\n                    {{ temperature_badge(temp, tea_name) }}\n                </div>\n            {% endfor %}\n        </div>\n    </div>\n\n    <div style=\"background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;\">\n        <h3 style=\"color: var(--teapot-brown); margin-top: 0;\">Brewing Status</h3>\n        <div style=\"background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);\">\n            {% match brew_result %}\n                {% when Ok(message) %}\n                    <p style=\"color: #28a745; padding: 1rem; background: #d4edda; border-radius: 8px;\">\n                        ✓ {{ message }}\n                    </p>\n                {% when Err(error) %}\n                    <p style=\"color: #dc3545; padding: 1rem; background: #f8d7da; border-radius: 8px;\">\n                        ✗ Error: {{ error }}\n                    </p>\n            {% endmatch %}\n        </div>\n    </div>\n\n    <div style=\"background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;\">\n        <h3 style=\"color: var(--teapot-brown); margin-top: 0;\">Compatibility Matrix</h3>\n        <div style=\"background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);\">\n            <table style=\"width: 100%; border-collapse: collapse;\">\n                <thead>\n                    <tr style=\"background: #f8f9fa;\">\n                        <th style=\"padding: 0.75rem; text-align: left; border-bottom: 2px solid #dee2e6;\">Status Code</th>\n                        <th style=\"padding: 0.75rem; text-align: left; border-bottom: 2px solid #dee2e6;\">Tea Compatible</th>\n                        <th style=\"padding: 0.75rem; text-align: left; border-bottom: 2px solid #dee2e6;\">Coffee Compatible</th>\n                    </tr>\n                </thead>\n                <tbody>\n                    {% let codes = [200, 418, 500] %}\n                    {% for code in codes %}\n                        <tr>\n                            <td style=\"padding: 0.75rem; border-bottom: 1px solid #e9ecef;\">\n                                <code>{{ code }}</code>\n                            </td>\n                            {% match code %}\n                                {% when 200 | 201 | 204 %}\n                                    <td style=\"padding: 0.75rem; border-bottom: 1px solid #e9ecef; color: #28a745;\">✓ Yes</td>\n                                    <td style=\"padding: 0.75rem; border-bottom: 1px solid #e9ecef; color: #28a745;\">✓ Yes</td>\n                                {% when 418 %}\n                                    <td style=\"padding: 0.75rem; border-bottom: 1px solid #e9ecef; color: #28a745;\">✓ Yes</td>\n                                    <td style=\"padding: 0.75rem; border-bottom: 1px solid #e9ecef; color: #dc3545;\">✗ No</td>\n                                {% when _ %}\n                                    {% if *code >= 500 && (is_teapot || !brew_available) %}\n                                        <td style=\"padding: 0.75rem; border-bottom: 1px solid #e9ecef; color: #ffc107;\">⚠ Maybe</td>\n                                        <td style=\"padding: 0.75rem; border-bottom: 1px solid #e9ecef; color: #ffc107;\">⚠ Maybe</td>\n                                    {% else %}\n                                        <td style=\"padding: 0.75rem; border-bottom: 1px solid #e9ecef; color: #6c757d;\">- N/A</td>\n                                        <td style=\"padding: 0.75rem; border-bottom: 1px solid #e9ecef; color: #6c757d;\">- N/A</td>\n                                    {% endif %}\n                            {% endmatch %}\n                        </tr>\n                    {% endfor %}\n                </tbody>\n            </table>\n        </div>\n    </div>\n\n    <div style=\"margin-top: 3rem; padding: 2rem; background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); border-radius: 15px; border: 3px solid var(--teapot-brown);\">\n        <h3 style=\"color: var(--teapot-brown); margin-top: 0; text-align: center;\">🫖 Wrapping Up 🫖</h3>\n        <p style=\"text-align: center; font-size: 1.1rem; line-height: 1.8;\">\n            So there you have it: HTTP status code 418 started as an April Fools' joke in 1998, almost got removed in 2017, but survived thanks to some vocal fans. It's still around today, a quirky reminder that the people writing these specs have a sense of humor.\n        </p>\n        <p style=\"text-align: center; margin-top: 1.5rem; font-size: 1.1rem; line-height: 1.8;\">\n            Whether you're here for the HTTP details, the Askama examples, or just the story of a silly status code, hopefully you found something useful. And remember: a teapot that won't brew coffee isn't broken—it's just doing what it's meant to do.\n        </p>\n    </div>\n</section>\n"
+---
+<section id="brewing-practices" class="section">
+    <h2>Brewing Best Practices</h2>
+    <p style="margin-bottom: 1rem;">
+        We've covered the history, the protocol, and the technical bits.
+        Now let's get back to what teapots actually do: brew tea. Here's how
+        temperature and compatibility factor in.
+    </p>
+    {% macro temperature_badge(temp, label="Unknown") %}
+        <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.9rem; font-weight: bold; {% if *temp < 85 %}background: #d4edda; color: #155724;{% elif *temp < 95 %}background: #fff3cd; color: #856404;{% else %}background: #f8d7da; color: #721c24;{% endif %}">
+            {{ label }}: {{ *temp }}°C
+        </span>
+    {% endmacro %}
+    <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;">
+        <h3 style="color: var(--teapot-brown); margin-top: 0;">
+            Optimal Brewing Temperatures
+        </h3>
+        <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
+            {% for (tea_name, temp) in temperature_readings %}
+                <div style="padding: 0.75rem 0; {% if !loop.last %}border-bottom: 1px solid #e9ecef;{% endif %}">
+                    <strong>{{ loop.index }}.</strong> {{ temperature_badge(temp, tea_name) }}
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+    <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;">
+        <h3 style="color: var(--teapot-brown); margin-top: 0;">Brewing Status</h3>
+        <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
+            {% match brew_result %}
+                {% when Ok(message) %}
+                    <p style="color: #28a745; padding: 1rem; background: #d4edda; border-radius: 8px;">
+                        ✓ {{ message }}
+                    </p>
+                {% when Err(error) %}
+                    <p style="color: #dc3545; padding: 1rem; background: #f8d7da; border-radius: 8px;">
+                        ✗ Error: {{ error }}
+                    </p>
+            {% endmatch %}
+        </div>
+    </div>
+    <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;">
+        <h3 style="color: var(--teapot-brown); margin-top: 0;">Compatibility Matrix</h3>
+        <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f8f9fa;">
+                        <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #dee2e6;">
+                            Status Code
+                        </th>
+                        <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #dee2e6;">
+                            Tea Compatible
+                        </th>
+                        <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #dee2e6;">
+                            Coffee Compatible
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% let codes = [200, 418, 500] %}
+                    {% for code in codes %}
+                        <tr>
+                            <td style="padding: 0.75rem; border-bottom: 1px solid #e9ecef;">
+                                <code>{{ code }}</code>
+                            </td>
+                            {% match code %}
+                                {% when 200 | 201 | 204 %}
+                                    <td style="padding: 0.75rem; border-bottom: 1px solid #e9ecef; color: #28a745;">
+                                        ✓ Yes
+                                    </td>
+                                    <td style="padding: 0.75rem; border-bottom: 1px solid #e9ecef; color: #28a745;">
+                                        ✓ Yes
+                                    </td>
+                                {% when 418 %}
+                                    <td style="padding: 0.75rem; border-bottom: 1px solid #e9ecef; color: #28a745;">
+                                        ✓ Yes
+                                    </td>
+                                    <td style="padding: 0.75rem; border-bottom: 1px solid #e9ecef; color: #dc3545;">
+                                        ✗ No
+                                    </td>
+                                {% when _ %}
+                                    {% if *code >= 500 && (is_teapot || !brew_available) %}
+                                        <td style="padding: 0.75rem; border-bottom: 1px solid #e9ecef; color: #ffc107;">
+                                            ⚠ Maybe
+                                        </td>
+                                        <td style="padding: 0.75rem; border-bottom: 1px solid #e9ecef; color: #ffc107;">
+                                            ⚠ Maybe
+                                        </td>
+                                    {% else %}
+                                        <td style="padding: 0.75rem; border-bottom: 1px solid #e9ecef; color: #6c757d;">
+                                            - N/A
+                                        </td>
+                                        <td style="padding: 0.75rem; border-bottom: 1px solid #e9ecef; color: #6c757d;">
+                                            - N/A
+                                        </td>
+                                    {% endif %}
+                            {% endmatch %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div style="margin-top: 3rem; padding: 2rem; background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); border-radius: 15px; border: 3px solid var(--teapot-brown);">
+        <h3 style="color: var(--teapot-brown); margin-top: 0; text-align: center;">
+            🫖 Wrapping Up 🫖
+        </h3>
+        <p style="text-align: center; font-size: 1.1rem; line-height: 1.8;">
+            So there you have it: HTTP status code 418 started as an April
+            Fools' joke in 1998, almost got removed in 2017, but survived thanks
+            to some vocal fans. It's still around today, a quirky reminder that
+            the people writing these specs have a sense of humor.
+        </p>
+        <p style="text-align: center; margin-top: 1.5rem; font-size: 1.1rem; line-height: 1.8;">
+            Whether you're here for the HTTP details, the Askama examples, or
+            just the story of a silly status code, hopefully you found something
+            useful. And remember: a teapot that won't brew coffee isn't broken—
+            it's just doing what it's meant to do.
+        </p>
+    </div>
+</section>
