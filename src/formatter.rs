@@ -3,7 +3,7 @@ use tree_sitter::Parser;
 use tree_sitter_askama::LANGUAGE as ASKAMA_LANGUAGE;
 use tree_sitter_html::LANGUAGE as HTML_LANGUAGE;
 
-use crate::{askama, config::Config, html, sakura_tree::SakuraTree, wire, woodcut};
+use crate::{askama, config::Config, html, sakura_tree::SakuraTree, woodcut};
 
 pub struct AskamaFormatter {
     askama_parser: Parser,
@@ -78,12 +78,9 @@ impl AskamaFormatter {
         .context("Failed to extract HTML nodes")?;
 
         // 5. Grow a SakuraTree
-        let mut sakura_tree = SakuraTree::grow(&askama_nodes, &html_nodes, source, &self.config);
+        let sakura_tree = SakuraTree::grow(&askama_nodes, &html_nodes, source, &self.config);
 
-        // 6. Wire
-        wire::wire(&mut sakura_tree);
-
-        // 7. Print
+        // 6. Print
         Ok(woodcut::print(&sakura_tree))
     }
 }
