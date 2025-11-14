@@ -25,6 +25,8 @@ description: "{% extends \"base.html\" %}\n{% block title %}Profile{% endblock %
     <h1 class="username">{{ user.name }}</h1>
     {# Loop through user posts #}
     <ul>
-        {% for post in user.posts %}<li>{{ post.title }}</li>{% endfor %}
+        {% for post in user.posts %}
+            <li>{{ post.title }}</li>
+        {% endfor %}
     </ul>
 {% endblock %}

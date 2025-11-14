@@ -96,7 +96,9 @@ description: "{% if is_teapot %}\n    <div class=\"hero\">\n        <h1>🫖 I'm
     <h2>Fun Facts About HTTP 418</h2>
     <div class="facts-list">
         {% if show_history %}
-            {% for fact in fun_facts %}<div class="fact-item">🫖 {{ fact }} </div>{% endfor %}
+            {% for fact in fun_facts %}
+                <div class="fact-item">🫖 {{ fact }} </div>
+            {% endfor %}
         {% endif %}
     </div>
 </section>
