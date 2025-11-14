@@ -60,6 +60,66 @@ pub enum Ring {
     Single(Twig),
 }
 
+impl Ring {
+    fn total_chars(&self, tree: &SakuraTree) -> usize {
+        self.twig()
+            .indices()
+            .filter_map(|i| tree.leaves.get(i))
+            .map(Leaf::chars_count)
+            .sum()
+    }
+
+    // Check if any inner rings contain block-level structure
+    fn has_block(&self, tree: &SakuraTree) -> bool {
+        match self {
+            Self::Element(_, Some(inner)) => {
+                // Check if any inner ring is a block-level element
+                inner.iter().any(|node| match node {
+                    Self::Element(twig, _) => {
+                        let start = twig.start();
+                        !tree.leaves[start].is_inline_level()
+                    }
+                    Self::ControlBlock(_, _) | Self::RawText(_) => true,
+                    _ => node.has_block(tree),
+                })
+            }
+            Self::ControlBlock(_, Some(inner)) => inner.iter().any(|node| node.has_block(tree)),
+            Self::MatchArm(_, Some(inner)) => inner.iter().any(|node| node.has_block(tree)),
+            Self::TextSequence(_, inner) => inner.iter().any(|node| node.has_block(tree)),
+            Self::RawText(_) => true,
+            _ => false,
+        }
+    }
+
+    fn twig(&self) -> Twig {
+        match self {
+            Self::Element(twig, _)
+            | Self::TextSequence(twig, _)
+            | Self::ControlBlock(twig, _)
+            | Self::RawText(twig)
+            | Self::Comment(twig)
+            | Self::Single(twig)
+            | Self::MatchArm(twig, None) => *twig,
+            Self::MatchArm(twig, Some(inner)) => {
+                // Get the last leaf from the last inner ring
+                let first = twig.start();
+                let last = inner.last().map_or(first, |ring| ring.twig().end());
+
+                (first, last).into()
+            }
+        }
+    }
+
+    // Branch style for atomic rings
+    fn default_branch_style(&self) -> Option<BranchStyle> {
+        match self {
+            Self::RawText(_) => Some(BranchStyle::Raw),
+            Self::Single(_) | Self::MatchArm(_, _) => Some(BranchStyle::Inline),
+            _ => None,
+        }
+    }
+}
+
 // Maps start_leaf index to end_leaf index
 #[derive(Debug, Clone, Copy)]
 pub struct Twig(usize, usize);
@@ -435,7 +495,7 @@ impl SakuraTree {
             tree.rings.extend(rings);
         }
 
-        wire(&mut tree);
+        tree.wire();
 
         tree
     }
@@ -610,6 +670,20 @@ impl SakuraTree {
         }
     }
 
+    fn element_fits_inline(&self, idx: usize) -> bool {
+        let elem_twig = self.twigs[idx];
+        let elem_width: usize = elem_twig
+            .indices()
+            .filter_map(|i| self.leaves.get(i))
+            .map(Leaf::chars_count)
+            .sum();
+        elem_width <= self.config.max_width
+    }
+
+    fn grow_inner_rings(&self, start_idx: usize, end_idx: usize) -> Option<Vec<Ring>> {
+        self.grow_rings(start_idx + 1, end_idx)
+    }
+
     fn handle_start_tag(&self, idx: usize, end_idx: usize) -> (Ring, usize) {
         let leaf = &self.leaves[idx];
 
@@ -634,7 +708,7 @@ impl SakuraTree {
         let twig = self.twigs[start_leaf];
         (!twig.has_same_idx()).then(|| {
             let end_leaf = twig.end();
-            let inner = self.grow_rings(start_leaf + 1, end_leaf);
+            let inner = self.grow_inner_rings(start_leaf, end_leaf);
             (Ring::Element(twig, inner), end_leaf + 1)
         })
     }
@@ -649,7 +723,7 @@ impl SakuraTree {
             .filter(|twig| !twig.has_same_idx())
             .map(|twig| {
                 let end_leaf = twig.end();
-                let inner = self.grow_rings(start_idx + 1, end_leaf);
+                let inner = self.grow_inner_rings(start_idx, end_leaf);
                 (Ring::ControlBlock(twig, inner), end_leaf + 1)
             })
     }
@@ -683,16 +757,20 @@ impl SakuraTree {
         let content_end_idx = curr_idx;
 
         // All or nothing
-        let twig = (start_idx, content_end_idx - 1).into();
-        let temp_ring = Ring::TextSequence(twig, Vec::new());
-        let fits = temp_ring.total_chars(self) <= self.config.max_width;
+        let content_width: usize = (start_idx..content_end_idx)
+            .filter_map(|i| self.leaves.get(i))
+            .map(Leaf::chars_count)
+            .sum();
+        let fits = content_width <= self.config.max_width;
 
-        if fits {
-            let inner = self.grow_rings(start_idx + 1, content_end_idx);
-            (Ring::MatchArm(start_idx.into(), inner), content_end_idx)
+        let inner = if fits {
+            self.grow_inner_rings(start_idx, content_end_idx)
         } else {
-            (Ring::MatchArm(start_idx.into(), None), start_idx + 1)
-        }
+            None
+        };
+
+        let next_idx = if fits { content_end_idx } else { start_idx + 1 };
+        (Ring::MatchArm(start_idx.into(), inner), next_idx)
     }
 
     fn try_text_sequence(&self, start_idx: usize, end_idx: usize) -> Option<(Ring, usize)> {
@@ -706,18 +784,12 @@ impl SakuraTree {
                 && !self.twigs[start_idx].has_same_idx()
             {
                 // Check if complete element fits inline
-                let elem_twig = self.twigs[start_idx];
-                let elem_width: usize = elem_twig
-                    .indices()
-                    .filter_map(|i| self.leaves.get(i))
-                    .map(Leaf::chars_count)
-                    .sum();
-
-                if elem_width > self.config.max_width {
+                if !self.element_fits_inline(start_idx) {
                     return None;
                 }
 
-                let elem_inner = self.grow_rings(start_idx + 1, elem_twig.end());
+                let elem_twig = self.twigs[start_idx];
+                let elem_inner = self.grow_inner_rings(start_idx, elem_twig.end());
                 inner_rings.push(Ring::Element(elem_twig, elem_inner));
                 last_idx = elem_twig.end();
                 curr_idx = elem_twig.end() + 1;
@@ -735,18 +807,12 @@ impl SakuraTree {
                 && leaf.is_inline_level()
             {
                 // Check if complete element fits inline
-                let elem_twig = self.twigs[curr_idx];
-                let elem_width: usize = elem_twig
-                    .indices()
-                    .filter_map(|i| self.leaves.get(i))
-                    .map(Leaf::chars_count)
-                    .sum();
-
-                if elem_width > self.config.max_width {
+                if !self.element_fits_inline(curr_idx) {
                     break;
                 }
 
-                let elem_inner = self.grow_rings(curr_idx + 1, elem_twig.end());
+                let elem_twig = self.twigs[curr_idx];
+                let elem_inner = self.grow_inner_rings(curr_idx, elem_twig.end());
                 inner_rings.push(Ring::Element(elem_twig, elem_inner));
                 last_idx = elem_twig.end();
                 curr_idx = elem_twig.end() + 1;
@@ -769,228 +835,173 @@ impl SakuraTree {
             (ring, curr_idx)
         })
     }
-}
 
-impl Ring {
-    pub fn total_chars(&self, tree: &SakuraTree) -> usize {
-        self.twig()
-            .indices()
-            .filter_map(|i| tree.leaves.get(i))
-            .map(Leaf::chars_count)
-            .sum()
+    fn wire(&mut self) {
+        let indent_map = self.analyze_indentation_structure();
+        self.wire_branches(&indent_map);
     }
 
-    // Check if any inner rings contain block-level structure
-    pub fn has_block(&self, tree: &SakuraTree) -> bool {
-        match self {
-            Self::Element(_, Some(inner)) => {
-                // Check if any inner ring is a block-level element
-                inner.iter().any(|node| match node {
-                    Self::Element(twig, _) => {
-                        let start = twig.start();
-                        !tree.leaves[start].is_inline_level()
-                    }
-                    Self::ControlBlock(_, _) | Self::RawText(_) => true,
-                    _ => node.has_block(tree),
-                })
+    fn analyze_indentation_structure(&self) -> Vec<i32> {
+        let mut indent_map = vec![0; self.leaves.len()];
+        let mut curr_indent = 0;
+
+        for (i, leaf) in self.leaves.iter().enumerate() {
+            if matches!(leaf, Leaf::HtmlEndTag { .. }) {
+                curr_indent = (curr_indent - 1).max(0);
             }
-            Self::ControlBlock(_, Some(inner)) => inner.iter().any(|node| node.has_block(tree)),
-            Self::MatchArm(_, Some(inner)) => inner.iter().any(|node| node.has_block(tree)),
-            Self::TextSequence(_, inner) => inner.iter().any(|node| node.has_block(tree)),
-            Self::RawText(_) => true,
-            _ => false,
-        }
-    }
 
-    pub fn twig(&self) -> Twig {
-        match self {
-            Self::Element(twig, _)
-            | Self::TextSequence(twig, _)
-            | Self::ControlBlock(twig, _)
-            | Self::RawText(twig)
-            | Self::Comment(twig)
-            | Self::Single(twig)
-            | Self::MatchArm(twig, None) => *twig,
-            Self::MatchArm(twig, Some(inner)) => {
-                // Get the last leaf from the last inner ring
-                let first = twig.start();
-                let last = inner.last().map_or(first, |ring| ring.twig().end());
-
-                (first, last).into()
-            }
-        }
-    }
-}
-
-fn wire(tree: &mut SakuraTree) {
-    let indent_map = analyze_indentation_structure(tree);
-    wire_branches(tree, &indent_map);
-}
-
-fn analyze_indentation_structure(tree: &SakuraTree) -> Vec<i32> {
-    let mut indent_map = vec![0; tree.leaves.len()];
-    let mut curr_indent = 0;
-
-    for (i, leaf) in tree.leaves.iter().enumerate() {
-        if matches!(leaf, Leaf::HtmlEndTag { .. }) {
-            curr_indent = (curr_indent - 1).max(0);
-        }
-
-        let (pre_delta, post_delta) = match leaf {
-            Leaf::AskamaControl { tag, .. } => tag.indent_delta(),
-            _ => (0, 0),
-        };
-
-        curr_indent = (curr_indent + pre_delta).max(0);
-        indent_map[i] = curr_indent;
-        curr_indent = (curr_indent + post_delta).max(0);
-
-        // Only increment indent if it has a matching end tag
-        // TODO: find better way to solve this
-        if let Leaf::HtmlStartTag { .. } = leaf
-            && !tree.twig_has_same_idx(i)
-        {
-            curr_indent += 1;
-        }
-    }
-    indent_map
-}
-
-fn wire_branches(tree: &mut SakuraTree, indent_map: &[i32]) {
-    let rings: Vec<Ring> = tree.rings.clone();
-
-    for ring in &rings {
-        wire_branch(tree, ring, indent_map);
-    }
-}
-
-fn wire_branch(tree: &mut SakuraTree, ring: &Ring, indent_map: &[i32]) {
-    let fits = ring.total_chars(tree) <= tree.config.max_width;
-    let has_block = ring.has_block(tree);
-
-    match ring {
-        // Compound
-        Ring::Element(twig, inner) | Ring::ControlBlock(twig, inner) => {
-            if fits && !has_block {
-                push_branch(tree, twig, BranchStyle::Inline, indent_map);
-            } else {
-                wire_open_close_branches(tree, twig, inner.as_deref(), indent_map);
-            }
-        }
-        Ring::TextSequence(twig, inner) => {
-            if fits {
-                push_branch(tree, twig, BranchStyle::Inline, indent_map);
-            } else if is_text_and_entity(inner, tree) {
-                push_branch(tree, twig, BranchStyle::WrappedText, indent_map);
-            } else {
-                split_text_sequence(tree, twig, inner, indent_map);
-            }
-        }
-        Ring::MatchArm(_, _) => push_branch(tree, &ring.twig(), BranchStyle::Inline, indent_map),
-
-        // Atomic
-        Ring::RawText(twig) => push_branch(tree, twig, BranchStyle::Raw, indent_map),
-        Ring::Comment(twig) => {
-            let style = if fits {
-                BranchStyle::Inline
-            } else {
-                BranchStyle::MultilineComment
+            let (pre_delta, post_delta) = match leaf {
+                Leaf::AskamaControl { tag, .. } => tag.indent_delta(),
+                _ => (0, 0),
             };
-            push_branch(tree, twig, style, indent_map);
+
+            curr_indent = (curr_indent + pre_delta).max(0);
+            indent_map[i] = curr_indent;
+            curr_indent = (curr_indent + post_delta).max(0);
+
+            // Only increment indent if it has a matching end tag
+            // TODO: find better way to solve this
+            if let Leaf::HtmlStartTag { .. } = leaf
+                && !self.twig_has_same_idx(i)
+            {
+                curr_indent += 1;
+            }
         }
-        Ring::Single(twig) => {
-            push_branch(tree, twig, BranchStyle::Inline, indent_map);
-        }
+        indent_map
     }
-}
 
-fn wire_open_close_branches(
-    tree: &mut SakuraTree,
-    twig: &Twig,
-    inner: Option<&[Ring]>,
-    indent_map: &[i32],
-) {
-    let indent = get_indent(indent_map, twig);
+    fn wire_branches(&mut self, indent_map: &[i32]) {
+        let rings: Vec<Ring> = self.rings.clone();
 
-    tree.branches.push(Branch::grow(
-        twig.start().into(),
-        BranchStyle::OpenClose,
-        indent,
-    ));
-
-    if let Some(inner) = inner {
-        for ring in inner {
-            wire_branch(tree, ring, indent_map);
+        for ring in &rings {
+            self.wire_branch(ring, indent_map);
         }
     }
 
-    tree.branches.push(Branch::grow(
-        twig.end().into(),
-        BranchStyle::OpenClose,
-        indent,
-    ));
-}
-
-fn get_indent(indent_map: &[i32], twig: &Twig) -> i32 {
-    indent_map.get(twig.start()).copied().unwrap_or(0)
-}
-
-fn is_text_and_entity(inner: &[Ring], tree: &SakuraTree) -> bool {
-    inner.iter().all(|ring| {
-        let twig = ring.twig();
-        if !twig.has_same_idx() {
-            return false;
+    fn wire_branch(&mut self, ring: &Ring, indent_map: &[i32]) {
+        // Handle deterministic cases early
+        if let Some(style) = ring.default_branch_style() {
+            self.push_branch(&ring.twig(), style, indent_map);
+            return;
         }
-        tree.leaves
-            .get(twig.start())
-            .is_some_and(|leaf| matches!(leaf, Leaf::HtmlText(_) | Leaf::HtmlEntity(_)))
-    })
-}
 
-fn split_text_sequence(tree: &mut SakuraTree, twig: &Twig, inner: &[Ring], indent_map: &[i32]) {
-    let indent = get_indent(indent_map, twig);
-    let indent_width = (indent as usize) * tree.config.indent_size;
-    let available_width = tree.config.max_width.saturating_sub(indent_width);
+        let fits = ring.total_chars(self) <= self.config.max_width;
 
-    let mut line_start = twig.start();
-    let mut line_end = twig.start();
-    let mut line_width = 0;
+        match ring {
+            // Compound
+            Ring::Element(twig, inner) | Ring::ControlBlock(twig, inner) => {
+                let has_block = ring.has_block(self);
+                if fits && !has_block {
+                    self.push_branch(twig, BranchStyle::Inline, indent_map);
+                } else {
+                    self.wire_open_close_branches(twig, inner.as_deref(), indent_map);
+                }
+            }
+            Ring::TextSequence(twig, inner) => {
+                if fits {
+                    self.push_branch(twig, BranchStyle::Inline, indent_map);
+                } else if self.is_text_and_entity(inner) {
+                    self.push_branch(twig, BranchStyle::WrappedText, indent_map);
+                } else {
+                    self.split_text_sequence(twig, inner, indent_map);
+                }
+            }
+            Ring::Comment(twig) => {
+                let style = if fits {
+                    BranchStyle::Inline
+                } else {
+                    BranchStyle::MultilineComment
+                };
+                self.push_branch(twig, style, indent_map);
+            }
+            _ => unreachable!(),
+        }
+    }
 
-    for (i, ring) in inner.iter().enumerate() {
-        let ring_width = ring.total_chars(tree);
-        let space_width = usize::from(i > 0 && line_width > 0);
-        let total_width = line_width + space_width + ring_width;
+    fn wire_open_close_branches(
+        &mut self,
+        twig: &Twig,
+        inner: Option<&[Ring]>,
+        indent_map: &[i32],
+    ) {
+        let indent = indent_map.get(twig.start()).copied().unwrap_or(0);
 
-        if total_width > available_width && line_width > 0 {
-            // Emit current line
-            tree.branches.push(Branch::grow(
+        self.branches.push(Branch::grow(
+            twig.start().into(),
+            BranchStyle::OpenClose,
+            indent,
+        ));
+
+        if let Some(inner) = inner {
+            for ring in inner {
+                self.wire_branch(ring, indent_map);
+            }
+        }
+
+        self.branches.push(Branch::grow(
+            twig.end().into(),
+            BranchStyle::OpenClose,
+            indent,
+        ));
+    }
+
+    fn is_text_and_entity(&self, inner: &[Ring]) -> bool {
+        inner.iter().all(|ring| {
+            let twig = ring.twig();
+            if !twig.has_same_idx() {
+                return false;
+            }
+            self.leaves
+                .get(twig.start())
+                .is_some_and(|leaf| matches!(leaf, Leaf::HtmlText(_) | Leaf::HtmlEntity(_)))
+        })
+    }
+
+    fn split_text_sequence(&mut self, twig: &Twig, inner: &[Ring], indent_map: &[i32]) {
+        let indent = indent_map.get(twig.start()).copied().unwrap_or(0);
+        let indent_width = (indent as usize) * self.config.indent_size;
+        let available_width = self.config.max_width.saturating_sub(indent_width);
+
+        let mut line_start = twig.start();
+        let mut line_end = twig.start();
+        let mut line_width = 0;
+
+        for (i, ring) in inner.iter().enumerate() {
+            let ring_width = ring.total_chars(self);
+            let space_width = usize::from(i > 0 && line_width > 0);
+            let total_width = line_width + space_width + ring_width;
+
+            if total_width > available_width && line_width > 0 {
+                // Emit current line
+                self.branches.push(Branch::grow(
+                    (line_start, line_end).into(),
+                    BranchStyle::Inline,
+                    indent,
+                ));
+
+                // Start new line
+                line_start = ring.twig().start();
+                line_end = ring.twig().end();
+                line_width = ring_width;
+            } else {
+                // Add to current line
+                line_end = ring.twig().end();
+                line_width = total_width;
+            }
+        }
+
+        // Emit final line
+        if line_width > 0 {
+            self.branches.push(Branch::grow(
                 (line_start, line_end).into(),
                 BranchStyle::Inline,
                 indent,
             ));
-
-            // Start new line
-            line_start = ring.twig().start();
-            line_end = ring.twig().end();
-            line_width = ring_width;
-        } else {
-            // Add to current line
-            line_end = ring.twig().end();
-            line_width = total_width;
         }
     }
 
-    // Emit final line
-    if line_width > 0 {
-        tree.branches.push(Branch::grow(
-            (line_start, line_end).into(),
-            BranchStyle::Inline,
-            indent,
-        ));
+    fn push_branch(&mut self, twig: &Twig, style: BranchStyle, indent_map: &[i32]) {
+        let indent = indent_map.get(twig.start()).copied().unwrap_or(0);
+        self.branches.push(Branch::grow(*twig, style, indent));
     }
-}
-
-fn push_branch(tree: &mut SakuraTree, twig: &Twig, style: BranchStyle, indent_map: &[i32]) {
-    let indent = get_indent(indent_map, twig);
-    tree.branches.push(Branch::grow(*twig, style, indent));
 }
