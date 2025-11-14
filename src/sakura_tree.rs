@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::ops::{Range, RangeInclusive};
 
 use crate::{
@@ -402,9 +402,6 @@ impl SakuraTree {
             }
         }
 
-        // Track which end leaves are already claimed to detect overlapping ranges
-        let mut claimed_end_leaves = HashSet::new();
-
         // Update twigs for paired start/end tags
         for html_node in html_nodes {
             if let HtmlNode::StartTag {
@@ -420,11 +417,6 @@ impl SakuraTree {
                     byte_to_leaf_map.get(&range.start),
                     byte_to_leaf_map.get(&end_start),
                 ) {
-                    // Skip if this end leaf is already claimed (malformed Html)
-                    if claimed_end_leaves.contains(&end_leaf_idx) {
-                        continue;
-                    }
-
                     // Skip if this Html element crosses a control block boundary
                     if ctrl_boundaries.iter().any(|&(ctrl_start, ctrl_end)| {
                         let start_inside = start_leaf_idx > ctrl_start && start_leaf_idx < ctrl_end;
@@ -435,7 +427,6 @@ impl SakuraTree {
                     }
 
                     tree.twigs[start_leaf_idx] = Twig(start_leaf_idx, end_leaf_idx);
-                    claimed_end_leaves.insert(end_leaf_idx);
                 }
             }
         }
