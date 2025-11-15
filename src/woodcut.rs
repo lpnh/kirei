@@ -189,7 +189,7 @@ fn content_normalized(leaf: &Leaf) -> Cow<'_, str> {
 fn normalize_leaf_content(leaf: &Leaf, prev_expr: bool, next_expr: bool) -> Cow<'_, str> {
     let content = leaf.content();
 
-    if !matches!(leaf, Leaf::HtmlText(_)) {
+    if !leaf.is_text() {
         return Cow::Borrowed(content);
     }
 

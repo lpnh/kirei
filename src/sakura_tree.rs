@@ -632,25 +632,19 @@ impl SakuraTree {
             let leaf = &self.leaves[idx];
 
             let (ring, next_idx) = match leaf {
-                Leaf::AskamaControl { tag, .. } if tag.is_match_arm() => {
-                    self.try_match_arm_with_content(idx, end_idx)
-                }
-                Leaf::AskamaControl { .. } => self
+                leaf if leaf.is_match_arm() => self.try_match_arm_with_content(idx, end_idx),
+                leaf if leaf.is_ctrl() => self
                     .try_askama_block(idx)
                     .unwrap_or_else(|| Ring::from_single_with_next(idx)),
-                Leaf::HtmlStartTag { .. } => self.handle_start_tag(idx, end_idx),
+                leaf if leaf.is_start_tag() => self.handle_start_tag(idx, end_idx),
                 Leaf::HtmlRawText(_) => {
                     // Collect consecutive RawText and Askama leaves into one ring
                     let last_idx = self.leaves[idx..]
                         .iter()
                         .take(end_idx - idx)
                         .take_while(|leaf| {
-                            matches!(
-                                leaf,
-                                Leaf::HtmlRawText(_)
-                                    | Leaf::AskamaExpr { .. }
-                                    | Leaf::AskamaComment(_)
-                            )
+                            matches!(leaf, Leaf::HtmlRawText(_) | Leaf::AskamaComment(_))
+                                || leaf.is_expr()
                         })
                         .count()
                         + idx
@@ -741,9 +735,7 @@ impl SakuraTree {
             }
 
             // If start tag, skip to after the end tag
-            if let Leaf::HtmlStartTag { .. } = leaf
-                && leaf.is_paired()
-            {
+            if leaf.is_start_tag() && leaf.is_paired() {
                 let pair = leaf.pair_range(curr_idx);
                 curr_idx = *pair.end() + 1;
                 continue;
@@ -783,10 +775,7 @@ impl SakuraTree {
         while curr_idx < end_idx {
             let leaf = &self.leaves[curr_idx];
 
-            if let Leaf::HtmlStartTag { .. } = leaf
-                && leaf.is_paired()
-                && leaf.is_inline_level()
-            {
+            if leaf.is_start_tag() && leaf.is_paired() && leaf.is_inline_level() {
                 let pair = leaf.pair_range(curr_idx);
                 // Check if complete element fits inline
                 if !self.twig_fits(pair.clone()) {
@@ -838,7 +827,7 @@ impl SakuraTree {
         let mut curr_indent = 0;
 
         for (i, leaf) in self.leaves.iter().enumerate() {
-            if matches!(leaf, Leaf::HtmlEndTag { .. }) {
+            if leaf.is_end_tag() {
                 curr_indent = (curr_indent - 1).max(0);
             }
 
@@ -852,9 +841,7 @@ impl SakuraTree {
             curr_indent = (curr_indent + post_delta).max(0);
 
             // Only increment indent if it has a matching end tag
-            if let Leaf::HtmlStartTag { .. } = leaf
-                && leaf.pair_range(i).count() > 1
-            {
+            if leaf.is_start_tag() && leaf.pair_range(i).count() > 1 {
                 curr_indent += 1;
             }
         }
@@ -891,11 +878,10 @@ impl SakuraTree {
                 if fits {
                     self.push_branch(&ring.twig, BranchStyle::Inline, indent_map);
                 } else {
-                    let is_text_and_entity_only = ring.twig.clone().all(|i| {
-                        self.leaves
-                            .get(i)
-                            .is_some_and(|l| matches!(l, Leaf::HtmlText(_) | Leaf::HtmlEntity(_)))
-                    });
+                    let is_text_and_entity_only = ring
+                        .twig
+                        .clone()
+                        .all(|i| self.leaves.get(i).is_some_and(Leaf::is_text_or_entity));
 
                     if is_text_and_entity_only {
                         self.push_branch(&ring.twig, BranchStyle::WrappedText, indent_map);
