@@ -216,18 +216,12 @@ fn should_add_space_before_leaf(
             .get(twig.clone().nth(position_in_branch - 1).unwrap())
             .unwrap();
 
-        matches!(prev, Leaf::AskamaExpr { space_after: true, .. } if !current.is_ctrl())
-            || matches!(current, Leaf::AskamaExpr { space_before: true, .. } if !prev.is_ctrl())
-            || matches!(
-                (prev, current),
-                (
-                    Leaf::HtmlText(_),
-                    Leaf::HtmlEntity(_) | Leaf::HtmlStartTag { .. }
-                ) | (Leaf::HtmlEntity(_), Leaf::HtmlText(_))
-            )
-            || matches!(prev, Leaf::AskamaControl { tag, .. } if tag.is_match_arm())
-            || (matches!(prev, Leaf::HtmlEndTag { .. })
-                && (current.content().starts_with(char::is_alphabetic)))
+        (prev.has_space_after() && !current.is_ctrl())
+            || (current.has_space_before() && !prev.is_ctrl())
+            || (prev.is_text_or_entity() && current.is_text_or_entity())
+            || (prev.is_match_arm() && !current.is_ctrl())
+            || (prev.is_text_or_entity() && current.is_start_tag())
+            || (prev.is_end_tag() && current.content().starts_with(char::is_alphabetic))
     }
 }
 

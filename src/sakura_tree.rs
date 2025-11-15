@@ -324,6 +324,10 @@ impl Leaf {
         }
     }
 
+    pub fn chars_count(&self) -> usize {
+        self.content().chars().count()
+    }
+
     pub fn is_ctrl(&self) -> bool {
         matches!(self, Self::AskamaControl { .. })
     }
@@ -332,12 +336,52 @@ impl Leaf {
         matches!(self, Self::AskamaExpr { .. })
     }
 
-    fn is_text_or_expr(&self) -> bool {
-        matches!(self, Self::HtmlText(_) | Self::AskamaExpr { .. })
+    pub fn is_match_arm(&self) -> bool {
+        matches!(self, Self::AskamaControl { tag, .. } if tag.is_match_arm())
     }
 
-    pub fn chars_count(&self) -> usize {
-        self.content().chars().count()
+    pub fn has_space_before(&self) -> bool {
+        matches!(
+            self,
+            Self::AskamaExpr {
+                space_before: true,
+                ..
+            }
+        )
+    }
+
+    pub fn has_space_after(&self) -> bool {
+        matches!(
+            self,
+            Self::AskamaExpr {
+                space_after: true,
+                ..
+            }
+        )
+    }
+
+    pub fn is_text(&self) -> bool {
+        matches!(self, Self::HtmlText(_))
+    }
+
+    pub fn is_entity(&self) -> bool {
+        matches!(self, Self::HtmlEntity(_))
+    }
+
+    pub fn is_start_tag(&self) -> bool {
+        matches!(self, Self::HtmlStartTag { .. })
+    }
+
+    pub fn is_end_tag(&self) -> bool {
+        matches!(self, Self::HtmlEndTag(_))
+    }
+
+    pub fn is_text_or_entity(&self) -> bool {
+        self.is_text() || self.is_entity()
+    }
+
+    fn is_text_or_expr(&self) -> bool {
+        self.is_text() || self.is_expr()
     }
 
     fn from_text_fragment(fragment: &str, is_raw: bool) -> Self {

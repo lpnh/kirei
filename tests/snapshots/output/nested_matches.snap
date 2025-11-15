@@ -4,6 +4,6 @@ description: "{% match user %}\n{% when Some with (status) %}\n{% match status %
 ---
 {% match user %}
     {% when Some with (status) %}
-        {% match status %}{% when Online %} {% when Offline %} {% endmatch %}
+        {% match status %}{% when Online %}{% when Offline %}{% endmatch %}
     {% when None %}
 {% endmatch %}
