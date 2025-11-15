@@ -115,6 +115,69 @@ impl HtmlNode {
             }
         }
     }
+
+    pub fn range(&self) -> Option<&ops::Range<usize>> {
+        match self {
+            Self::StartTag { range, .. }
+            | Self::Void { range, .. }
+            | Self::SelfClosingTag { range, .. }
+            | Self::Text { range, .. }
+            | Self::RawText { range, .. }
+            | Self::Comment { range, .. } => Some(range),
+            _ => None,
+        }
+    }
+
+    pub fn name(&self) -> Option<&str> {
+        match self {
+            Self::StartTag { name, .. }
+            | Self::Void { name, .. }
+            | Self::SelfClosingTag { name, .. }
+            | Self::EndTag { name, .. }
+            | Self::ErroneousEndTag { name, .. } => Some(name),
+            _ => None,
+        }
+    }
+
+    pub fn is_inline(&self) -> bool {
+        self.name().is_some_and(is_inline_tag_name)
+    }
+
+    pub fn is_text(&self) -> bool {
+        matches!(self, Self::Text { .. })
+    }
+
+    pub fn is_raw_text(&self) -> bool {
+        matches!(self, Self::RawText { .. })
+    }
+
+    pub fn is_tag(&self) -> bool {
+        matches!(
+            self,
+            Self::StartTag { .. } | Self::Void { .. } | Self::SelfClosingTag { .. }
+        )
+    }
+
+    pub fn end_tag_index(&self) -> Option<usize> {
+        match self {
+            Self::StartTag { end_tag_idx, .. } => *end_tag_idx,
+            _ => None,
+        }
+    }
+
+    pub fn is_consumer(&self) -> bool {
+        matches!(
+            self,
+            Self::StartTag { .. }
+                | Self::Void { .. }
+                | Self::SelfClosingTag { .. }
+                | Self::Comment { .. }
+        )
+    }
+
+    pub fn is_splitter(&self) -> bool {
+        matches!(self, Self::Text { .. } | Self::RawText { .. })
+    }
 }
 
 pub fn is_inline_tag_name(name: &str) -> bool {

@@ -261,6 +261,10 @@ impl AskamaNode {
             ControlTag::When(_) | ControlTag::Else(Boundary::Inner)
         )
     }
+
+    pub fn within_range(&self, range: &ops::Range<usize>) -> bool {
+        self.start() >= range.start && self.end() <= range.end
+    }
 }
 
 pub fn extract_askama_nodes(root: &Node, source: &str) -> Result<(Vec<AskamaNode>, Vec<Range>)> {
