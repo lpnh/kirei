@@ -530,8 +530,8 @@ impl SakuraTree {
         let mut leaves = BTreeMap::new();
 
         for (idx, node) in html_nodes.iter().enumerate() {
-            if node.is_tag() {
-                // Tags are consumers. Check if this one contains Askama
+            if node.is_start_tag_or_void() {
+                // Tags may consume. Check if this one contains Askama
                 let range = node.range().expect("tag must have range");
                 let leaf = if prune_map.is_consumer(idx) {
                     let content = html::reconstruct_tag(range, source, askama_nodes, config);
@@ -549,7 +549,7 @@ impl SakuraTree {
                 };
                 leaves.insert(range.start, leaf);
             } else if node.is_text() {
-                // Text are splitters. Check if this one contains Askama
+                // Text may split. Check if this one contains Askama
                 let range = node.range().expect("text must have range");
                 if prune_map.is_splitter(range) {
                     leaves.extend(Self::split_text(
@@ -566,7 +566,7 @@ impl SakuraTree {
                     leaves.insert(range.start, Leaf::from_text(text, false));
                 }
             } else if node.is_raw_text() {
-                // RawText are splitters. Check if this one contains Askama
+                // RawText may split. Check if this one contains Askama
                 let range = node.range().expect("raw text must have range");
                 if prune_map.is_splitter(range) {
                     leaves.extend(Self::split_text(
@@ -582,8 +582,9 @@ impl SakuraTree {
                     };
                     leaves.insert(range.start, Leaf::from_text(text, true));
                 }
-            } else if let Some(range) = node.range() {
-                // Comments are consumers. Check if this one contains Askama
+            } else if node.is_comment() {
+                // Comments may consume. Check if this one contains Askama
+                let range = node.range().expect("comment must have range");
                 let leaf = if prune_map.is_consumer(idx) {
                     let content = html::reconstruct_comment(range, source, askama_nodes, config);
                     Leaf::HtmlComment(content)
@@ -591,8 +592,11 @@ impl SakuraTree {
                     Leaf::from_html(node)
                 };
                 leaves.insert(range.start, leaf);
+            } else if let Some(range) = node.range() {
+                // Other node types
+                leaves.insert(range.start, Leaf::from_html(node));
             } else {
-                // Let's pretend other node types don't contain Askama for now
+                // Nodes without ranges
                 leaves.insert(node.start(), Leaf::from_html(node));
             }
         }

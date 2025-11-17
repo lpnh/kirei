@@ -151,7 +151,7 @@ impl HtmlNode {
         matches!(self, Self::RawText { .. })
     }
 
-    pub fn is_tag(&self) -> bool {
+    pub fn is_start_tag_or_void(&self) -> bool {
         matches!(
             self,
             Self::StartTag { .. } | Self::Void { .. } | Self::SelfClosingTag { .. }
@@ -177,6 +177,10 @@ impl HtmlNode {
 
     pub fn is_splitter(&self) -> bool {
         matches!(self, Self::Text { .. } | Self::RawText { .. })
+    }
+
+    pub fn is_comment(&self) -> bool {
+        matches!(self, Self::Comment { .. })
     }
 }
 
