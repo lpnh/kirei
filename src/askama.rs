@@ -267,7 +267,6 @@ pub fn extract_askama_nodes(root: &Node, source: &str) -> Result<(Vec<AskamaNode
             "control_tag" | "render_expression" | "comment" | "raw_statement"
             | "endraw_statement" => {
                 let mut node = parse_askama_node(child, source)?;
-                let idx = nodes.len();
 
                 // Pair opening and closing control blocks
                 if let AskamaNode::Control {
@@ -275,7 +274,7 @@ pub fn extract_askama_nodes(root: &Node, source: &str) -> Result<(Vec<AskamaNode
                 } = &mut node
                 {
                     if ctrl_tag.is_opening() {
-                        stack.push((idx, *ctrl_tag));
+                        stack.push((nodes.len(), *ctrl_tag));
                     } else if let Some(pos) = stack
                         .iter()
                         .rposition(|(_, open_tag)| open_tag.matches_close(*ctrl_tag))

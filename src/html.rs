@@ -13,16 +13,19 @@ pub enum HtmlNode {
         name: String,
         attr: String,
         end_tag_idx: Option<usize>,
+        embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
     },
     Void {
         name: String,
         attr: String,
+        embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
     },
     SelfClosingTag {
         name: String,
         attr: String,
+        embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
     },
     EndTag {
@@ -32,10 +35,12 @@ pub enum HtmlNode {
 
     Text {
         text: String,
+        embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
     },
     RawText {
         text: String,
+        embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
     },
 
@@ -49,6 +54,7 @@ pub enum HtmlNode {
     },
     Comment {
         text: String,
+        embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
     },
 
@@ -165,22 +171,20 @@ impl HtmlNode {
         }
     }
 
-    pub fn is_consumer(&self) -> bool {
-        matches!(
-            self,
-            Self::StartTag { .. }
-                | Self::Void { .. }
-                | Self::SelfClosingTag { .. }
-                | Self::Comment { .. }
-        )
-    }
-
-    pub fn is_splitter(&self) -> bool {
-        matches!(self, Self::Text { .. } | Self::RawText { .. })
-    }
-
     pub fn is_comment(&self) -> bool {
         matches!(self, Self::Comment { .. })
+    }
+
+    pub fn embed_askm(&self) -> Option<&[usize]> {
+        match self {
+            Self::StartTag { embed_askm, .. }
+            | Self::Void { embed_askm, .. }
+            | Self::SelfClosingTag { embed_askm, .. }
+            | Self::Comment { embed_askm, .. }
+            | Self::Text { embed_askm, .. }
+            | Self::RawText { embed_askm, .. } => embed_askm.as_deref(),
+            _ => None,
+        }
     }
 }
 
@@ -235,10 +239,37 @@ pub fn extract_html_nodes(
     root_node: &Node,
     source: &[u8],
     content_ranges: &[Range],
+    askama_nodes: &[AskamaNode],
 ) -> Result<Vec<HtmlNode>> {
     let mut html_nodes = Vec::new();
-    parse_html_node_recursive(root_node, source, content_ranges, &mut html_nodes, 0)?;
+    parse_html_node_recursive(
+        root_node,
+        source,
+        content_ranges,
+        askama_nodes,
+        &mut html_nodes,
+        0,
+    )?;
     Ok(html_nodes)
+}
+
+fn find_askama_in_range(
+    askama_nodes: &[AskamaNode],
+    range: &ops::Range<usize>,
+) -> Option<Vec<usize>> {
+    let indices: Vec<_> = askama_nodes
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, node)| {
+            (node.start() >= range.start && node.end() <= range.end).then_some(idx)
+        })
+        .collect();
+
+    if indices.is_empty() {
+        None
+    } else {
+        Some(indices)
+    }
 }
 
 // Extract text only from included content ranges, skipping Askama gaps
@@ -270,6 +301,7 @@ fn parse_html_node_recursive(
     node: &Node,
     source: &[u8],
     content_ranges: &[Range],
+    askama_nodes: &[AskamaNode],
     html_nodes: &mut Vec<HtmlNode>,
     depth: usize,
 ) -> Result<()> {
@@ -281,7 +313,14 @@ fn parse_html_node_recursive(
     match node.kind() {
         "document" => {
             for child in node.children(&mut node.walk()) {
-                parse_html_node_recursive(&child, source, content_ranges, html_nodes, depth + 1)?;
+                parse_html_node_recursive(
+                    &child,
+                    source,
+                    content_ranges,
+                    askama_nodes,
+                    html_nodes,
+                    depth + 1,
+                )?;
             }
         }
         "doctype" => {
@@ -291,16 +330,31 @@ fn parse_html_node_recursive(
                 start: node.start_byte(),
             });
         }
-        "start_tag" => html_nodes.push(parse_start_tag(node, source)),
-        "end_tag" => html_nodes.push(parse_end_tag(node, source)),
-        "self_closing_tag" => html_nodes.push(parse_self_closing_tag(node, source)),
-        "erroneous_end_tag" => html_nodes.push(parse_erroneous_end_tag(node, source)),
+        "start_tag" => {
+            let range = node.start_byte()..node.end_byte();
+            let embed_askm = find_askama_in_range(askama_nodes, &range);
+            html_nodes.push(parse_start_tag(node, source, embed_askm));
+        }
+        "end_tag" => {
+            html_nodes.push(parse_end_tag(node, source));
+        }
+        "self_closing_tag" => {
+            let range = node.start_byte()..node.end_byte();
+            let embed_askm = find_askama_in_range(askama_nodes, &range);
+            html_nodes.push(parse_self_closing_tag(node, source, embed_askm));
+        }
+        "erroneous_end_tag" => {
+            html_nodes.push(parse_erroneous_end_tag(node, source));
+        }
         "comment" => {
             let text = node.utf8_text(source)?.to_string();
             let normalized = format_comment(&text);
+            let range = node.start_byte()..node.end_byte();
+            let embed_askm = find_askama_in_range(askama_nodes, &range);
             html_nodes.push(HtmlNode::Comment {
                 text: normalized,
-                range: node.start_byte()..node.end_byte(),
+                embed_askm,
+                range,
             });
         }
         "entity" => {
@@ -312,16 +366,26 @@ fn parse_html_node_recursive(
         }
         "text" => {
             let text = extract_text_from_ranges(node, source, content_ranges)?;
+            let range = node.start_byte()..node.end_byte();
+            let embed_askm = find_askama_in_range(askama_nodes, &range);
             html_nodes.push(HtmlNode::Text {
                 text,
-                range: node.start_byte()..node.end_byte(),
+                embed_askm,
+                range,
             });
         }
         "element" | "script_element" | "style_element" => {
             let start_tag_idx = html_nodes.len();
 
             for child in node.children(&mut node.walk()) {
-                parse_html_node_recursive(&child, source, content_ranges, html_nodes, depth + 1)?;
+                parse_html_node_recursive(
+                    &child,
+                    source,
+                    content_ranges,
+                    askama_nodes,
+                    html_nodes,
+                    depth + 1,
+                )?;
             }
 
             let is_void_or_self_closing = html_nodes
@@ -364,9 +428,12 @@ fn parse_html_node_recursive(
         "raw_text" => {
             let text = node.utf8_text(source)?;
             if !text.trim().is_empty() {
+                let range = node.start_byte()..node.end_byte();
+                let embed_askm = find_askama_in_range(askama_nodes, &range);
                 html_nodes.push(HtmlNode::RawText {
                     text: text.to_string(),
-                    range: node.start_byte()..node.end_byte(),
+                    embed_askm,
+                    range,
                 });
             }
         }
@@ -375,7 +442,7 @@ fn parse_html_node_recursive(
     Ok(())
 }
 
-fn parse_start_tag(node: &Node, source: &[u8]) -> HtmlNode {
+fn parse_start_tag(node: &Node, source: &[u8], embed_askm: Option<Vec<usize>>) -> HtmlNode {
     let tag_name = extract_tag_name(node, source, "tag_name");
     let attr = extract_attr(node, source);
 
@@ -384,6 +451,7 @@ fn parse_start_tag(node: &Node, source: &[u8]) -> HtmlNode {
         HtmlNode::Void {
             name: tag_name,
             attr,
+            embed_askm,
             range: node.start_byte()..node.end_byte(),
         }
     } else {
@@ -391,18 +459,20 @@ fn parse_start_tag(node: &Node, source: &[u8]) -> HtmlNode {
             name: tag_name,
             attr,
             end_tag_idx: None,
+            embed_askm,
             range: node.start_byte()..node.end_byte(),
         }
     }
 }
 
-fn parse_self_closing_tag(node: &Node, source: &[u8]) -> HtmlNode {
+fn parse_self_closing_tag(node: &Node, source: &[u8], embed_askm: Option<Vec<usize>>) -> HtmlNode {
     let tag_name = extract_tag_name(node, source, "tag_name");
     let attr = extract_attr(node, source);
 
     HtmlNode::SelfClosingTag {
         name: tag_name,
         attr,
+        embed_askm,
         range: node.start_byte()..node.end_byte(),
     }
 }
@@ -511,17 +581,14 @@ pub fn reconstruct_tag(
     range: &ops::Range<usize>,
     source: &str,
     askama_nodes: &[AskamaNode],
+    embed_askm: &[usize],
     config: &Config,
 ) -> String {
     let mut result = String::new();
     let mut current_pos = range.start;
 
-    let askama_in_range: Vec<_> = askama_nodes
-        .iter()
-        .filter(|a| a.start() >= range.start && a.end() <= range.end)
-        .collect();
-
-    for askama in askama_in_range {
+    for &idx in embed_askm {
+        let askama = &askama_nodes[idx];
         if askama.start() > current_pos {
             let fragment = &source[current_pos..askama.start()];
             let normalized = normalize_fragment(fragment);
@@ -548,17 +615,14 @@ pub fn reconstruct_comment(
     range: &ops::Range<usize>,
     source: &str,
     askama_nodes: &[AskamaNode],
+    embed_askm: &[usize],
     config: &Config,
 ) -> String {
     let mut result = String::new();
     let mut current_pos = range.start;
 
-    let askama_in_range: Vec<_> = askama_nodes
-        .iter()
-        .filter(|a| a.start() >= range.start && a.end() <= range.end)
-        .collect();
-
-    for askama in askama_in_range {
+    for &idx in embed_askm {
+        let askama = &askama_nodes[idx];
         if askama.start() > current_pos {
             result.push_str(&source[current_pos..askama.start()]);
         }
@@ -591,18 +655,9 @@ fn normalize_fragment(fragment: &str) -> String {
 
 // Normalize whitespace preserving leading/trailing spaces
 fn normalize_preserving_ends(text: &str) -> String {
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        return if text.is_empty() {
-            String::new()
-        } else {
-            " ".to_string()
-        };
-    }
-
     let has_leading = text.starts_with(char::is_whitespace);
     let has_trailing = text.ends_with(char::is_whitespace);
-    let normalized = crate::normalize_whitespace(trimmed);
+    let normalized = crate::normalize_whitespace(text);
 
     match (has_leading, has_trailing) {
         (true, true) => format!(" {} ", normalized),

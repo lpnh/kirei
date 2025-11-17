@@ -74,6 +74,7 @@ impl AskamaFormatter {
             &html_tree.root_node(),
             source.as_bytes(),
             &content_node_ranges,
+            &askama_nodes,
         )
         .context("Failed to extract HTML nodes")?;
 
