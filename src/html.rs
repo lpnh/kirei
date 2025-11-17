@@ -238,18 +238,11 @@ pub fn is_inline_tag_name(name: &str) -> bool {
 pub fn extract_html_nodes(
     root_node: &Node,
     source: &[u8],
-    content_ranges: &[Range],
+    ranges: &[Range],
     askama_nodes: &[AskamaNode],
 ) -> Result<Vec<HtmlNode>> {
     let mut html_nodes = Vec::new();
-    parse_html_node_recursive(
-        root_node,
-        source,
-        content_ranges,
-        askama_nodes,
-        &mut html_nodes,
-        0,
-    )?;
+    parse_recursive(root_node, source, ranges, askama_nodes, &mut html_nodes, 0)?;
     Ok(html_nodes)
 }
 
@@ -297,10 +290,10 @@ fn extract_text_from_ranges(
     Ok(text_parts.join(""))
 }
 
-fn parse_html_node_recursive(
+fn parse_recursive(
     node: &Node,
     source: &[u8],
-    content_ranges: &[Range],
+    ranges: &[Range],
     askama_nodes: &[AskamaNode],
     html_nodes: &mut Vec<HtmlNode>,
     depth: usize,
@@ -313,14 +306,7 @@ fn parse_html_node_recursive(
     match node.kind() {
         "document" => {
             for child in node.children(&mut node.walk()) {
-                parse_html_node_recursive(
-                    &child,
-                    source,
-                    content_ranges,
-                    askama_nodes,
-                    html_nodes,
-                    depth + 1,
-                )?;
+                parse_recursive(&child, source, ranges, askama_nodes, html_nodes, depth + 1)?;
             }
         }
         "doctype" => {
@@ -365,7 +351,7 @@ fn parse_html_node_recursive(
             });
         }
         "text" => {
-            let text = extract_text_from_ranges(node, source, content_ranges)?;
+            let text = extract_text_from_ranges(node, source, ranges)?;
             let range = node.start_byte()..node.end_byte();
             let embed_askm = find_askama_in_range(askama_nodes, &range);
             html_nodes.push(HtmlNode::Text {
@@ -378,14 +364,7 @@ fn parse_html_node_recursive(
             let start_tag_idx = html_nodes.len();
 
             for child in node.children(&mut node.walk()) {
-                parse_html_node_recursive(
-                    &child,
-                    source,
-                    content_ranges,
-                    askama_nodes,
-                    html_nodes,
-                    depth + 1,
-                )?;
+                parse_recursive(&child, source, ranges, askama_nodes, html_nodes, depth + 1)?;
             }
 
             let is_void_or_self_closing = html_nodes
