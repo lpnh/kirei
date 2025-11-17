@@ -91,7 +91,7 @@ impl HtmlNode {
                 | "input"
                 | "link"
                 | "meta"
-                | "param"
+                | "param" // deprecated
                 | "source"
                 | "track"
                 | "wbr"
@@ -102,7 +102,7 @@ impl HtmlNode {
         match self {
             Self::StartTag { name, attr, .. } => format_opening_tag(name, attr),
             Self::Void { name, attr, .. } | Self::SelfClosingTag { name, attr, .. } => {
-                format_self_closing_tag(name, attr)
+                format_self_closing_or_void(name, attr)
             }
             Self::Text { text, .. }
             | Self::RawText { text, .. }
@@ -379,7 +379,7 @@ fn parse_start_tag(node: &Node, source: &[u8]) -> HtmlNode {
     let tag_name = extract_tag_name(node, source, "tag_name");
     let attr = extract_attr(node, source);
 
-    // Check if this is a void element and create the appropriate variant
+    // https://github.com/tree-sitter/tree-sitter-html/issues/97
     if HtmlNode::is_void_element_name(&tag_name) {
         HtmlNode::Void {
             name: tag_name,
@@ -484,7 +484,7 @@ fn format_opening_tag(name: &str, attr: &str) -> String {
     }
 }
 
-fn format_self_closing_tag(name: &str, attr: &str) -> String {
+fn format_self_closing_or_void(name: &str, attr: &str) -> String {
     if attr.is_empty() {
         format!("<{} />", name)
     } else {
