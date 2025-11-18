@@ -21,7 +21,7 @@ fn run(args: &Args) -> Result<()> {
     let formatted = if raw_formatted.ends_with('\n') {
         raw_formatted
     } else {
-        format!("{}\n", raw_formatted)
+        format!("{raw_formatted}\n")
     };
 
     // Handle --check and --list-different
@@ -46,13 +46,13 @@ fn run(args: &Args) -> Result<()> {
         if let Some(path) = maybe_filepath {
             std::fs::write(path, formatted)?;
         } else {
-            print!("{}", formatted);
+            print!("{formatted}");
         }
         return Ok(());
     }
 
     // Default: print to stdout
-    print!("{}", formatted);
+    print!("{formatted}");
     Ok(())
 }
 

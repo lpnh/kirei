@@ -104,7 +104,7 @@ impl HtmlNode {
         )
     }
 
-    pub fn to_string(&self) -> String {
+    pub fn format(&self) -> String {
         match self {
             Self::StartTag { name, attr, .. } => format_opening_tag(name, attr),
             Self::Void { name, attr, .. } | Self::SelfClosingTag { name, attr, .. } => {
@@ -134,7 +134,7 @@ impl HtmlNode {
         }
     }
 
-    pub fn name(&self) -> Option<&str> {
+    fn name(&self) -> Option<&str> {
         match self {
             Self::StartTag { name, .. }
             | Self::Void { name, .. }

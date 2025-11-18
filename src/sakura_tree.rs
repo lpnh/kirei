@@ -173,7 +173,7 @@ impl Leaf {
     }
 
     fn from_html(html_node: &HtmlNode) -> Self {
-        let source = html_node.to_string();
+        let source = html_node.format();
         match html_node {
             HtmlNode::StartTag { .. } => Self::HtmlStartTag {
                 content: source,

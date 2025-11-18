@@ -18,6 +18,7 @@ impl Default for AskamaFormatter {
 }
 
 impl AskamaFormatter {
+    #[must_use]
     pub fn new() -> Result<Self> {
         let mut askama_parser = Parser::new();
         askama_parser

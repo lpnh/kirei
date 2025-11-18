@@ -116,6 +116,7 @@ impl ControlTag {
         }
     }
 
+    #[must_use]
     pub fn indent_delta(self) -> (i32, i32) {
         match self {
             Self::Match(_) => (0, 2),
@@ -129,15 +130,17 @@ impl ControlTag {
         }
     }
 
+    #[must_use]
     pub fn is_opening(self) -> bool {
         matches!(self.boundary(), Boundary::Open)
     }
 
+    #[must_use]
     pub fn is_match_arm(self) -> bool {
         matches!(self, Self::When(_) | Self::Else(Boundary::Inner))
     }
 
-    // Check if this opening tag matches with a closing tag
+    #[must_use]
     pub fn matches_close(self, close: Self) -> bool {
         matches!(
             (self, close),
@@ -151,11 +154,6 @@ impl ControlTag {
                 | (Self::MacroCall(_), Self::Endcall(_))
                 | (Self::Raw(_), Self::Endraw(_))
         )
-    }
-
-    // Check if two tags are the same kind (both If, both For, etc.)
-    pub fn same_kind(self, other: Self) -> bool {
-        std::mem::discriminant(&self) == std::mem::discriminant(&other)
     }
 }
 
@@ -187,6 +185,7 @@ pub enum AskamaNode {
 }
 
 impl AskamaNode {
+    #[must_use]
     pub fn start(&self) -> usize {
         match self {
             Self::Control { range, .. }
@@ -195,6 +194,7 @@ impl AskamaNode {
         }
     }
 
+    #[must_use]
     pub fn end(&self) -> usize {
         match self {
             Self::Control { range, .. }
@@ -219,37 +219,12 @@ impl AskamaNode {
         }
     }
 
-    pub fn indent_delta(&self) -> (i32, i32) {
-        match self {
-            Self::Control { ctrl_tag, .. } => ctrl_tag.indent_delta(),
-            _ => (0, 0),
-        }
-    }
-
-    pub fn is_ctrl(&self) -> bool {
-        matches!(self, Self::Control { .. })
-    }
-    pub fn is_expr(&self) -> bool {
+    fn is_expr(&self) -> bool {
         matches!(self, Self::Expression { .. })
     }
-    pub fn is_comment(&self) -> bool {
-        matches!(self, Self::Comment { .. })
-    }
-    pub fn get_ctrl_tag(&self) -> ControlTag {
-        match self {
-            Self::Control { ctrl_tag, .. } => *ctrl_tag,
-            _ => unreachable!(),
-        }
-    }
-    pub fn is_match_arm(&self) -> bool {
-        matches!(
-            self.get_ctrl_tag(),
-            ControlTag::When(_) | ControlTag::Else(Boundary::Inner)
-        )
-    }
 
-    pub fn within_range(&self, range: &ops::Range<usize>) -> bool {
-        self.start() >= range.start && self.end() <= range.end
+    fn is_comment(&self) -> bool {
+        matches!(self, Self::Comment { .. })
     }
 }
 
@@ -394,6 +369,8 @@ fn extract_delimiters(node: Node, source: &str) -> Result<(Delimiters, String)> 
 }
 
 // Format an Askama node with proper normalization
+
+#[must_use]
 pub fn format_askama_node(config: &Config, node: &AskamaNode) -> String {
     // Normalize whitespace inside delimiters
     let (open, close, inner) = normalize_askama_node(node, config);
