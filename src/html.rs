@@ -14,8 +14,16 @@ const PHRASING_CONTENT: &[&str] = &[
     "math", "meter", "noscript", "object", "output", "picture", "progress", "q", "ruby", "s",
     "samp", "script", "select", "slot", "small", "span", "strong", "sub", "sup", "svg", "template",
     "textarea", "time", "u", "var", "video", "wbr",
-    // Conditionally phrasing (included for formatting purposes)
+    //
+    //  Conditionally phrasing
+    //
     "a", "area", "del", "ins", "link", "map", "meta",
+];
+
+// https://developer.mozilla.org/en-US/docs/Glossary/Void_element
+const VOID_ELEMENTS: &[&str] = &[
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
+    "track", "wbr",
 ];
 
 #[derive(Debug, Clone)]
@@ -76,6 +84,11 @@ pub enum HtmlNode {
 }
 
 impl HtmlNode {
+    // https://github.com/tree-sitter/tree-sitter-html/issues/97
+    fn is_void(name: &str) -> bool {
+        VOID_ELEMENTS.contains(&name.to_lowercase().as_str())
+    }
+
     pub fn start(&self) -> usize {
         match self {
             Self::StartTag { range, .. }
@@ -89,26 +102,6 @@ impl HtmlNode {
             | Self::Doctype { start, .. }
             | Self::Entity { start, .. } => *start,
         }
-    }
-
-    fn is_void_element_name(name: &str) -> bool {
-        matches!(
-            name.to_lowercase().as_str(),
-            "area"
-                | "base"
-                | "br"
-                | "col"
-                | "embed"
-                | "hr"
-                | "img"
-                | "input"
-                | "link"
-                | "meta"
-                | "param" // deprecated
-                | "source"
-                | "track"
-                | "wbr"
-        )
     }
 
     pub fn format(&self) -> String {
@@ -357,8 +350,7 @@ fn parse_start_tag(node: &Node, source: &[u8], embed_askm: Option<Vec<usize>>) -
     let tag_name = extract_tag_name(node, source, "tag_name");
     let attr = extract_attr(node, source);
 
-    // https://github.com/tree-sitter/tree-sitter-html/issues/97
-    if HtmlNode::is_void_element_name(&tag_name) {
+    if HtmlNode::is_void(&tag_name) {
         HtmlNode::Void {
             name: tag_name,
             attr,
