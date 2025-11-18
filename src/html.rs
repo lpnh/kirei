@@ -7,6 +7,17 @@ use crate::{
     config::Config,
 };
 
+// https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Content_categories#phrasing_content
+const PHRASING_CONTENT: &[&str] = &[
+    "abbr", "audio", "b", "bdi", "bdo", "br", "button", "canvas", "cite", "code", "data",
+    "datalist", "dfn", "em", "embed", "i", "iframe", "img", "input", "kbd", "label", "mark",
+    "math", "meter", "noscript", "object", "output", "picture", "progress", "q", "ruby", "s",
+    "samp", "script", "select", "slot", "small", "span", "strong", "sub", "sup", "svg", "template",
+    "textarea", "time", "u", "var", "video", "wbr",
+    // Conditionally phrasing (included for formatting purposes)
+    "a", "area", "del", "ins", "link", "map", "meta",
+];
+
 #[derive(Debug, Clone)]
 pub enum HtmlNode {
     StartTag {
@@ -130,17 +141,15 @@ impl HtmlNode {
         }
     }
 
-    fn name(&self) -> Option<&str> {
-        match self {
+    pub fn is_inline(&self) -> bool {
+        let name = match self {
             Self::StartTag { name, .. }
             | Self::Void { name, .. }
-            | Self::SelfClosingTag { name, .. } => Some(name),
-            _ => None,
-        }
-    }
+            | Self::SelfClosingTag { name, .. } => name,
+            _ => return false,
+        };
 
-    pub fn is_inline(&self) -> bool {
-        self.name().is_some_and(is_inline_tag_name)
+        PHRASING_CONTENT.contains(&name.to_lowercase().as_str())
     }
 
     pub fn is_text(&self) -> bool {
@@ -180,53 +189,6 @@ impl HtmlNode {
             _ => None,
         }
     }
-}
-
-pub fn is_inline_tag_name(name: &str) -> bool {
-    matches!(
-        name.to_lowercase().as_str(),
-        "a" | "abbr"
-            | "acronym"
-            | "b"
-            | "bdi"
-            | "bdo"
-            | "big"
-            | "br"
-            | "button"
-            | "cite"
-            | "code"
-            | "dfn"
-            | "em"
-            | "i"
-            | "img"
-            | "input"
-            | "kbd"
-            | "label"
-            | "map"
-            | "mark"
-            | "meter"
-            | "noscript"
-            | "object"
-            | "output"
-            | "progress"
-            | "q"
-            | "ruby"
-            | "s"
-            | "samp"
-            | "script"
-            | "select"
-            | "small"
-            | "span"
-            | "strong"
-            | "sub"
-            | "sup"
-            | "textarea"
-            | "time"
-            | "tt"
-            | "u"
-            | "var"
-            | "wbr"
-    )
 }
 
 pub fn extract_html_nodes(
