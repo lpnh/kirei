@@ -339,9 +339,7 @@ impl SakuraTree {
 
         tree.leaves = leaves.into_values().collect();
 
-        // Control block pairings and boundaries
-        let mut ctrl_boundaries = Vec::new();
-
+        // Pair Askama control blocks
         for node in askama_nodes {
             if let AskamaNode::Control {
                 ctrl_tag,
@@ -352,38 +350,24 @@ impl SakuraTree {
                 && ctrl_tag.is_opening()
                 && let Some(&opening_idx) = byte_to_leaf_map.get(&range.start)
                 && let Some(&closing_idx) = byte_to_leaf_map.get(closing_byte)
+                && let Leaf::AskamaControl { end_idx, .. } = &mut tree.leaves[opening_idx]
             {
-                if let Leaf::AskamaControl { end_idx, .. } = &mut tree.leaves[opening_idx] {
-                    *end_idx = Some(closing_idx);
-                }
-                ctrl_boundaries.push((opening_idx, closing_idx));
+                *end_idx = Some(closing_idx);
             }
         }
 
+        // Pair Html elements (only if within same Askama control block)
         for html_node in html_nodes {
-            if let (Some(range), Some(end_html_idx)) =
-                (html_node.range(), html_node.end_tag_index())
-                && let Some(end_node) = html_nodes.get(end_html_idx)
-            {
-                let end_start = end_node.start();
-
-                if let (Some(&start_leaf_idx), Some(&end_leaf_idx)) = (
+            if let (Some(range), Some(end_tag_idx)) = (html_node.range(), html_node.end_tag_idx())
+                && let Some(end_node) = html_nodes.get(end_tag_idx)
+                && let (Some(&start_leaf_idx), Some(&end_leaf_idx)) = (
                     byte_to_leaf_map.get(&range.start),
-                    byte_to_leaf_map.get(&end_start),
-                ) {
-                    // Skip if this Html element crosses a control block boundary
-                    if ctrl_boundaries.iter().any(|&(ctrl_start, ctrl_end)| {
-                        let start_inside = start_leaf_idx > ctrl_start && start_leaf_idx < ctrl_end;
-                        let end_inside = end_leaf_idx > ctrl_start && end_leaf_idx < ctrl_end;
-                        start_inside != end_inside
-                    }) {
-                        continue;
-                    }
-
-                    if let Leaf::HtmlStartTag { end_idx, .. } = &mut tree.leaves[start_leaf_idx] {
-                        *end_idx = Some(end_leaf_idx);
-                    }
-                }
+                    byte_to_leaf_map.get(&end_node.start()),
+                )
+                && askama::is_inside_same_ctrl(range.start, end_node.start(), askama_nodes)
+                && let Leaf::HtmlStartTag { end_idx, .. } = &mut tree.leaves[start_leaf_idx]
+            {
+                *end_idx = Some(end_leaf_idx);
             }
         }
 

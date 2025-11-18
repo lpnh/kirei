@@ -26,7 +26,8 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
                     {% if method.skip %}{% continue %}{% endif %}
                     <li style="padding: 0.75rem 0; border-bottom: 1px solid #e9ecef;">
                         {% if loop.first %}
-                            <strong style="color: var(--teapot-brown);">→
+                            <strong style="color: var(--teapot-brown);">
+                            →
                         {% elif loop.last %}
                             <span style="font-size: 1.2rem;">
                             🫖

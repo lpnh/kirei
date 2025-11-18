@@ -368,7 +368,32 @@ fn extract_delimiters(node: Node, source: &str) -> Result<(Delimiters, String)> 
     Ok((Delimiters { open, close }, inner))
 }
 
-// Format an Askama node with proper normalization
+#[must_use]
+pub fn is_inside_same_ctrl(start: usize, end: usize, nodes: &[AskamaNode]) -> bool {
+    innermost_ctrl_idx(start, nodes) == innermost_ctrl_idx(end, nodes)
+}
+
+fn innermost_ctrl_idx(pos: usize, nodes: &[AskamaNode]) -> Option<usize> {
+    nodes
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, node)| {
+            if let AskamaNode::Control {
+                range,
+                close_tag: Some(close_idx),
+                ..
+            } = node
+                && pos >= range.end
+                && pos < *close_idx
+            {
+                Some((idx, close_idx - range.end))
+            } else {
+                None
+            }
+        })
+        .min_by_key(|(_, size)| *size)
+        .map(|(idx, _)| idx)
+}
 
 #[must_use]
 pub fn format_askama_node(config: &Config, node: &AskamaNode) -> String {

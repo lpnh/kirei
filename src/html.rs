@@ -80,10 +80,6 @@ impl HtmlNode {
         }
     }
 
-    fn is_void_element(&self) -> bool {
-        matches!(self, Self::Void { .. })
-    }
-
     fn is_void_element_name(name: &str) -> bool {
         matches!(
             name.to_lowercase().as_str(),
@@ -138,9 +134,7 @@ impl HtmlNode {
         match self {
             Self::StartTag { name, .. }
             | Self::Void { name, .. }
-            | Self::SelfClosingTag { name, .. }
-            | Self::EndTag { name, .. }
-            | Self::ErroneousEndTag { name, .. } => Some(name),
+            | Self::SelfClosingTag { name, .. } => Some(name),
             _ => None,
         }
     }
@@ -164,7 +158,7 @@ impl HtmlNode {
         )
     }
 
-    pub fn end_tag_index(&self) -> Option<usize> {
+    pub fn end_tag_idx(&self) -> Option<usize> {
         match self {
             Self::StartTag { end_tag_idx, .. } => *end_tag_idx,
             _ => None,
@@ -361,47 +355,23 @@ fn parse_recursive(
             });
         }
         "element" | "script_element" | "style_element" => {
-            let start_tag_idx = html_nodes.len();
+            let start_idx = html_nodes.len();
+
+            let has_end_tag = node
+                .child(node.child_count().saturating_sub(1))
+                .is_some_and(|n| n.kind() == "end_tag");
 
             for child in node.children(&mut node.walk()) {
                 parse_recursive(&child, source, ranges, askama_nodes, html_nodes, depth + 1)?;
             }
 
-            let is_void_or_self_closing = html_nodes
-                .get(start_tag_idx)
-                .is_some_and(HtmlNode::is_void_element);
+            if has_end_tag {
+                let end_idx = html_nodes.len().saturating_sub(1);
 
-            let mut elem_end_tag_idx = if is_void_or_self_closing {
-                start_tag_idx
-            } else {
-                html_nodes.len().saturating_sub(1)
-            };
-
-            // Validate that start and end tags match (detect unclosed elements)
-            if !is_void_or_self_closing {
-                let start_tag_name = html_nodes.get(start_tag_idx).and_then(|n| match n {
-                    HtmlNode::StartTag { name, .. } => Some(name.as_str()),
-                    _ => None,
-                });
-                let end_tag_name = html_nodes.get(elem_end_tag_idx).and_then(|n| match n {
-                    HtmlNode::EndTag { name, .. } | HtmlNode::ErroneousEndTag { name, .. } => {
-                        Some(name.as_str())
-                    }
-                    _ => None,
-                });
-
-                if let (Some(start_name), Some(end_name)) = (start_tag_name, end_tag_name)
-                    && start_name != end_name
+                if let Some(HtmlNode::StartTag { end_tag_idx, .. }) = html_nodes.get_mut(start_idx)
                 {
-                    // Treat unclosed elements like void elements (point end to start)
-                    elem_end_tag_idx = start_tag_idx;
+                    *end_tag_idx = Some(end_idx);
                 }
-            }
-
-            // Attach metadata
-            if let Some(HtmlNode::StartTag { end_tag_idx, .. }) = html_nodes.get_mut(start_tag_idx)
-            {
-                *end_tag_idx = Some(elem_end_tag_idx);
             }
         }
         "raw_text" => {
