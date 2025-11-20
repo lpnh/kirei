@@ -3,13 +3,13 @@ source: tests/snapshots/ice_cream_club.rs
 description: "{#\nIce cream card component - supports various display modes\nVariables that can be set before including:\n- show_availability (default true) - show availability status\n- show_position (default false) - show position number\n- show_first_choice (default false) - highlight as first choice\n- card_style - additional CSS for the card wrapper\n- emoji_style - additional CSS for the emoji\n#}\n\n{% set show_availability = show_availability | default(default_value=true) %}\n{% set show_position = show_position | default(default_value=false) %}\n{% set show_first_choice = show_first_choice | default(default_value=false) %}\n{% set card_style = card_style | default(default_value=\"\") %}\n{% set emoji_style = emoji_style | default(default_value=\"\") %}\n\n<div class=\"card\" style=\"{{ card_style }}\">\n{# First choice badge #}\n{% if show_first_choice %}\n<div style=\"background: gold; color: #333; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-bottom: 8px; display: inline-block;\">🥇 First Choice</div>\n{% endif %}\n\n{# Emoji with optional styling #}\n<div style=\"text-align:center;font-size:2em;{{ emoji_style }}\">{{ ice_cream.emoji }}</div>\n\n{# Name and popularity badge #}\n<h3 style=\"margin:8px 0\">\n{{ ice_cream.name }}\n{% if ice_cream.popularity == 5 %}<span class=\"popular-badge\">Member Favorite</span>{% endif %}\n</h3>\n\n{# Description #}\n<p style=\"color:var(--muted);font-size:0.95em\">{{ ice_cream.description }}</p>\n\n{# Rating and status/position row #}\n<div style=\"display:flex;justify-content:space-between;align-items:center;margin-top:10px\">\n<div>\n{% for star in 1..=5 %}\n{% if star <= ice_cream.popularity %}⭐{% else %}☆{% endif %}\n{% endfor %}\n</div>\n<div>\n{% if show_availability %}\n{% if ice_cream.available %}\n<span style=\"color:green;font-size:0.9em\">Available today</span>\n{% else %}\n<span style=\"color:var(--muted);font-size:0.9em\">Coming soon</span>\n{% endif %}\n{% endif %}\n{% if show_position %}\n<span style=\"font-size:0.8em;color:green\">#{{ position }}</span>\n{% endif %}\n</div>\n</div>\n\n{# Seasonal badge #}\n{% if ice_cream.seasonal %}\n<div style=\"font-size:0.8em;margin-top:8px\">\n<span style=\"color:orange\">🌱 Seasonal special</span>\n</div>\n{% endif %}\n</div>\n"
 ---
 {#
-    Ice cream card component - supports various display modes
-    Variables that can be set before including:
-    - show_availability (default true) - show availability status
-    - show_position (default false) - show position number
-    - show_first_choice (default false) - highlight as first choice
-    - card_style - additional CSS for the card wrapper
-    - emoji_style - additional CSS for the emoji
+Ice cream card component - supports various display modes
+Variables that can be set before including:
+- show_availability (default true) - show availability status
+- show_position (default false) - show position number
+- show_first_choice (default false) - highlight as first choice
+- card_style - additional CSS for the card wrapper
+- emoji_style - additional CSS for the emoji
 #}
 {% set show_availability = show_availability | default(default_value=true) %}
 {% set show_position = show_position | default(default_value=false) %}

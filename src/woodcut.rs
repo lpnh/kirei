@@ -17,7 +17,7 @@ pub fn print(tree: &SakuraTree) -> String {
             BranchStyle::Inline => ink_inline(&mut inked_tree, tree, branch),
             BranchStyle::OpenClose => ink_open_close(&mut inked_tree, tree, branch),
             BranchStyle::WrappedText => ink_wrapped_text(&mut inked_tree, tree, branch),
-            BranchStyle::MultilineComment => ink_multiline_comment(&mut inked_tree, tree, branch),
+            BranchStyle::Comment => ink_comment(&mut inked_tree, tree, branch),
             BranchStyle::Raw => ink_raw(&mut inked_tree, tree, branch),
         }
     }
@@ -50,56 +50,42 @@ fn ink_wrapped_text(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch)
     inked_tree.push('\n');
 }
 
-fn ink_multiline_comment(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
-    debug_assert!(branch.twig.start() == branch.twig.end());
-    let leaf_idx = *branch.twig.start();
+fn ink_comment(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
+    let content = branch_content(tree, &branch.twig);
 
-    if let Some(leaf) = tree.leaves.get(leaf_idx) {
-        match leaf {
-            Leaf::HtmlComment(_) => {
-                ink_html_comment(inked_tree, &tree.config, branch, leaf.content());
-            }
-            _ => {
-                ink_askama_comment(inked_tree, &tree.config, branch.indent, leaf);
-            }
-        }
+    // Single-line
+    if !content.contains('\n') {
+        let indent_str = indent_for(&tree.config, branch.indent);
+        push_indented_line(inked_tree, &indent_str, &content);
+        return;
     }
-}
 
-fn ink_askama_comment(inked_tree: &mut String, config: &Config, indent_level: i32, leaf: &Leaf) {
-    let indent = indent_for(config, indent_level);
+    // Multiline
+    let indent_str = indent_for(&tree.config, branch.indent);
+    let lines: Vec<&str> = content.lines().collect();
 
-    for line in leaf.content().lines() {
-        if !line.is_empty() {
-            push_indented_line(inked_tree, &indent, line);
+    // Find minimum indentation across all non-empty lines
+    let min_indent = lines
+        .iter()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.len() - line.trim_start().len())
+        .min()
+        .unwrap_or(0);
+
+    for line in &lines {
+        if line.trim().is_empty() {
+            inked_tree.push('\n');
         } else {
+            let current_indent = line.len() - line.trim_start().len();
+            let extra_indent = current_indent.saturating_sub(min_indent);
+            let extra_spaces = " ".repeat(extra_indent);
+
+            inked_tree.push_str(&indent_str);
+            inked_tree.push_str(&extra_spaces);
+            inked_tree.push_str(line.trim_start());
             inked_tree.push('\n');
         }
     }
-}
-
-fn ink_html_comment(inked_tree: &mut String, config: &Config, branch: &Branch, content: &str) {
-    const OPEN: &str = "<!--";
-    const CLOSE: &str = "-->";
-
-    let indent = indent_for(config, branch.indent);
-    let inner = &content[OPEN.len()..content.len() - CLOSE.len()];
-    let trimmed = inner.trim();
-
-    push_indented_line(inked_tree, &indent, OPEN);
-
-    if !trimmed.is_empty() {
-        if trimmed.len() <= config.max_width {
-            let content_indent = indent_for(config, branch.indent + 1);
-            push_indented_line(inked_tree, &content_indent, trimmed);
-        } else {
-            let wrapped = wrap_inline_content(config, trimmed, branch.indent + 1);
-            inked_tree.push_str(&wrapped);
-            inked_tree.push('\n');
-        }
-    }
-
-    push_indented_line(inked_tree, &indent, CLOSE);
 }
 
 fn ink_raw(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {

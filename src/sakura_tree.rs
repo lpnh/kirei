@@ -58,7 +58,7 @@ pub enum BranchStyle {
     Inline,
     OpenClose,
     WrappedText,
-    MultilineComment,
+    Comment,
     Raw,
 }
 
@@ -802,13 +802,7 @@ impl SakuraTree {
                 let leaf = &self.leaves[*ring.twig.start()];
                 let style = match leaf {
                     Leaf::HtmlRawText(_) => BranchStyle::Raw,
-                    Leaf::HtmlComment(_) | Leaf::AskamaComment(_) => {
-                        if fits {
-                            BranchStyle::Inline
-                        } else {
-                            BranchStyle::MultilineComment
-                        }
-                    }
+                    Leaf::HtmlComment(_) | Leaf::AskamaComment(_) => BranchStyle::Comment,
                     _ => BranchStyle::Inline,
                 };
                 self.push_branch(&ring.twig, style, indent_map);

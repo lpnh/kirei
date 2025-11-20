@@ -2,4 +2,4 @@
 source: tests/snapshots/rules.rs
 description: "{#-   ~#}\n"
 ---
-{#-~#}
+{#-   ~#}

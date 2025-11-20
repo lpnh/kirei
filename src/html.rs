@@ -283,11 +283,10 @@ fn parse_recursive(
         }
         "comment" => {
             let text = node.utf8_text(source)?.to_string();
-            let normalized = format_comment(&text);
             let range = node.start_byte()..node.end_byte();
             let embed_askm = find_askama_in_range(askama_nodes, &range);
             html_nodes.push(HtmlNode::Comment {
-                text: normalized,
+                text,
                 embed_askm,
                 range,
             });
@@ -462,20 +461,6 @@ fn format_self_closing_or_void(name: &str, attr: &str) -> String {
         format!("<{} />", name)
     } else {
         format!("<{} {} />", name, attr)
-    }
-}
-
-fn format_comment(content: &str) -> String {
-    let open = "<!--";
-    let close = "-->";
-
-    let inner = &content[open.len()..content.len() - close.len()];
-    let normalized = crate::normalize_whitespace(inner);
-
-    if normalized.is_empty() {
-        format!("{}{}", open, close)
-    } else {
-        format!("{} {} {}", open, normalized, close)
     }
 }
 

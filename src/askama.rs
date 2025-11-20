@@ -222,10 +222,6 @@ impl AskamaNode {
     fn is_expr(&self) -> bool {
         matches!(self, Self::Expression { .. })
     }
-
-    fn is_comment(&self) -> bool {
-        matches!(self, Self::Comment { .. })
-    }
 }
 
 pub fn extract_askama_nodes(root: &Node, source: &str) -> Result<(Vec<AskamaNode>, Vec<Range>)> {
@@ -353,8 +349,8 @@ fn extract_delimiters(node: Node, source: &str) -> Result<(Delimiters, String)> 
         .child(node.child_count() - 1)
         .ok_or_else(|| anyhow::anyhow!("Node has no last child"))?;
 
-    let open = first.utf8_text(source.as_bytes())?.to_string();
-    let close = last.utf8_text(source.as_bytes())?.to_string();
+    let open = first.utf8_text(source.as_bytes())?.trim().to_string();
+    let close = last.utf8_text(source.as_bytes())?.trim().to_string();
 
     let start = first.end_byte();
     let end = last.start_byte();
@@ -397,8 +393,13 @@ fn innermost_ctrl_idx(pos: usize, nodes: &[AskamaNode]) -> Option<usize> {
 
 #[must_use]
 pub fn format_askama_node(config: &Config, node: &AskamaNode) -> String {
+    // Return comments as-is
+    if let AskamaNode::Comment { dlmts, inner, .. } = node {
+        return format!("{}{}{}", dlmts.open, inner, dlmts.close);
+    }
+
     // Normalize whitespace inside delimiters
-    let (open, close, inner) = normalize_askama_node(node, config);
+    let (open, close, inner) = normalize_askama_node(node);
 
     // If no inner content, return delimiters
     if inner.is_empty() {
@@ -435,33 +436,19 @@ pub fn format_askama_node(config: &Config, node: &AskamaNode) -> String {
     }
 }
 
-fn normalize_askama_node(node: &AskamaNode, config: &Config) -> (String, String, String) {
+fn normalize_askama_node(node: &AskamaNode) -> (String, String, String) {
     let (raw_open, raw_close) = node.delimiters();
     let raw_inner = node.inner();
 
-    // Normalize delimiters just in case
-    let open = raw_open.trim().to_string();
-    let close = raw_close.trim().to_string();
+    let open = raw_open.to_string();
+    let close = raw_close.to_string();
 
     // Normalize inner content
     let inner = if node.is_expr() {
-        // Expressions just need simple trimming
         raw_inner.trim().to_string()
-    } else if node.is_comment() {
-        // Special treatment for comments
-        normalize_askama_comment(raw_inner, config.max_width)
     } else {
         crate::normalize_whitespace(raw_inner)
     };
 
     (open, close, inner)
-}
-
-fn normalize_askama_comment(text: &str, max_length: usize) -> String {
-    let normalized = crate::normalize_whitespace(text);
-    if normalized.len() <= max_length {
-        normalized
-    } else {
-        text.to_string()
-    }
 }

@@ -9,16 +9,10 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}{{ page_title }}{%
     {% include "intro.html" %}
     {# The story: history and coffee incompatibility #}
     {% include "story.html" %}
-    {#
-        HTTP protocol fundamentals: methods, status categories, protocol properties
-    #}
+    {# HTTP protocol fundamentals: methods, status categories, protocol properties #}
     {% include "http-protocol.html" %}
-    {#
-        Status code 418 implementation details: feature flags, metrics, response phrase, and analysis
-    #}
+    {# Status code 418 implementation details: feature flags, metrics, response phrase, and analysis #}
     {% include "status-code-details.html" %}
-    {#
-        Brewing best practices: macros, temperature control, brew status, and compatibility matrix
-    #}
+    {# Brewing best practices: macros, temperature control, brew status, and compatibility matrix #}
     {% include "brewing-practices.html" %}
 {% endblock %}

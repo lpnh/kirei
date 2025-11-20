@@ -38,9 +38,7 @@ description: "{% if is_teapot %}\n    <div class=\"hero\">\n        <h1>🫖 I'm
         our unwavering commitment to tea.
     </p>
     <h2>Our Track Record</h2>
-    <!--
-        Brew attempts: {{ brew_attempts }}, Successful teas: {{ successful_teas }}
-    -->
+    <!-- Brew attempts: {{ brew_attempts }}, Successful teas: {{ successful_teas }} -->
     <div class="stats-container">
         {% for stat_index in 0..2 %}
             <div class="stat-box">

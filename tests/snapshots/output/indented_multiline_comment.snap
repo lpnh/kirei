@@ -2,18 +2,19 @@
 source: tests/snapshots/rules.rs
 description: "        <!--      \n            Welcome to Scoops & Dreams! \n                   The most formatter-challenging    \n              ice cream parlor in town!   \n    -->   \n\n\n\n            {#-   \n                    A base template can contain `blocks`, which my be overridden templates that use   \n                       this base template. A block may contain a default content, if the extending\n                     template does want to / need to override the content of a block.\n\n                    E.g. maybe you would like to have \"Askama example application\" as default title for   \n                              your pages, then simply add this text (without quotation marks) in the block!\n\n                     The default content can be as complex as you need it to be.\n                    E.g. it may contain any nodes like `{% if … %}`, and even other blocks.   \n      ~#}   \n\n"
 ---
-<!--
-    Welcome to Scoops & Dreams! The most formatter-challenging ice cream parlor
-    in town!
--->
-{#-
-    A base template can contain `blocks`, which my be overridden templates that use
-    this base template. A block may contain a default content, if the extending
-    template does want to / need to override the content of a block.
+<!--      
+            Welcome to Scoops & Dreams! 
+                   The most formatter-challenging    
+              ice cream parlor in town!   
+    -->
+{#-   
+                    A base template can contain `blocks`, which my be overridden templates that use   
+                       this base template. A block may contain a default content, if the extending
+                     template does want to / need to override the content of a block.
 
-    E.g. maybe you would like to have "Askama example application" as default title for
-    your pages, then simply add this text (without quotation marks) in the block!
+                    E.g. maybe you would like to have "Askama example application" as default title for   
+                              your pages, then simply add this text (without quotation marks) in the block!
 
-    The default content can be as complex as you need it to be.
-    E.g. it may contain any nodes like `{% if … %}`, and even other blocks.
-~#}
+                     The default content can be as complex as you need it to be.
+                    E.g. it may contain any nodes like `{% if … %}`, and even other blocks.   
+      ~#}

@@ -10,9 +10,7 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
         communication between clients and servers using request methods and
         status codes.
     </p>
-    {#
-        HTTP Methods section {# with details about verbs #} for protocol operations
-    #}
+    {# HTTP Methods section {# with details about verbs #} for protocol operations #}
     <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;">
         <h3 style="color: var(--teapot-brown); margin-top: 0;">HTTP Request Methods</h3>
         <p style="margin-bottom: 1rem;">
