@@ -9,7 +9,9 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="description" content="Testing HTML formatters with delicious ice cream content & tricky edge cases!" />
-        <title>🍦 Scoops &#38; Dreams - HTML Formatter Edge Case Extravaganza!</title>
+        <title>
+            🍦 Scoops &#38; Dreams - HTML Formatter Edge Case Extravaganza!
+        </title>
         <!-- Inline styles with various formatting challenges -->
         <style>
             /* CSS with mixed formatting */
@@ -74,7 +76,8 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 🍦 Scoops &#38; Dreams 🍦
             </h1>
             <p class="tagline">
-                Where <em>every</em><strong>scoop</strong> is a <mark>frozen delight</mark>!
+                Where <em>every</em><strong>scoop</strong> is a
+                <mark>frozen delight</mark>!
             </p>
         </header>
         <!-- Navigation with various link types -->
@@ -86,7 +89,9 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                     </a>
                 </li>
                 <li>
-                    <a href="mailto:scoops@dreams.com?subject=Ice%20Cream%20Inquiry">Email Us</a>
+                    <a href="mailto:scoops@dreams.com?subject=Ice%20Cream%20Inquiry">
+                        Email Us
+                    </a>
                 </li>
                 <li>
                     <a href="tel:+1-555-SCOOPS" title="Call for instant frozen gratification!">
@@ -94,7 +99,9 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                     </a>
                 </li>
                 <li>
-                    <a href="https://example.com" target="_blank" rel="noopener">External Link</a>
+                    <a href="https://example.com" target="_blank" rel="noopener">
+                        External Link
+                    </a>
                 </li>
             </ul>
         </nav>
@@ -165,7 +172,10 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                                 <input type="radio" name="size" value="single" checked />
                                 Single Scoop 🍦
                             </label>
-                            <label><input type="radio" name="size" value="double" />Double Scoop 🍦🍦</label>
+                            <label>
+                                <input type="radio" name="size" value="double" />
+                                Double Scoop 🍦🍦
+                            </label>
                         </p>
                         <!-- Checkboxes with various formatting -->
                         <p>Flavors:</p>
@@ -189,7 +199,9 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                         </div>
                         <!-- Range and number inputs -->
                         <p>
-                            <label for="sweetness-level">Sweetness Level (1-10):</label>
+                            <label for="sweetness-level">
+                                Sweetness Level (1-10):
+                            </label>
                             <input type="range" id="sweetness-level" name="sweetness" min="1" max="10" value="7" oninput="document.getElementById('sweetness-display').textContent=this.value" />
                             <output id="sweetness-display">7</output>🍯
                         </p>
@@ -199,23 +211,35 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                         </p>
                         <!-- Textarea and select -->
                         <p>
-                            <label for="special-instructions">Special Instructions:</label>
+                            <label for="special-instructions">
+                                Special Instructions:
+                            </label>
                             <br />
                             <textarea id="special-instructions" name="instructions" rows="3" cols="50" placeholder="Extra sprinkles, waffle cone, birthday candle...">
                             </textarea>
                         </p>
                         <p>
-                            <label for="pickup-time">Preferred Pickup Time:</label>
+                            <label for="pickup-time">
+                                Preferred Pickup Time:
+                            </label>
                             <select id="pickup-time" name="pickup-time">
                                 <option value="">Select a time</option>
                                 <optgroup label="Today">
                                     <option value="asap">ASAP! 🏃‍♂️</option>
-                                    <option value="lunch">Lunch Time (12-1 PM)</option>
-                                    <option value="afternoon">Afternoon Treat (3-4 PM)</option>
+                                    <option value="lunch">
+                                        Lunch Time (12-1 PM)
+                                    </option>
+                                    <option value="afternoon">
+                                        Afternoon Treat (3-4 PM)
+                                    </option>
                                 </optgroup>
                                 <optgroup label="Tomorrow">
-                                    <option value="tomorrow-lunch">Tomorrow Lunch</option>
-                                    <option value="tomorrow-afternoon">Tomorrow Afternoon</option>
+                                    <option value="tomorrow-lunch">
+                                        Tomorrow Lunch
+                                    </option>
+                                    <option value="tomorrow-afternoon">
+                                        Tomorrow Afternoon
+                                    </option>
                                 </optgroup>
                             </select>
                         </p>
@@ -259,11 +283,19 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 <h3>Ice Cream Terminology</h3>
                 <dl>
                     <dt><strong>Gelato</strong></dt>
-                    <dd>The <em>Italian</em> style of ice cream - denser and more flavorful</dd>
+                    <dd>
+                        The <em>Italian</em>
+                        style of ice cream - denser and more flavorful
+                    </dd>
                     <dt><strong>Soft Serve</strong></dt>
-                    <dd>Light and airy ice cream served at warmer temperatures</dd>
+                    <dd>
+                        Light and airy ice cream served at warmer temperatures
+                    </dd>
                     <dt><strong>Sundae</strong></dt>
-                    <dd>Ice cream topped with <mark>delicious sauces</mark> and toppings</dd>
+                    <dd>
+                        Ice cream topped with <mark>delicious sauces</mark>
+                        and toppings
+                    </dd>
                 </dl>
             </section>
             <!-- Various inline elements and text formatting -->
@@ -278,7 +310,8 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                         AMAZING!"
                     </p>
                     <footer>
-                        — <cite>Emma Wilson</cite>, <time datetime="2024-12-15">December 15, 2024</time>
+                        — <cite>Emma Wilson</cite>,
+                        <time datetime="2024-12-15">December 15, 2024</time>
                     </footer>
                 </blockquote>
                 <p>
@@ -292,7 +325,8 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 <p>
                     Scoops &#38; Dreams: Where <sup>super</sup> meets
                     <sub>creamy</sub>! We've been serving <small>(big)</small>
-                    smiles since 1985. Mathematical proof: Ice Cream + Love = ∞ Happiness!
+                    smiles since 1985. Mathematical proof: Ice Cream + Love =
+                    ∞ Happiness!
                 </p>
                 <!-- Keyboard and sample elements -->
                 <p>
@@ -307,7 +341,8 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 <figure style="text-align: center;">
                     <img src="https://via.placeholder.com/400x300/87CEEB/ffffff?text=🍦+Delicious+Ice+Cream" alt="A mouth-watering ice cream cone with perfect swirls" width="400" height="300" loading="lazy" />
                     <figcaption>
-                        Our signature <strong>Vanilla Bean Dream</strong>- frozen perfection!
+                        Our signature <strong>Vanilla Bean Dream</strong>
+                        - frozen perfection!
                     </figcaption>
                 </figure>
                 <!-- Self-closing tags with various formats -->
@@ -327,7 +362,10 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                     🍦 Ice Cream Fun Facts (Click to collapse)
                 </summary>
                 <ul>
-                    <li>Ice cream was invented in <time datetime="1665">1665</time> in England</li>
+                    <li>
+                        Ice cream was invented in
+                        <time datetime="1665">1665</time> in England
+                    </li>
                     <li>
                         Americans consume approximately
                         <data value="1600000000">1.6 billion</data>
@@ -342,7 +380,10 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
             <!-- Progress and other HTML5 elements -->
             <section>
                 <h2>Your Order Progress</h2>
-                <p>Freezing process: <progress value="75" max="100">75%</progress></p>
+                <p>
+                    Freezing process:
+                    <progress value="75" max="100">75%</progress>
+                </p>
                 <p>
                     Freezer temperature:
                     <meter value="-10" min="-20" max="0" optimum="-18" title="-10°F">-10°F</meter>

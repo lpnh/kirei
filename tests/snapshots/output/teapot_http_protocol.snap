@@ -12,7 +12,9 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
     </p>
     {# HTTP Methods section {# with details about verbs #} for protocol operations #}
     <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;">
-        <h3 style="color: var(--teapot-brown); margin-top: 0;">HTTP Request Methods</h3>
+        <h3 style="color: var(--teapot-brown); margin-top: 0;">
+            HTTP Request Methods
+        </h3>
         <p style="margin-bottom: 1rem;">
             HTTP defines standard request methods (often called "verbs") that
             tell servers what to do with a resource. Each method has a specific
@@ -39,10 +41,14 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
                     </span>
                     {% if let Some(msg) = error_message %}
                         {% if method.name == "BREW" %}
-                            <span style="color: var(--error-red);">(returns {{ status_code }}!)</span>
+                            <span style="color: var(--error-red);">
+                                (returns {{ status_code }}!)
+                            </span>
                         {% endif %}
                     {% endif %}
-                    <span style="color: #6c757d;">{{ method.description }}</span>
+                    <span style="color: #6c757d;">
+                        {{ method.description }}
+                    </span>
                     </li>
                 {% endfor %}
             </ul>
@@ -68,10 +74,12 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
             Processing continues
         </p>
         <p style="padding: 0.5rem 0;">
-            <strong style="color: #28a745;">2xx (Success):</strong> Request succeeded
+            <strong style="color: #28a745;">2xx (Success):</strong>
+            Request succeeded
         </p>
         <p style="padding: 0.5rem 0;">
-            <strong style="color: #ffc107;">3xx (Redirection):</strong> Further action needed
+            <strong style="color: #ffc107;">3xx (Redirection):</strong>
+            Further action needed
         </p>
         <p style="padding: 0.5rem 0;">
             <strong style="color: #dc3545;">
@@ -87,7 +95,9 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
 </div>
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin: 2rem 0;">
     <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px;">
-        <h3 style="color: var(--teapot-brown); margin-top: 0;">Protocol Properties</h3>
+        <h3 style="color: var(--teapot-brown); margin-top: 0;">
+            Protocol Properties
+        </h3>
         <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
             <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
                 <strong>Stateless:</strong>
@@ -100,7 +110,9 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
             <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
                 <strong>Coffee Support:</strong>
                 {% if coffee_support is not defined %}
-                    <span style="color: #dc3545;">✗ Not Available (Teapot Mode)</span>
+                    <span style="color: #dc3545;">
+                        ✗ Not Available (Teapot Mode)
+                    </span>
                 {% else %}
                     <span style="color: #28a745;">✓ Available</span>
                 {% endif %}
@@ -120,7 +132,9 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
                 Coffee varieties available:
             </p>
             {% for pot in teapot_types if pot.can_brew_coffee %}
-                <p style="color: #28a745;">✓ {{ pot.name }} from {{ pot.origin }}</p>
+                <p style="color: #28a745;">
+                    ✓ {{ pot.name }} from {{ pot.origin }}
+                </p>
             {% else %}
                 <p style="color: var(--error-red); padding: 1rem; background: #ffe6e6; border-radius: 8px; text-align: center;">
                     <strong>⚠️ No coffee support</strong>

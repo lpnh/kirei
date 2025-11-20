@@ -23,7 +23,13 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}Club - Ice Cream S
     </div>
     <div class="card" style="margin-top:18px">
         <h3>Join Our Next Social</h3>
-        <p>We meet every Sunday at the club center. New faces are always welcome!</p>
-        <p>Bring your sweet tooth, your stories, and your love for frozen delights.</p>
+        <p>
+            We meet every Sunday at the club center. New faces are always
+            welcome!
+        </p>
+        <p>
+            Bring your sweet tooth, your stories, and your love for frozen
+            delights.
+        </p>
     </div>
 {% endblock %}

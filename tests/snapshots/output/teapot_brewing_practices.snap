@@ -21,13 +21,16 @@ description: "<section id=\"brewing-practices\" class=\"section\">\n    <h2>Brew
         <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
             {% for (tea_name, temp) in temperature_readings %}
                 <div style="padding: 0.75rem 0; {% if !loop.last %}border-bottom: 1px solid #e9ecef;{% endif %}">
-                    <strong>{{ loop.index }}.</strong> {{ temperature_badge(temp, tea_name) }}
+                    <strong>{{ loop.index }}.</strong>
+                    {{ temperature_badge(temp, tea_name) }}
                 </div>
             {% endfor %}
         </div>
     </div>
     <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;">
-        <h3 style="color: var(--teapot-brown); margin-top: 0;">Brewing Status</h3>
+        <h3 style="color: var(--teapot-brown); margin-top: 0;">
+            Brewing Status
+        </h3>
         <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
             {% match brew_result %}
                 {% when Ok(message) %}
@@ -42,7 +45,9 @@ description: "<section id=\"brewing-practices\" class=\"section\">\n    <h2>Brew
         </div>
     </div>
     <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;">
-        <h3 style="color: var(--teapot-brown); margin-top: 0;">Compatibility Matrix</h3>
+        <h3 style="color: var(--teapot-brown); margin-top: 0;">
+            Compatibility Matrix
+        </h3>
         <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
             <table style="width: 100%; border-collapse: collapse;">
                 <thead>

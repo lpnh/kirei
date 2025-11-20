@@ -17,7 +17,8 @@ description: "{% if is_teapot %}\n    <div class=\"hero\">\n        <h1>🫖 I'm
             it work, and see why it's still hanging around today.
         </p>
         <p style="margin-top: 1rem; font-style: italic; opacity: 0.9;">
-            Any attempt to brew coffee with a teapot should result in the error code
+            Any attempt to brew coffee with a teapot should result in the error
+            code
             <span class="highlight">"418 I'm a teapot"</span>
             . The resulting entity body MAY be short and stout.
         </p>
@@ -73,14 +74,18 @@ description: "{% if is_teapot %}\n    <div class=\"hero\">\n        <h1>🫖 I'm
                     <div class="teapot-emoji">{{ teapot.emoji }}</div>
                     <div class="teapot-name">{{ teapot.name }}</div>
                     <div class="teapot-origin">Origin: {{ teapot.origin }}</div>
-                    <span class="badge badge-incompatible">✓ Coffee Incompatible</span>
+                    <span class="badge badge-incompatible">
+                        ✓ Coffee Incompatible
+                    </span>
                 </div>
             {% else %}
                 <div class="teapot-card">
                     <div class="teapot-emoji">{{ teapot.emoji }}</div>
                     <div class="teapot-name">{{ teapot.name }}</div>
                     <div class="teapot-origin">Origin: {{ teapot.origin }}</div>
-                    <span class="badge badge-imposter">⚠️ Not a Real Teapot</span>
+                    <span class="badge badge-imposter">
+                        ⚠️ Not a Real Teapot
+                    </span>
                 </div>
             {% endif %}
         {% endfor %}

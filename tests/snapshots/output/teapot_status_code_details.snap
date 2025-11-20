@@ -17,7 +17,9 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
     </p>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin: 2rem 0;">
         <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px;">
-            <h3 style="color: var(--teapot-brown); margin-top: 0;">Feature Flags</h3>
+            <h3 style="color: var(--teapot-brown); margin-top: 0;">
+                Feature Flags
+            </h3>
             <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
                 {% let feature_flags = 13 %}
                 <p style="margin-bottom: 1rem; font-family: 'Courier New', monospace; background: var(--code-bg); color: white; padding: 0.5rem; border-radius: 4px;">
@@ -58,7 +60,9 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
                 {% let resource_ref = &resource_type %}
                 <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
                     <strong>Resource Type:</strong>
-                    <span style="color: var(--teapot-brown);">{{ *resource_ref }}</span>
+                    <span style="color: var(--teapot-brown);">
+                        {{ *resource_ref }}
+                    </span>
                 </p>
                 <p style="padding: 0.5rem 0;">
                     <strong>URI Scheme:</strong>
@@ -73,7 +77,9 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
         </div>
     </div>
     <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;">
-        <h3 style="color: var(--teapot-brown); margin-top: 0;">Performance Metrics</h3>
+        <h3 style="color: var(--teapot-brown); margin-top: 0;">
+            Performance Metrics
+        </h3>
         <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
             <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
                 <strong>
@@ -114,18 +120,26 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
                     <p style="padding: 0.5rem 0;">
                         <strong>Authenticity Check:</strong>
                         {% if *reason == "I'm a teapot" %}
-                            <span style="color: #28a745;">✓ This is the genuine RFC 2324 response!</span>
+                            <span style="color: #28a745;">
+                                ✓ This is the genuine RFC 2324 response!
+                            </span>
                         {% else %}
-                            <span style="color: #dc3545;">✗ Unexpected reason phrase detected</span>
+                            <span style="color: #dc3545;">
+                                ✗ Unexpected reason phrase detected
+                            </span>
                         {% endif %}
                     </p>
                 {% when None %}
-                    <p style="color: #dc3545;">⚠️ No canonical reason phrase available</p>
+                    <p style="color: #dc3545;">
+                        ⚠️ No canonical reason phrase available
+                    </p>
             {% endmatch %}
         </div>
     </div>
     <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;">
-        <h3 style="color: var(--teapot-brown); margin-top: 0;">Status Code Analysis</h3>
+        <h3 style="color: var(--teapot-brown); margin-top: 0;">
+            Status Code Analysis
+        </h3>
         <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
             <p style="margin-bottom: 1rem; color: #6c757d;">
                 Understanding the structure and classification of HTTP status
@@ -150,7 +164,9 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
                 {% if status_u16 == 418 %}
                     <span style="color: #28a745;">✓ Confirmed</span>
                 {% else %}
-                    <span style="color: #dc3545;">✗ This is not the teapot you're looking for</span>
+                    <span style="color: #dc3545;">
+                        ✗ This is not the teapot you're looking for
+                    </span>
                 {% endif %}
             </p>
         </div>

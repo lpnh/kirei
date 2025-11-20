@@ -35,7 +35,9 @@ Variables that can be set before including:
         {% endif %}
     </h3>
     {# Description #}
-    <p style="color:var(--muted);font-size:0.95em">{{ ice_cream.description }}</p>
+    <p style="color:var(--muted);font-size:0.95em">
+        {{ ice_cream.description }}
+    </p>
     {# Rating and status/position row #}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
         <div>
@@ -46,9 +48,13 @@ Variables that can be set before including:
         <div>
             {% if show_availability %}
                 {% if ice_cream.available %}
-                    <span style="color:green;font-size:0.9em">Available today</span>
+                    <span style="color:green;font-size:0.9em">
+                        Available today
+                    </span>
                 {% else %}
-                    <span style="color:var(--muted);font-size:0.9em">Coming soon</span>
+                    <span style="color:var(--muted);font-size:0.9em">
+                        Coming soon
+                    </span>
                 {% endif %}
             {% endif %}
             {% if show_position %}

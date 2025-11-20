@@ -49,7 +49,8 @@ description: "<!-- History section -->\n{% if show_history %}\n    <section id=\
                 practical use. A 15-year-old developer named Shane Brunswick
                 wasn't having it. He created
                 <strong>save418.com</strong>
-                and the "Save 418 Movement," arguing that references to 418 serve as
+                and the "Save 418 Movement," arguing that references to 418
+                serve as
                 <em>
                     "a reminder that the underlying processes of computers are
                     still made by humans."
@@ -79,7 +80,8 @@ description: "<!-- History section -->\n{% if show_history %}\n    <section id=\
         for the job.
     </p>
     <p style="margin-top: 1rem;">
-        When you try to make a teapot brew coffee, the only reasonable response is
+        When you try to make a teapot brew coffee, the only reasonable response
+        is
         <strong class="highlight">I'm a teapot</strong>
         . It's not really an error—more like a proud declaration of identity. 🫖
     </p>

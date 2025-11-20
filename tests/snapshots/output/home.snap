@@ -11,11 +11,13 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}Home - Ice Cream S
         {% match club_stats.0 %}
             {% when true %}
                 <p style="color: green;">
-                    🟢 Join us today! {{ club_stats.1 }} · {{ club_stats.2 }} members and counting!
+                    🟢 Join us today! {{ club_stats.1 }} · {{ club_stats.2 }}
+                    members and counting!
                 </p>
             {% when false %}
                 <p style="color: blue;">
-                    🔵 Next meeting: {{ club_stats.1 }} · {{ club_stats.2 }} members and counting!
+                    🔵 Next meeting: {{ club_stats.1 }} · {{ club_stats.2 }}
+                    members and counting!
                 </p>
         {% endmatch %}
     </section>
@@ -62,7 +64,8 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}Home - Ice Cream S
         <div class="card">
             <p>🍨 Sundae Workshop - Build your perfect sundae (Next Sunday)</p>
             <p>
-                🌈 Rainbow Day - Extra sprinkles for everyone! (First Monday of each month)
+                🌈 Rainbow Day - Extra sprinkles for everyone! (First Monday of
+                each month)
             </p>
         </div>
     </section>

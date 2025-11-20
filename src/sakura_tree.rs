@@ -12,6 +12,7 @@ pub struct SakuraTree {
     pub config: Config,
     pub leaves: Vec<Leaf>,
     pub branches: Vec<Branch>,
+    indent_map: Vec<i32>,
 }
 
 #[derive(Debug, Clone)]
@@ -317,6 +318,7 @@ impl SakuraTree {
             config: config.clone(),
             leaves: Vec::new(),
             branches: Vec::new(),
+            indent_map: Vec::new(),
         };
 
         // Grow Html leaves and pruned Askama indices inside tags or comments
@@ -371,11 +373,11 @@ impl SakuraTree {
             }
         }
 
+        tree.indent_map = tree.analyze_indentation_structure();
         let rings = tree.grow_rings(0, tree.leaves.len());
-        let indent_map = tree.analyze_indentation_structure();
 
         for ring in rings {
-            tree.grow_branch(&ring, &indent_map);
+            tree.grow_branch(&ring);
         }
 
         tree
@@ -626,13 +628,11 @@ impl SakuraTree {
             curr_idx += 1;
         }
 
-        let content_end_idx = curr_idx;
-
         // All or nothing
-        let fits = self.twig_fits(start_idx..content_end_idx);
+        let fits = self.twig_fits(start_idx..=(curr_idx - 1));
 
-        let twig = if fits && content_end_idx > start_idx + 1 {
-            start_idx..=(content_end_idx - 1)
+        let twig = if fits {
+            start_idx..=(curr_idx - 1)
         } else {
             start_idx..=start_idx
         };
@@ -643,7 +643,7 @@ impl SakuraTree {
             inner_rings: None,
         };
 
-        let next_idx = if fits { content_end_idx } else { start_idx + 1 };
+        let next_idx = if fits { curr_idx } else { start_idx + 1 };
 
         (ring, next_idx)
     }
@@ -679,6 +679,7 @@ impl SakuraTree {
 
             if leaf.is_start_tag() && leaf.is_paired() && leaf.is_inline_level() {
                 let pair = leaf.pair_range(curr_idx);
+
                 // Check if complete element fits inline
                 if !self.twig_fits(pair.clone()) {
                     if curr_idx == start_idx {
@@ -750,8 +751,9 @@ impl SakuraTree {
         indent_map
     }
 
-    fn grow_branch(&mut self, ring: &Ring, indent_map: &[i32]) {
-        let fits = self.twig_fits(ring.twig.clone());
+    fn grow_branch(&mut self, ring: &Ring) {
+        let indentation = self.indent(*ring.twig.start()) as usize * self.config.indent_size;
+        let fits = indentation + self.twig_width(ring.twig.clone()) <= self.config.max_width;
 
         match &ring.layer {
             RingLayer::Element | RingLayer::ControlBlock => {
@@ -767,18 +769,14 @@ impl SakuraTree {
                     });
 
                 if fits && !has_block {
-                    self.push_branch(&ring.twig, BranchStyle::Inline, indent_map);
+                    self.push_branch(&ring.twig, BranchStyle::Inline);
                 } else {
-                    self.grow_open_close_branches(
-                        &ring.twig,
-                        ring.inner_rings.as_ref(),
-                        indent_map,
-                    );
+                    self.grow_open_close_branches(&ring.twig, ring.inner_rings.as_ref());
                 }
             }
             RingLayer::TextSequence => {
                 if fits {
-                    self.push_branch(&ring.twig, BranchStyle::Inline, indent_map);
+                    self.push_branch(&ring.twig, BranchStyle::Inline);
                 } else {
                     let is_text_and_entity_only = ring
                         .twig
@@ -786,17 +784,17 @@ impl SakuraTree {
                         .all(|i| self.leaves.get(i).is_some_and(Leaf::is_text_or_entity));
 
                     if is_text_and_entity_only {
-                        self.push_branch(&ring.twig, BranchStyle::WrappedText, indent_map);
+                        self.push_branch(&ring.twig, BranchStyle::WrappedText);
                     } else if let Some(inner) = ring.inner_rings.as_ref() {
-                        self.split_text_sequence(&ring.twig, inner, indent_map);
+                        self.split_text_sequence(&ring.twig, inner);
                     }
                 }
             }
             RingLayer::RawText => {
-                self.push_branch(&ring.twig, BranchStyle::Raw, indent_map);
+                self.push_branch(&ring.twig, BranchStyle::Raw);
             }
             RingLayer::MatchArm => {
-                self.push_branch(&ring.twig, BranchStyle::Inline, indent_map);
+                self.push_branch(&ring.twig, BranchStyle::Inline);
             }
             RingLayer::Single => {
                 let leaf = &self.leaves[*ring.twig.start()];
@@ -805,18 +803,13 @@ impl SakuraTree {
                     Leaf::HtmlComment(_) | Leaf::AskamaComment(_) => BranchStyle::Comment,
                     _ => BranchStyle::Inline,
                 };
-                self.push_branch(&ring.twig, style, indent_map);
+                self.push_branch(&ring.twig, style);
             }
         }
     }
 
-    fn grow_open_close_branches(
-        &mut self,
-        twig: &Twig<usize>,
-        inner: Option<&Vec<Ring>>,
-        indent_map: &[i32],
-    ) {
-        let indent = indent_map.get(*twig.start()).copied().unwrap_or(0);
+    fn grow_open_close_branches(&mut self, twig: &Twig<usize>, inner: Option<&Vec<Ring>>) {
+        let indent = self.indent(*twig.start());
 
         self.branches.push(Branch::grow(
             *twig.start()..=*twig.start(),
@@ -826,7 +819,7 @@ impl SakuraTree {
 
         if let Some(inner_rings) = inner {
             for ring in inner_rings {
-                self.grow_branch(ring, indent_map);
+                self.grow_branch(ring);
             }
         }
 
@@ -837,9 +830,9 @@ impl SakuraTree {
         ));
     }
 
-    fn split_text_sequence(&mut self, twig: &Twig<usize>, inner: &[Ring], indent_map: &[i32]) {
-        let indent = indent_map.get(*twig.start()).copied().unwrap_or(0);
-        let indent_width = (indent as usize) * self.config.indent_size;
+    fn split_text_sequence(&mut self, twig: &Twig<usize>, inner: &[Ring]) {
+        let indent = self.indent(*twig.start());
+        let indent_width = self.indent_width(indent);
         let available_width = self.config.max_width.saturating_sub(indent_width);
 
         let mut line_start = *twig.start();
@@ -852,7 +845,8 @@ impl SakuraTree {
 
             if total_width > available_width && line_width > 0 {
                 // Emit current line
-                let style = self.branch_style_from_line(line_start..=line_end, line_width);
+                let style =
+                    self.branch_style_from_line(line_start..=line_end, line_width, available_width);
                 self.branches
                     .push(Branch::grow(line_start..=line_end, style, indent));
 
@@ -869,26 +863,34 @@ impl SakuraTree {
 
         // Emit final line
         if line_width > 0 {
-            let style = self.branch_style_from_line(line_start..=line_end, line_width);
+            let style =
+                self.branch_style_from_line(line_start..=line_end, line_width, available_width);
             self.branches
                 .push(Branch::grow(line_start..=line_end, style, indent));
         }
     }
 
-    fn branch_style_from_line(&self, twig: Twig<usize>, width: usize) -> BranchStyle {
-        let is_text_and_entity_only = twig
-            .clone()
-            .all(|i| self.leaves.get(i).is_some_and(Leaf::is_text_or_entity));
+    fn branch_style_from_line(
+        &self,
+        twig: Twig<usize>,
+        line_width: usize,
+        available_width: usize,
+    ) -> BranchStyle {
+        if line_width > available_width {
+            let is_text_entity_only = twig
+                .into_iter()
+                .all(|i| self.leaves.get(i).is_some_and(Leaf::is_text_or_entity));
 
-        if is_text_and_entity_only && width > self.config.max_width {
-            BranchStyle::WrappedText
-        } else {
-            BranchStyle::Inline
+            if is_text_entity_only {
+                return BranchStyle::WrappedText;
+            }
         }
+
+        BranchStyle::Inline
     }
 
-    fn twig_fits(&self, indices: impl IntoIterator<Item = usize>) -> bool {
-        self.twig_width(indices) <= self.config.max_width
+    fn twig_fits(&self, twig: Twig<usize>) -> bool {
+        self.twig_width(twig) <= self.config.max_width
     }
 
     fn twig_width(&self, indices: impl IntoIterator<Item = usize>) -> usize {
@@ -899,8 +901,16 @@ impl SakuraTree {
             .sum()
     }
 
-    fn push_branch(&mut self, twig: &Twig<usize>, style: BranchStyle, indent_map: &[i32]) {
-        let indent = indent_map.get(*twig.start()).copied().unwrap_or(0);
+    fn indent(&self, idx: usize) -> i32 {
+        self.indent_map.get(idx).copied().unwrap_or(0)
+    }
+
+    fn indent_width(&self, indent: i32) -> usize {
+        (indent as usize) * self.config.indent_size
+    }
+
+    fn push_branch(&mut self, twig: &Twig<usize>, style: BranchStyle) {
+        let indent = self.indent(*twig.start());
         self.branches
             .push(Branch::grow(twig.clone(), style, indent));
     }

@@ -40,7 +40,10 @@ description: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8
             {% block content %}{% endblock %}
         </main>
         <footer style="text-align:center;margin-top:36px;color:var(--muted)">
-            <small>© 2025 Ice Cream Social Club · Sharing smiles one scoop at a time</small>
+            <small>
+                © 2025 Ice Cream Social Club · Sharing smiles one scoop at
+                a time
+            </small>
         </footer>
     </body>
 </html>
