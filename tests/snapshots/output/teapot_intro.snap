@@ -7,7 +7,8 @@ description: "{% if is_teapot %}\n    <div class=\"hero\">\n        <h1>🫖 I'm
         <h1>🫖 I'm a Teapot! 🫖</h1>
         <p style="font-size: 1.2rem; margin-bottom: 1rem;">
             Welcome! Status <span class="highlight">418 I'm a teapot</span>
-            is a real HTTP status code that exists to declare one simple truth: teapots don't brew coffee.
+            is a real HTTP status code that exists to declare one simple truth:
+            teapots don't brew coffee.
         </p>
         <p>
             Born from an April Fools' joke in 1998, this status code somehow

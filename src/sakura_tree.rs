@@ -852,11 +852,9 @@ impl SakuraTree {
 
             if total_width > available_width && line_width > 0 {
                 // Emit current line
-                self.branches.push(Branch::grow(
-                    line_start..=line_end,
-                    BranchStyle::Inline,
-                    indent,
-                ));
+                let style = self.branch_style_from_line(line_start..=line_end, line_width);
+                self.branches
+                    .push(Branch::grow(line_start..=line_end, style, indent));
 
                 // Start new line
                 line_start = *ring.twig.start();
@@ -871,11 +869,21 @@ impl SakuraTree {
 
         // Emit final line
         if line_width > 0 {
-            self.branches.push(Branch::grow(
-                line_start..=line_end,
-                BranchStyle::Inline,
-                indent,
-            ));
+            let style = self.branch_style_from_line(line_start..=line_end, line_width);
+            self.branches
+                .push(Branch::grow(line_start..=line_end, style, indent));
+        }
+    }
+
+    fn branch_style_from_line(&self, twig: Twig<usize>, width: usize) -> BranchStyle {
+        let is_text_and_entity_only = twig
+            .clone()
+            .all(|i| self.leaves.get(i).is_some_and(Leaf::is_text_or_entity));
+
+        if is_text_and_entity_only && width > self.config.max_width {
+            BranchStyle::WrappedText
+        } else {
+            BranchStyle::Inline
         }
     }
 
