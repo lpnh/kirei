@@ -76,7 +76,7 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 🍦 Scoops &#38; Dreams 🍦
             </h1>
             <p class="tagline">
-                Where <em>every</em><strong>scoop</strong> is a
+                Where <em>every</em> <strong>scoop</strong> is a
                 <mark>frozen delight</mark>!
             </p>
         </header>
@@ -203,7 +203,7 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                                 Sweetness Level (1-10):
                             </label>
                             <input type="range" id="sweetness-level" name="sweetness" min="1" max="10" value="7" oninput="document.getElementById('sweetness-display').textContent=this.value" />
-                            <output id="sweetness-display">7</output>🍯
+                            <output id="sweetness-display">7</output> 🍯
                         </p>
                         <p>
                             <label for="quantity">Quantity:</label>
@@ -276,7 +276,7 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                             <li>Real vanilla beans 🌟</li>
                         </ul>
                     </li>
-                    <li><em>Hand-churned daily</em>🥄</li>
+                    <li><em>Hand-churned daily</em> 🥄</li>
                     <li>Smiles guaranteed or your money back! 😊</li>
                 </ol>
                 <!-- Definition list -->
@@ -330,7 +330,7 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 </p>
                 <!-- Keyboard and sample elements -->
                 <p>
-                    To order by phone, press <kbd>Ctrl</kbd>+ <kbd>S</kbd>
+                    To order by phone, press <kbd>Ctrl</kbd> + <kbd>S</kbd>
                     to save this menu, then call us! Our system will display
                     <samp>Order confirmed!</samp> when your ice cream is ready.
                 </p>
@@ -395,7 +395,7 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
             <address>
                 <strong>Scoops &#38; Dreams</strong>
                 <br />
-                456 Frozen Lane<br />Sweet City, SC 67890<br />
+                456 Frozen Lane<br /> Sweet City, SC 67890<br />
                 <a href="tel:+1-555-SCOOPS" style="color: #87CEEB;">📞 1-555-SCOOPS</a>
                 <br />
                 <a href="mailto:info@scoopsanddreams.com" style="color: #87CEEB;">

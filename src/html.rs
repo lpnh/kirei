@@ -135,11 +135,11 @@ impl HtmlNode {
     }
 
     pub fn is_inline(&self) -> bool {
-        let name = match self {
-            Self::StartTag { name, .. }
-            | Self::Void { name, .. }
-            | Self::SelfClosingTag { name, .. } => name,
-            _ => return false,
+        let (Self::StartTag { name, .. }
+        | Self::Void { name, .. }
+        | Self::SelfClosingTag { name, .. }) = self
+        else {
+            return false;
         };
 
         PHRASING_CONTENT.contains(&name.to_lowercase().as_str())

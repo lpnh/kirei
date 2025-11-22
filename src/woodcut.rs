@@ -100,16 +100,22 @@ fn ink_raw(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
 }
 
 fn branch_content(tree: &SakuraTree, twig: &Twig<usize>) -> String {
-    twig.clone()
-        .enumerate()
-        .filter_map(|(i, leaf_idx)| tree.leaves.get(leaf_idx).map(|leaf| (i, leaf_idx, leaf)))
-        .fold(String::new(), |mut content, (i, leaf_idx, leaf)| {
-            if i > 0 && should_add_space_before_leaf(tree, leaf_idx, twig, i) {
+    let mut content = String::new();
+    let mut prev_idx = None;
+
+    for leaf_idx in twig.clone() {
+        if let Some(leaf) = tree.leaves.get(leaf_idx) {
+            if let Some(prev) = prev_idx
+                && tree.has_space(prev, leaf_idx)
+            {
                 content.push(' ');
             }
             content.push_str(leaf.content());
-            content
-        })
+            prev_idx = Some(leaf_idx);
+        }
+    }
+
+    content
 }
 
 fn process_raw_content(
@@ -187,28 +193,6 @@ fn normalize_leaf_content(leaf: &Leaf, prev_expr: bool, next_expr: bool) -> Cow<
     let normalized = crate::normalize_whitespace(content);
 
     Cow::Owned(format!("{}{}{}", leading, normalized, trailing))
-}
-
-fn should_add_space_before_leaf(
-    tree: &SakuraTree,
-    curr_leaf_idx: usize,
-    twig: &Twig<usize>,
-    position_in_branch: usize,
-) -> bool {
-    position_in_branch > 0 && {
-        let current = tree.leaves.get(curr_leaf_idx).unwrap();
-        let prev = tree
-            .leaves
-            .get(twig.clone().nth(position_in_branch - 1).unwrap())
-            .unwrap();
-
-        (prev.has_space_after() && !current.is_ctrl())
-            || (current.has_space_before() && !prev.is_ctrl())
-            || (prev.is_text_or_entity() && current.is_text_or_entity())
-            || (prev.is_match_arm() && !current.is_ctrl())
-            || (prev.is_text_or_entity() && current.is_start_tag())
-            || (prev.is_end_tag() && current.content().starts_with(char::is_alphabetic))
-    }
 }
 
 fn wrap_inline_content(config: &Config, content: &str, indent: i32) -> String {

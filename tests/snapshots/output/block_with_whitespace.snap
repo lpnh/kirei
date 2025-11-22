@@ -2,4 +2,4 @@
 source: tests/snapshots/rules.rs
 description: "{% block content %}      {% endblock %}\n"
 ---
-{% block content %}{% endblock %}
+{% block content %} {% endblock %}

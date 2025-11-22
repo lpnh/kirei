@@ -13,6 +13,7 @@ pub struct SakuraTree {
     pub leaves: Vec<Leaf>,
     pub branches: Vec<Branch>,
     indent_map: Vec<i32>,
+    spacing_map: Vec<(bool, bool)>, // (space_before, space_after)
 }
 
 #[derive(Debug, Clone)]
@@ -22,11 +23,7 @@ pub enum Leaf {
         tag: ControlTag,
         end_idx: Option<usize>,
     },
-    AskamaExpr {
-        content: String,
-        space_before: bool,
-        space_after: bool,
-    },
+    AskamaExpr(String),
     AskamaComment(String),
 
     HtmlStartTag {
@@ -138,7 +135,7 @@ impl Leaf {
         }
     }
 
-    fn from_askama(config: &Config, askama_node: &AskamaNode, source: &str) -> Self {
+    fn from_askama(config: &Config, askama_node: &AskamaNode) -> Self {
         let content = askama::format_askama_node(config, askama_node);
 
         match askama_node {
@@ -147,28 +144,7 @@ impl Leaf {
                 tag: *ctrl_tag,
                 end_idx: None,
             },
-            AskamaNode::Expression { .. } => {
-                let start = askama_node.start();
-                let end = askama_node.end();
-
-                let space_before = start > 0
-                    && source[..start]
-                        .chars()
-                        .last()
-                        .is_some_and(char::is_whitespace);
-
-                let space_after = end < source.len()
-                    && source[end..]
-                        .chars()
-                        .next()
-                        .is_some_and(char::is_whitespace);
-
-                Self::AskamaExpr {
-                    content,
-                    space_before,
-                    space_after,
-                }
-            }
+            AskamaNode::Expression { .. } => Self::AskamaExpr(content),
             AskamaNode::Comment { .. } => Self::AskamaComment(content),
         }
     }
@@ -207,7 +183,7 @@ impl Leaf {
     pub fn content(&self) -> &str {
         match self {
             Self::AskamaControl { content, .. }
-            | Self::AskamaExpr { content, .. }
+            | Self::AskamaExpr(content)
             | Self::AskamaComment(content)
             | Self::HtmlStartTag { content, .. }
             | Self::HtmlVoidTag { content, .. }
@@ -229,31 +205,11 @@ impl Leaf {
     }
 
     pub fn is_expr(&self) -> bool {
-        matches!(self, Self::AskamaExpr { .. })
+        matches!(self, Self::AskamaExpr(_))
     }
 
     pub fn is_match_arm(&self) -> bool {
         matches!(self, Self::AskamaControl { tag, .. } if tag.is_match_arm())
-    }
-
-    pub fn has_space_before(&self) -> bool {
-        matches!(
-            self,
-            Self::AskamaExpr {
-                space_before: true,
-                ..
-            }
-        )
-    }
-
-    pub fn has_space_after(&self) -> bool {
-        matches!(
-            self,
-            Self::AskamaExpr {
-                space_after: true,
-                ..
-            }
-        )
     }
 
     pub fn is_text(&self) -> bool {
@@ -319,27 +275,55 @@ impl SakuraTree {
             leaves: Vec::new(),
             branches: Vec::new(),
             indent_map: Vec::new(),
+            spacing_map: Vec::new(),
         };
 
         // Grow Html leaves and pruned Askama indices inside tags or comments
-        let (mut leaves, pruned) = Self::leaves_from_html(html_nodes, askama_nodes, source, config);
+        let (mut btree, pruned) = Self::leaves_from_html(html_nodes, askama_nodes, source, config);
 
         // Grow standalone leaves for Askama nodes NOT in the pruned set
-        leaves.extend(Self::leaves_from_askama(
-            askama_nodes,
-            &pruned,
-            source,
-            config,
-        ));
+        btree.extend(Self::leaves_from_askama(askama_nodes, &pruned, config));
 
-        // Map byte positions to leaf indices
-        let byte_to_leaf_map: HashMap<usize, usize> = leaves
+        let nodes: Vec<_> = btree.into_iter().collect();
+
+        let spacing_map: Vec<(bool, bool)> = nodes
             .iter()
             .enumerate()
-            .map(|(leaf_idx, (start, _))| (*start, leaf_idx))
+            .map(|(i, (start, (_, end)))| {
+                let node_src = &source[*start..*end];
+
+                // Check internal whitespace (inside the node boundaries)
+                let internal_start = node_src.starts_with(char::is_whitespace);
+                let internal_end = node_src.ends_with(char::is_whitespace);
+
+                // Check gap before (between previous end and current start)
+                let gap_before = if i > 0 {
+                    let (_, (_, prev_end)) = nodes[i - 1];
+                    source[prev_end..*start].contains(char::is_whitespace)
+                } else {
+                    false
+                };
+
+                // Check gap after (between current end and next start)
+                let gap_after = if i + 1 < nodes.len() {
+                    let (next_start, _) = nodes[i + 1];
+                    source[*end..next_start].contains(char::is_whitespace)
+                } else {
+                    false
+                };
+
+                (internal_start || gap_before, internal_end || gap_after)
+            })
             .collect();
 
-        tree.leaves = leaves.into_values().collect();
+        let (leaves, byte_to_leaf_map): (Vec<_>, HashMap<_, _>) = nodes
+            .into_iter()
+            .enumerate()
+            .map(|(i, (start, (leaf, _)))| (leaf, (start, i)))
+            .unzip();
+
+        tree.leaves = leaves;
+        tree.spacing_map = spacing_map;
 
         // Pair Askama control blocks
         for node in askama_nodes {
@@ -386,14 +370,13 @@ impl SakuraTree {
     fn leaves_from_askama(
         askama_nodes: &[AskamaNode],
         pruned: &HashSet<usize>,
-        source: &str,
         config: &Config,
-    ) -> BTreeMap<usize, Leaf> {
+    ) -> BTreeMap<usize, (Leaf, usize)> {
         let mut leaves = BTreeMap::new();
 
         for (idx, node) in askama_nodes.iter().enumerate() {
             if !pruned.contains(&idx) {
-                leaves.insert(node.start(), Leaf::from_askama(config, node, source));
+                leaves.insert(node.start(), (Leaf::from_askama(config, node), node.end()));
             }
         }
 
@@ -405,7 +388,7 @@ impl SakuraTree {
         askama_nodes: &[AskamaNode],
         source: &str,
         config: &Config,
-    ) -> (BTreeMap<usize, Leaf>, HashSet<usize>) {
+    ) -> (BTreeMap<usize, (Leaf, usize)>, HashSet<usize>) {
         let mut leaves = BTreeMap::new();
         let mut pruned = HashSet::new();
 
@@ -430,7 +413,7 @@ impl SakuraTree {
                 } else {
                     Leaf::from_html(node)
                 };
-                leaves.insert(range.start, leaf);
+                leaves.insert(range.start, (leaf, range.end));
             } else if node.is_text() {
                 let range = node.range().expect("text must have range");
 
@@ -446,7 +429,7 @@ impl SakuraTree {
                     let HtmlNode::Text { text, .. } = node else {
                         unreachable!()
                     };
-                    leaves.insert(range.start, Leaf::from_text(text, false));
+                    leaves.insert(range.start, (Leaf::from_text(text, false), range.end));
                 }
             } else if node.is_raw_text() {
                 let range = node.range().expect("raw text must have range");
@@ -463,7 +446,7 @@ impl SakuraTree {
                     let HtmlNode::RawText { text, .. } = node else {
                         unreachable!()
                     };
-                    leaves.insert(range.start, Leaf::from_text(text, true));
+                    leaves.insert(range.start, (Leaf::from_text(text, true), range.end));
                 }
             } else if node.is_comment() {
                 let range = node.range().expect("comment must have range");
@@ -476,13 +459,13 @@ impl SakuraTree {
                 } else {
                     Leaf::from_html(node)
                 };
-                leaves.insert(range.start, leaf);
+                leaves.insert(range.start, (leaf, range.end));
             } else if let Some(range) = node.range() {
                 // Other node types
-                leaves.insert(range.start, Leaf::from_html(node));
+                leaves.insert(range.start, (Leaf::from_html(node), range.end));
             } else {
                 // Nodes without ranges
-                leaves.insert(node.start(), Leaf::from_html(node));
+                leaves.insert(node.start(), (Leaf::from_html(node), node.start()));
             }
         }
 
@@ -495,7 +478,7 @@ impl SakuraTree {
         embed_askm: &[usize],
         source: &str,
         is_raw: bool,
-    ) -> Vec<(usize, Leaf)> {
+    ) -> Vec<(usize, (Leaf, usize))> {
         let leaves = {
             let mut segments = Vec::new();
             let mut current_pos = range.start;
@@ -522,7 +505,7 @@ impl SakuraTree {
             .filter_map(|(start, end)| {
                 let text = &source[start..end];
                 // Avoid creating empty text leaves
-                (!text.is_empty()).then_some((start, Leaf::from_text(text, is_raw)))
+                (!text.is_empty()).then_some((start, (Leaf::from_text(text, is_raw), end)))
             })
             .collect()
     }
@@ -837,32 +820,32 @@ impl SakuraTree {
 
         let mut line_start = *twig.start();
         let mut line_end = *twig.start();
-        let mut line_width = 0;
 
         for ring in inner {
-            let ring_width = self.twig_width(ring.twig.clone());
-            let total_width = line_width + ring_width;
+            // Calculate width of current line if we add this ring
+            let try_twig = line_start..=*ring.twig.end();
+            let try_width = self.twig_width_with_spaces(&try_twig);
 
-            if total_width > available_width && line_width > 0 {
-                // Emit current line
+            if try_width > available_width && line_start < *ring.twig.start() {
+                // Emit current line (before adding this ring)
+                let line_width = self.twig_width_with_spaces(&(line_start..=line_end));
                 let style =
                     self.branch_style_from_line(line_start..=line_end, line_width, available_width);
                 self.branches
                     .push(Branch::grow(line_start..=line_end, style, indent));
 
-                // Start new line
+                // Start new line with this ring
                 line_start = *ring.twig.start();
                 line_end = *ring.twig.end();
-                line_width = ring_width;
             } else {
                 // Add to current line
                 line_end = *ring.twig.end();
-                line_width = total_width;
             }
         }
 
         // Emit final line
-        if line_width > 0 {
+        if line_start <= line_end {
+            let line_width = self.twig_width_with_spaces(&(line_start..=line_end));
             let style =
                 self.branch_style_from_line(line_start..=line_end, line_width, available_width);
             self.branches
@@ -899,6 +882,37 @@ impl SakuraTree {
             .filter_map(|i| self.leaves.get(i))
             .map(Leaf::chars_count)
             .sum()
+    }
+
+    fn twig_width_with_spaces(&self, twig: &Twig<usize>) -> usize {
+        let mut width = 0;
+        let mut prev_idx = None;
+
+        for leaf_idx in twig.clone() {
+            if let Some(leaf) = self.leaves.get(leaf_idx) {
+                if let Some(prev) = prev_idx
+                    && self.has_space(prev, leaf_idx)
+                {
+                    width += 1;
+                }
+                width += leaf.chars_count();
+                prev_idx = Some(leaf_idx);
+            }
+        }
+
+        width
+    }
+
+    pub fn has_space(&self, prev_idx: usize, curr_idx: usize) -> bool {
+        let after_prev = self
+            .spacing_map
+            .get(prev_idx)
+            .is_some_and(|(_, after)| *after);
+        let before_curr = self
+            .spacing_map
+            .get(curr_idx)
+            .is_some_and(|(before, _)| *before);
+        after_prev || before_curr
     }
 
     fn indent(&self, idx: usize) -> i32 {

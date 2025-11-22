@@ -57,7 +57,7 @@ description: "{% if is_teapot %}\n    <div class=\"hero\">\n        <h1>🫖 I'm
     {% let success_rate = successful_teas * 100 / total_brews %}
     <p style="text-align: center; margin-top: 2rem; font-size: 1.2rem;">
         Tea Success Rate: <strong>{{ success_rate }}%</strong>
-        | Coffee Success Rate: <strong>0%</strong>(as it should be!)
+        | Coffee Success Rate: <strong>0%</strong> (as it should be!)
     </p>
 </section>
 <!-- Teapot types section -->
@@ -101,7 +101,7 @@ description: "{% if is_teapot %}\n    <div class=\"hero\">\n        <h1>🫖 I'm
     <div class="facts-list">
         {% if show_history %}
             {% for fact in fun_facts %}
-                <div class="fact-item">🫖 {{ fact }} </div>
+                <div class="fact-item"> 🫖 {{ fact }} </div>
             {% endfor %}
         {% endif %}
     </div>

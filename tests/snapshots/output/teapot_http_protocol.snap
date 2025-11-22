@@ -60,7 +60,7 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
     </h3>
     <p style="margin-bottom: 1rem;">
         The
-        {% if is_teapot -%}{{ protocol | lower | capitalize }}{%- endif %}
+        {% if is_teapot -%} {{ protocol | lower | capitalize }} {%- endif %}
         protocol uses three-digit status codes to indicate what happened with a
         request. They're organized into five categories:
     </p>
@@ -119,7 +119,7 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
             </p>
             <p style="padding: 0.5rem 0;">
                 <strong>Request Model:</strong>
-                {% if is_teapot ~%}Client/Server{%~ endif %}
+                {% if is_teapot ~%} Client/Server {%~ endif %}
             </p>
         </div>
     </div>

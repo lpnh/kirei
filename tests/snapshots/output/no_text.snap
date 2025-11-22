@@ -10,13 +10,13 @@ description: "<!DOCTYPE html>\n<html data-theme=\"dim\" lang=\"en\">\n<head>\n<s
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta charset="UTF-8" />
         <link rel="stylesheet" href="/public/output.css" />
-        <title></title>
+        <title> </title>
     </head>
     <div class="font-fira-mono container mx-auto flex min-h-screen flex-col">
-        <main class="flex flex-grow"></main>
+        <main class="flex flex-grow"> </main>
         <footer class="sm:footer-horizontal footer-center footer text-base-content p-4">
             <aside>
-                <p></p>
+                <p> </p>
             </aside>
         </footer>
     </div>
