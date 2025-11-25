@@ -137,7 +137,7 @@ impl HtmlNode {
         }
     }
 
-    pub fn is_inline(&self) -> bool {
+    pub fn is_phrasing(&self) -> bool {
         let (Self::StartTag { name, .. }
         | Self::Void { name, .. }
         | Self::SelfClosingTag { name, .. }

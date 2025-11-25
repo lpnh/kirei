@@ -28,17 +28,17 @@ pub enum Leaf {
 
     HtmlStartTag {
         content: String,
-        is_inline: bool,
+        is_phrasing: bool,
         is_whitespace_sensitive: bool,
         end_idx: Option<usize>,
     },
     HtmlVoidTag {
         content: String,
-        is_inline: bool,
+        is_phrasing: bool,
     },
     HtmlEndTag {
         content: String,
-        is_inline: bool,
+        is_phrasing: bool,
         is_whitespace_sensitive: bool,
     },
 
@@ -159,17 +159,17 @@ impl Leaf {
         match html_node {
             HtmlNode::StartTag { .. } => Self::HtmlStartTag {
                 content: source,
-                is_inline: html_node.is_inline(),
+                is_phrasing: html_node.is_phrasing(),
                 is_whitespace_sensitive: html_node.is_whitespace_sensitive(),
                 end_idx: None,
             },
             HtmlNode::Void { .. } | HtmlNode::SelfClosingTag { .. } => Self::HtmlVoidTag {
                 content: source,
-                is_inline: html_node.is_inline(),
+                is_phrasing: html_node.is_phrasing(),
             },
             HtmlNode::EndTag { .. } | HtmlNode::ErroneousEndTag { .. } => Self::HtmlEndTag {
                 content: source,
-                is_inline: html_node.is_inline(),
+                is_phrasing: html_node.is_phrasing(),
                 is_whitespace_sensitive: html_node.is_whitespace_sensitive(),
             },
             HtmlNode::Text { .. } => Self::HtmlText(source),
@@ -180,17 +180,17 @@ impl Leaf {
         }
     }
 
-    fn is_inline_level(&self) -> bool {
+    fn is_phrasing(&self) -> bool {
         matches!(
             self,
             Self::HtmlStartTag {
-                is_inline: true,
+                is_phrasing: true,
                 ..
             } | Self::HtmlVoidTag {
-                is_inline: true,
+                is_phrasing: true,
                 ..
             } | Self::HtmlEndTag {
-                is_inline: true,
+                is_phrasing: true,
                 ..
             } | Self::HtmlText(_)
                 | Self::HtmlEntity(_)
@@ -248,11 +248,9 @@ impl Leaf {
 
     pub fn preserves_whitespace(&self) -> bool {
         self.is_text()
+            || self.is_phrasing()
             || self.is_raw_text()
             || self.is_ctrl()
-            || self.is_expr()
-            || self.is_entity()
-            || self.is_inline_level()
             || matches!(
                 self,
                 Self::HtmlStartTag {
@@ -387,16 +385,19 @@ impl SakuraTree {
 
                     let content =
                         html::reconstruct_tag(range, source, askama_nodes, embed_askm, config);
-                    let is_inline = node.is_inline();
+                    let is_phrasing = node.is_phrasing();
                     let is_whitespace_sensitive = node.is_whitespace_sensitive();
                     match node {
                         HtmlNode::StartTag { .. } => Leaf::HtmlStartTag {
                             content,
-                            is_inline,
+                            is_phrasing,
                             is_whitespace_sensitive,
                             end_idx: None,
                         },
-                        _ => Leaf::HtmlVoidTag { content, is_inline },
+                        _ => Leaf::HtmlVoidTag {
+                            content,
+                            is_phrasing,
+                        },
                     }
                 } else {
                     Leaf::from_html(node)
@@ -503,12 +504,12 @@ impl SakuraTree {
             .iter()
             .enumerate()
             .map(|(i, (start, (leaf, end)))| {
-                Self::check_whitespace(i, leaf, *start, *end, nodes, source)
+                Self::should_preserve_whitespace(i, leaf, *start, *end, nodes, source)
             })
             .collect()
     }
 
-    fn check_whitespace(
+    fn should_preserve_whitespace(
         i: usize,
         leaf: &Leaf,
         start: usize,
@@ -516,6 +517,10 @@ impl SakuraTree {
         nodes: &[(usize, (Leaf, usize))],
         source: &str,
     ) -> (bool, bool) {
+        if !leaf.preserves_whitespace() {
+            return (false, false);
+        }
+
         // Check if the node itself has internal leading/trailing whitespace
         let node_src = &source[start..end];
         let internal_start = node_src.starts_with(char::is_whitespace);
@@ -543,18 +548,14 @@ impl SakuraTree {
         let ws_before = internal_start || before_node;
         let ws_after = internal_end || after_node;
 
-        if leaf.preserves_whitespace() {
-            // Special case: Askama control tags preserve ALL whitespace
-            if leaf.is_ctrl() {
-                return (ws_before, ws_after);
-            }
-            (
-                ws_before && prev.is_some_and(Leaf::preserves_whitespace),
-                ws_after && next.is_some_and(Leaf::preserves_whitespace),
-            )
-        } else {
-            (false, false)
+        if leaf.is_ctrl() {
+            return (ws_before, ws_after);
         }
+
+        (
+            ws_before && prev.is_some_and(Leaf::preserves_whitespace),
+            ws_after && next.is_some_and(Leaf::preserves_whitespace),
+        )
     }
 
     fn pair_askama_controls(
@@ -660,8 +661,8 @@ impl SakuraTree {
         let leaf = &self.leaves[idx];
         let pair = leaf.pair_range(idx);
 
-        // Try text sequence for inline elements followed by text/expr
-        if leaf.is_inline_level()
+        // Try text sequence for phrasing elements followed by text/expr
+        if leaf.is_phrasing()
             && leaf.is_paired()
             && self
                 .leaves
@@ -770,11 +771,11 @@ impl SakuraTree {
         let mut curr_idx = start_idx;
         let mut inner_rings = Vec::new();
 
-        // Collect following inline content
+        // Collect following phrasing content
         while curr_idx < end_idx {
             let leaf = &self.leaves[curr_idx];
 
-            if leaf.is_start_tag() && leaf.is_paired() && leaf.is_inline_level() {
+            if leaf.is_start_tag() && leaf.is_paired() && leaf.is_phrasing() {
                 let pair = leaf.pair_range(curr_idx);
 
                 // Check if complete element fits inline
@@ -797,9 +798,7 @@ impl SakuraTree {
                 continue;
             }
 
-            let can_include = leaf.is_expr() || leaf.is_inline_level();
-
-            if can_include {
+            if leaf.is_phrasing() {
                 inner_rings.push(Ring::from_single(curr_idx));
                 last_idx = curr_idx;
                 curr_idx += 1;
@@ -832,7 +831,7 @@ impl SakuraTree {
                 let has_block = ((*ring.twig.start() + 1).min(*ring.twig.end())..*ring.twig.end())
                     .any(|i| {
                         self.leaves.get(i).is_some_and(|leaf| match leaf {
-                            Leaf::HtmlStartTag { is_inline, .. } => !is_inline,
+                            Leaf::HtmlStartTag { is_phrasing, .. } => !is_phrasing,
                             Leaf::AskamaControl { tag, .. } => tag.is_opening(),
                             Leaf::HtmlRawText(_) => true,
                             _ => false,
