@@ -28,7 +28,7 @@ description: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8
     </head>
     <body>
         <header>
-            <h1> 🍦 Ice Cream Social Club </h1>
+            <h1>🍦 Ice Cream Social Club</h1>
             <p class="tagline">Where sweet treats meet sweet people.</p>
         </header>
         <nav style="text-align:center;margin:12px 0">

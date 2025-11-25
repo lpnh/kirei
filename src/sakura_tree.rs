@@ -29,13 +29,18 @@ pub enum Leaf {
     HtmlStartTag {
         content: String,
         is_inline: bool,
+        is_whitespace_sensitive: bool,
         end_idx: Option<usize>,
     },
     HtmlVoidTag {
         content: String,
         is_inline: bool,
     },
-    HtmlEndTag(String),
+    HtmlEndTag {
+        content: String,
+        is_inline: bool,
+        is_whitespace_sensitive: bool,
+    },
 
     HtmlText(String),
     HtmlEntity(String),
@@ -155,13 +160,18 @@ impl Leaf {
             HtmlNode::StartTag { .. } => Self::HtmlStartTag {
                 content: source,
                 is_inline: html_node.is_inline(),
+                is_whitespace_sensitive: html_node.is_whitespace_sensitive(),
                 end_idx: None,
             },
             HtmlNode::Void { .. } | HtmlNode::SelfClosingTag { .. } => Self::HtmlVoidTag {
                 content: source,
                 is_inline: html_node.is_inline(),
             },
-            HtmlNode::EndTag { .. } | HtmlNode::ErroneousEndTag { .. } => Self::HtmlEndTag(source),
+            HtmlNode::EndTag { .. } | HtmlNode::ErroneousEndTag { .. } => Self::HtmlEndTag {
+                content: source,
+                is_inline: html_node.is_inline(),
+                is_whitespace_sensitive: html_node.is_whitespace_sensitive(),
+            },
             HtmlNode::Text { .. } => Self::HtmlText(source),
             HtmlNode::Entity { .. } => Self::HtmlEntity(source),
             HtmlNode::RawText { .. } => Self::HtmlRawText(source),
@@ -171,13 +181,21 @@ impl Leaf {
     }
 
     fn is_inline_level(&self) -> bool {
-        match self {
-            Self::HtmlStartTag { is_inline, .. } | Self::HtmlVoidTag { is_inline, .. } => {
-                *is_inline
-            }
-            Self::HtmlText(_) | Self::HtmlEntity(_) => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            Self::HtmlStartTag {
+                is_inline: true,
+                ..
+            } | Self::HtmlVoidTag {
+                is_inline: true,
+                ..
+            } | Self::HtmlEndTag {
+                is_inline: true,
+                ..
+            } | Self::HtmlText(_)
+                | Self::HtmlEntity(_)
+                | Self::AskamaExpr(_)
+        )
     }
 
     pub fn content(&self) -> &str {
@@ -187,7 +205,7 @@ impl Leaf {
             | Self::AskamaComment(content)
             | Self::HtmlStartTag { content, .. }
             | Self::HtmlVoidTag { content, .. }
-            | Self::HtmlEndTag(content)
+            | Self::HtmlEndTag { content, .. }
             | Self::HtmlText(content)
             | Self::HtmlEntity(content)
             | Self::HtmlRawText(content)
@@ -220,12 +238,35 @@ impl Leaf {
         matches!(self, Self::HtmlEntity(_))
     }
 
+    pub fn is_raw_text(&self) -> bool {
+        matches!(self, Self::HtmlRawText(_))
+    }
+
     pub fn is_start_tag(&self) -> bool {
         matches!(self, Self::HtmlStartTag { .. })
     }
 
+    pub fn preserves_whitespace(&self) -> bool {
+        self.is_text()
+            || self.is_raw_text()
+            || self.is_ctrl()
+            || self.is_expr()
+            || self.is_entity()
+            || self.is_inline_level()
+            || matches!(
+                self,
+                Self::HtmlStartTag {
+                    is_whitespace_sensitive: true,
+                    ..
+                } | Self::HtmlEndTag {
+                    is_whitespace_sensitive: true,
+                    ..
+                }
+            )
+    }
+
     pub fn is_end_tag(&self) -> bool {
-        matches!(self, Self::HtmlEndTag(_))
+        matches!(self, Self::HtmlEndTag { .. })
     }
 
     pub fn is_text_or_entity(&self) -> bool {
@@ -270,94 +311,28 @@ impl SakuraTree {
         source: &str,
         config: &Config,
     ) -> Self {
-        let mut tree = Self {
-            config: config.clone(),
-            leaves: Vec::new(),
-            branches: Vec::new(),
-            indent_map: Vec::new(),
-            spacing_map: Vec::new(),
-        };
+        let leaves = Self::grow_leaves(askama_nodes, html_nodes, source, config);
 
-        // Grow Html leaves and pruned Askama indices inside tags or comments
-        let (mut btree, pruned) = Self::leaves_from_html(html_nodes, askama_nodes, source, config);
+        let spacing_map = Self::generate_spacing_map(&leaves, source);
 
-        // Grow standalone leaves for Askama nodes NOT in the pruned set
-        btree.extend(Self::leaves_from_askama(askama_nodes, &pruned, config));
-
-        let nodes: Vec<_> = btree.into_iter().collect();
-
-        let spacing_map: Vec<(bool, bool)> = nodes
-            .iter()
-            .enumerate()
-            .map(|(i, (start, (_, end)))| {
-                let node_src = &source[*start..*end];
-
-                // Check internal whitespace (inside the node boundaries)
-                let internal_start = node_src.starts_with(char::is_whitespace);
-                let internal_end = node_src.ends_with(char::is_whitespace);
-
-                // Check gap before (between previous end and current start)
-                let gap_before = if i > 0 {
-                    let (_, (_, prev_end)) = nodes[i - 1];
-                    source[prev_end..*start].contains(char::is_whitespace)
-                } else {
-                    false
-                };
-
-                // Check gap after (between current end and next start)
-                let gap_after = if i + 1 < nodes.len() {
-                    let (next_start, _) = nodes[i + 1];
-                    source[*end..next_start].contains(char::is_whitespace)
-                } else {
-                    false
-                };
-
-                (internal_start || gap_before, internal_end || gap_after)
-            })
-            .collect();
-
-        let (leaves, byte_to_leaf_map): (Vec<_>, HashMap<_, _>) = nodes
+        let (leaves, byte_to_leaf_map): (Vec<_>, HashMap<_, _>) = leaves
             .into_iter()
             .enumerate()
             .map(|(i, (start, (leaf, _)))| (leaf, (start, i)))
             .unzip();
 
-        tree.leaves = leaves;
-        tree.spacing_map = spacing_map;
+        let mut tree = Self {
+            config: config.clone(),
+            leaves,
+            branches: Vec::new(),
+            indent_map: Vec::new(),
+            spacing_map,
+        };
 
-        // Pair Askama control blocks
-        for node in askama_nodes {
-            if let AskamaNode::Control {
-                ctrl_tag,
-                close_tag: Some(closing_byte),
-                range,
-                ..
-            } = node
-                && ctrl_tag.is_opening()
-                && let Some(&opening_idx) = byte_to_leaf_map.get(&range.start)
-                && let Some(&closing_idx) = byte_to_leaf_map.get(closing_byte)
-                && let Leaf::AskamaControl { end_idx, .. } = &mut tree.leaves[opening_idx]
-            {
-                *end_idx = Some(closing_idx);
-            }
-        }
+        tree.pair_askama_controls(askama_nodes, &byte_to_leaf_map);
+        tree.pair_html_elements(html_nodes, askama_nodes, &byte_to_leaf_map);
 
-        // Pair Html elements (only if within same Askama control block)
-        for html_node in html_nodes {
-            if let (Some(range), Some(end_tag_idx)) = (html_node.range(), html_node.end_tag_idx())
-                && let Some(end_node) = html_nodes.get(end_tag_idx)
-                && let (Some(&start_leaf_idx), Some(&end_leaf_idx)) = (
-                    byte_to_leaf_map.get(&range.start),
-                    byte_to_leaf_map.get(&end_node.start()),
-                )
-                && askama::is_inside_same_ctrl(range.start, end_node.start(), askama_nodes)
-                && let Leaf::HtmlStartTag { end_idx, .. } = &mut tree.leaves[start_leaf_idx]
-            {
-                *end_idx = Some(end_leaf_idx);
-            }
-        }
-
-        tree.indent_map = tree.analyze_indentation_structure();
+        tree.indent_map = tree.generate_indent_map();
         let rings = tree.grow_rings(0, tree.leaves.len());
 
         for ring in rings {
@@ -365,6 +340,17 @@ impl SakuraTree {
         }
 
         tree
+    }
+
+    fn grow_leaves(
+        askama_nodes: &[AskamaNode],
+        html_nodes: &[HtmlNode],
+        source: &str,
+        config: &Config,
+    ) -> Vec<(usize, (Leaf, usize))> {
+        let (mut btree, pruned) = Self::leaves_from_html(html_nodes, askama_nodes, source, config);
+        btree.extend(Self::leaves_from_askama(askama_nodes, &pruned, config));
+        btree.into_iter().collect()
     }
 
     fn leaves_from_askama(
@@ -402,10 +388,12 @@ impl SakuraTree {
                     let content =
                         html::reconstruct_tag(range, source, askama_nodes, embed_askm, config);
                     let is_inline = node.is_inline();
+                    let is_whitespace_sensitive = node.is_whitespace_sensitive();
                     match node {
                         HtmlNode::StartTag { .. } => Leaf::HtmlStartTag {
                             content,
                             is_inline,
+                            is_whitespace_sensitive,
                             end_idx: None,
                         },
                         _ => Leaf::HtmlVoidTag { content, is_inline },
@@ -508,6 +496,132 @@ impl SakuraTree {
                 (!text.is_empty()).then_some((start, (Leaf::from_text(text, is_raw), end)))
             })
             .collect()
+    }
+
+    fn generate_spacing_map(nodes: &[(usize, (Leaf, usize))], source: &str) -> Vec<(bool, bool)> {
+        nodes
+            .iter()
+            .enumerate()
+            .map(|(i, (start, (leaf, end)))| {
+                Self::check_whitespace(i, leaf, *start, *end, nodes, source)
+            })
+            .collect()
+    }
+
+    fn check_whitespace(
+        i: usize,
+        leaf: &Leaf,
+        start: usize,
+        end: usize,
+        nodes: &[(usize, (Leaf, usize))],
+        source: &str,
+    ) -> (bool, bool) {
+        // Check if the node itself has internal leading/trailing whitespace
+        let node_src = &source[start..end];
+        let internal_start = node_src.starts_with(char::is_whitespace);
+        let internal_end = node_src.ends_with(char::is_whitespace);
+
+        // Check if there is whitespace between nodes
+        let before_node = i > 0 && {
+            let (_, (_, prev_end)) = nodes[i - 1];
+            source[prev_end..start].contains(char::is_whitespace)
+        };
+
+        let after_node = i + 1 < nodes.len() && {
+            let (next_start, _) = nodes[i + 1];
+            source[end..next_start].contains(char::is_whitespace)
+        };
+
+        // Get adjacent nodes for context
+        let prev = i
+            .checked_sub(1)
+            .and_then(|p| nodes.get(p))
+            .map(|(_, (l, _))| l);
+        let next = nodes.get(i + 1).map(|(_, (l, _))| l);
+
+        // Whitespace exists if it's internal to the node OR between nodes
+        let ws_before = internal_start || before_node;
+        let ws_after = internal_end || after_node;
+
+        if leaf.preserves_whitespace() {
+            // Special case: Askama control tags preserve ALL whitespace
+            if leaf.is_ctrl() {
+                return (ws_before, ws_after);
+            }
+            (
+                ws_before && prev.is_some_and(Leaf::preserves_whitespace),
+                ws_after && next.is_some_and(Leaf::preserves_whitespace),
+            )
+        } else {
+            (false, false)
+        }
+    }
+
+    fn pair_askama_controls(
+        &mut self,
+        askama_nodes: &[AskamaNode],
+        byte_map: &HashMap<usize, usize>,
+    ) {
+        for node in askama_nodes {
+            if let AskamaNode::Control {
+                ctrl_tag,
+                close_tag: Some(closing_byte),
+                range,
+                ..
+            } = node
+                && ctrl_tag.is_opening()
+                && let Some(&opening_idx) = byte_map.get(&range.start)
+                && let Some(&closing_idx) = byte_map.get(closing_byte)
+                && let Leaf::AskamaControl { end_idx, .. } = &mut self.leaves[opening_idx]
+            {
+                *end_idx = Some(closing_idx);
+            }
+        }
+    }
+
+    fn pair_html_elements(
+        &mut self,
+        html_nodes: &[HtmlNode],
+        askama_nodes: &[AskamaNode],
+        byte_map: &HashMap<usize, usize>,
+    ) {
+        for html_node in html_nodes {
+            if let (Some(range), Some(end_tag_idx)) = (html_node.range(), html_node.end_tag_idx())
+                && let Some(end_node) = html_nodes.get(end_tag_idx)
+                && let (Some(&start_leaf_idx), Some(&end_leaf_idx)) =
+                    (byte_map.get(&range.start), byte_map.get(&end_node.start()))
+                && askama::is_inside_same_ctrl(range.start, end_node.start(), askama_nodes)
+                && let Leaf::HtmlStartTag { end_idx, .. } = &mut self.leaves[start_leaf_idx]
+            {
+                *end_idx = Some(end_leaf_idx);
+            }
+        }
+    }
+
+    fn generate_indent_map(&self) -> Vec<i32> {
+        let mut indent_map = vec![0; self.leaves.len()];
+        let mut curr_indent = 0;
+
+        for (i, leaf) in self.leaves.iter().enumerate() {
+            if leaf.is_end_tag() {
+                curr_indent = (curr_indent - 1).max(0);
+            }
+
+            let (pre_delta, post_delta) = match leaf {
+                Leaf::AskamaControl { tag, .. } => tag.indent_delta(),
+                _ => (0, 0),
+            };
+
+            curr_indent = (curr_indent + pre_delta).max(0);
+            indent_map[i] = curr_indent;
+            curr_indent = (curr_indent + post_delta).max(0);
+
+            // Only increment indent if it has a matching end tag
+            if leaf.is_start_tag() && leaf.pair_range(i).count() > 1 {
+                curr_indent += 1;
+            }
+        }
+        indent_map
     }
 
     // Grow concentric rings
@@ -706,32 +820,6 @@ impl SakuraTree {
 
             (ring, curr_idx)
         })
-    }
-
-    fn analyze_indentation_structure(&self) -> Vec<i32> {
-        let mut indent_map = vec![0; self.leaves.len()];
-        let mut curr_indent = 0;
-
-        for (i, leaf) in self.leaves.iter().enumerate() {
-            if leaf.is_end_tag() {
-                curr_indent = (curr_indent - 1).max(0);
-            }
-
-            let (pre_delta, post_delta) = match leaf {
-                Leaf::AskamaControl { tag, .. } => tag.indent_delta(),
-                _ => (0, 0),
-            };
-
-            curr_indent = (curr_indent + pre_delta).max(0);
-            indent_map[i] = curr_indent;
-            curr_indent = (curr_indent + post_delta).max(0);
-
-            // Only increment indent if it has a matching end tag
-            if leaf.is_start_tag() && leaf.pair_range(i).count() > 1 {
-                curr_indent += 1;
-            }
-        }
-        indent_map
     }
 
     fn grow_branch(&mut self, ring: &Ring) {

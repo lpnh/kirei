@@ -2,4 +2,4 @@
 source: tests/snapshots/rules.rs
 description: "        <p>\n        &copy;   \n    2025\n\n                Ferris    \n\n            &amp; \n    Corro\n\n</p>\n"
 ---
-<p> &copy; 2025 Ferris &amp; Corro </p>
+<p>&copy; 2025 Ferris &amp; Corro</p>

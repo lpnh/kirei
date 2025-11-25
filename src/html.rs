@@ -26,6 +26,9 @@ const VOID_ELEMENTS: &[&str] = &[
     "track", "wbr",
 ];
 
+// Tags that preserve whitespace-only content
+const WHITESPACE_SENSITIVE: &[&str] = &["title"];
+
 #[derive(Debug, Clone)]
 pub enum HtmlNode {
     StartTag {
@@ -137,12 +140,25 @@ impl HtmlNode {
     pub fn is_inline(&self) -> bool {
         let (Self::StartTag { name, .. }
         | Self::Void { name, .. }
-        | Self::SelfClosingTag { name, .. }) = self
+        | Self::SelfClosingTag { name, .. }
+        | Self::EndTag { name, .. }
+        | Self::ErroneousEndTag { name, .. }) = self
         else {
             return false;
         };
 
         PHRASING_CONTENT.contains(&name.to_lowercase().as_str())
+    }
+
+    pub fn is_whitespace_sensitive(&self) -> bool {
+        let (Self::StartTag { name, .. }
+        | Self::EndTag { name, .. }
+        | Self::ErroneousEndTag { name, .. }) = self
+        else {
+            return false;
+        };
+
+        WHITESPACE_SENSITIVE.contains(&name.to_lowercase().as_str())
     }
 
     pub fn is_text(&self) -> bool {
