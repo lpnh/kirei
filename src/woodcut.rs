@@ -1,4 +1,3 @@
-use std::ops::RangeInclusive as Twig;
 use textwrap::{Options, wrap};
 
 use crate::{
@@ -14,7 +13,6 @@ pub fn print(tree: &SakuraTree) -> String {
     for branch in &tree.branches {
         match branch.style {
             BranchStyle::Inline => ink_inline(&mut inked_tree, tree, branch),
-            BranchStyle::OpenClose => ink_open_close(&mut inked_tree, tree, branch),
             BranchStyle::WrappedText => ink_wrapped_text(&mut inked_tree, tree, branch),
             BranchStyle::Comment => ink_comment(&mut inked_tree, tree, branch),
             BranchStyle::Raw => ink_raw(&mut inked_tree, tree, branch),
@@ -26,22 +24,12 @@ pub fn print(tree: &SakuraTree) -> String {
 
 fn ink_inline(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
     let indent_str = indent_for(&tree.config, branch.indent);
-    let line_content = branch_content(tree, &branch.twig);
+    let line_content = branch_content(tree, branch.start, branch.end);
     push_indented_line(inked_tree, &indent_str, &line_content);
 }
 
-fn ink_open_close(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
-    let indent_str = indent_for(&tree.config, branch.indent);
-    debug_assert!(branch.twig.start() == branch.twig.end());
-    let leaf_idx = *branch.twig.start();
-
-    if let Some(leaf) = tree.leaves.get(leaf_idx) {
-        push_indented_line(inked_tree, &indent_str, leaf.content());
-    }
-}
-
 fn ink_wrapped_text(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
-    let text_content = branch_content(tree, &branch.twig);
+    let text_content = branch_content(tree, branch.start, branch.end);
     let wrapped_content = wrap_inline_content(&tree.config, &text_content, branch.indent);
 
     inked_tree.push_str(&wrapped_content);
@@ -49,7 +37,7 @@ fn ink_wrapped_text(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch)
 }
 
 fn ink_comment(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
-    let content = branch_content(tree, &branch.twig);
+    let content = branch_content(tree, branch.start, branch.end);
 
     // Single-line
     if !content.contains('\n') {
@@ -91,17 +79,17 @@ fn ink_raw(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
 
     process_raw_content(
         inked_tree,
-        &branch_content(tree, &branch.twig),
+        &branch_content(tree, branch.start, branch.end),
         &mut curr_indent,
         &tree.config,
     );
 }
 
-fn branch_content(tree: &SakuraTree, twig: &Twig<usize>) -> String {
+fn branch_content(tree: &SakuraTree, start: usize, end: usize) -> String {
     let mut content = String::new();
     let mut prev_idx = None;
 
-    for leaf_idx in twig.clone() {
+    for leaf_idx in start..=end {
         if let Some(leaf) = tree.leaves.get(leaf_idx) {
             if let Some(prev) = prev_idx
                 && tree.has_space(prev, leaf_idx)

@@ -49,11 +49,11 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
                     <span style="color: #6c757d;">
                         {{ method.description }}
                     </span>
-                    </li>
-                {% endfor %}
-            </ul>
-        </div>
+                </li>
+            {% endfor %}
+        </ul>
     </div>
+</div>
 <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;">
     <h3{# comment at tag start #} style="color: var(--teapot-brown); margin-top: 0;">
         Status Code Categories
