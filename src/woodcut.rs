@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::ops::RangeInclusive as Twig;
 use textwrap::{Options, wrap};
 
@@ -37,8 +36,7 @@ fn ink_open_close(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
     let leaf_idx = *branch.twig.start();
 
     if let Some(leaf) = tree.leaves.get(leaf_idx) {
-        let content = content_normalized(leaf);
-        push_indented_line(inked_tree, &indent_str, &content);
+        push_indented_line(inked_tree, &indent_str, leaf.content());
     }
 }
 
@@ -172,27 +170,6 @@ fn process_raw_content(
             }
         }
     }
-}
-
-fn content_normalized(leaf: &Leaf) -> Cow<'_, str> {
-    normalize_leaf_content(leaf, false, false)
-}
-
-fn normalize_leaf_content(leaf: &Leaf, prev_expr: bool, next_expr: bool) -> Cow<'_, str> {
-    let content = leaf.content();
-
-    if !leaf.is_text() {
-        return Cow::Borrowed(content);
-    }
-
-    let has_leading = content.starts_with(char::is_whitespace);
-    let has_trailing = content.ends_with(char::is_whitespace);
-
-    let leading = if has_leading && prev_expr { " " } else { "" };
-    let trailing = if has_trailing && next_expr { " " } else { "" };
-    let normalized = crate::normalize_whitespace(content);
-
-    Cow::Owned(format!("{}{}{}", leading, normalized, trailing))
 }
 
 fn wrap_inline_content(config: &Config, content: &str, indent: i32) -> String {

@@ -218,61 +218,40 @@ impl Leaf {
         self.content().chars().count()
     }
 
-    pub fn is_ctrl(&self) -> bool {
+    fn is_ctrl(&self) -> bool {
         matches!(self, Self::AskamaControl { .. })
     }
 
-    pub fn is_expr(&self) -> bool {
-        matches!(self, Self::AskamaExpr(_))
-    }
-
-    pub fn is_match_arm(&self) -> bool {
-        matches!(self, Self::AskamaControl { tag, .. } if tag.is_match_arm())
-    }
-
-    pub fn is_text(&self) -> bool {
-        matches!(self, Self::HtmlText(_))
-    }
-
-    pub fn is_entity(&self) -> bool {
-        matches!(self, Self::HtmlEntity(_))
-    }
-
-    pub fn is_raw_text(&self) -> bool {
-        matches!(self, Self::HtmlRawText(_))
-    }
-
-    pub fn is_start_tag(&self) -> bool {
+    fn is_start_tag(&self) -> bool {
         matches!(self, Self::HtmlStartTag { .. })
     }
 
-    pub fn preserves_whitespace(&self) -> bool {
-        self.is_text()
-            || self.is_phrasing()
-            || self.is_raw_text()
-            || self.is_ctrl()
-            || matches!(
-                self,
-                Self::HtmlStartTag {
-                    is_whitespace_sensitive: true,
-                    ..
-                } | Self::HtmlEndTag {
-                    is_whitespace_sensitive: true,
-                    ..
-                }
-            )
-    }
-
-    pub fn is_end_tag(&self) -> bool {
+    fn is_end_tag(&self) -> bool {
         matches!(self, Self::HtmlEndTag { .. })
     }
 
-    pub fn is_text_or_entity(&self) -> bool {
-        self.is_text() || self.is_entity()
+    fn preserves_whitespace(&self) -> bool {
+        self.is_phrasing()
+            || self.is_ctrl()
+            || matches!(
+                self,
+                Self::HtmlRawText(_)
+                    | Self::HtmlStartTag {
+                        is_whitespace_sensitive: true,
+                        ..
+                    }
+                    | Self::HtmlEndTag {
+                        is_whitespace_sensitive: true,
+                        ..
+                    }
+            )
     }
 
-    fn is_text_or_expr(&self) -> bool {
-        self.is_text() || self.is_expr()
+    fn is_text_sequence(&self) -> bool {
+        matches!(
+            self,
+            Self::HtmlText(_) | Self::HtmlEntity(_) | Self::AskamaExpr(_)
+        )
     }
 
     fn from_text(text: &str, is_raw: bool) -> Self {
@@ -634,13 +613,15 @@ impl SakuraTree {
             let leaf = &self.leaves[idx];
 
             let (ring, next_idx) = match leaf {
-                leaf if leaf.is_match_arm() => self.try_match_arm_with_content(idx, end_idx),
+                Leaf::AskamaControl { tag, .. } if tag.is_match_arm() => {
+                    self.try_match_arm_with_content(idx, end_idx)
+                }
                 leaf if leaf.is_ctrl() => self
                     .try_askama_block(idx)
                     .unwrap_or_else(|| Ring::from_single_with_next(idx)),
                 leaf if leaf.is_start_tag() => self.handle_start_tag(idx, end_idx),
                 Leaf::HtmlRawText(_) => self.raw_text(idx, end_idx),
-                leaf if leaf.is_text_or_expr() => self
+                leaf if leaf.is_text_sequence() => self
                     .try_text_sequence(idx, end_idx)
                     .unwrap_or_else(|| Ring::from_single_with_next(idx)),
                 _ => Ring::from_single_with_next(idx),
@@ -667,7 +648,7 @@ impl SakuraTree {
             && self
                 .leaves
                 .get(*pair.end() + 1)
-                .is_some_and(Leaf::is_text_or_expr)
+                .is_some_and(Leaf::is_text_sequence)
             && let Some(result) = self.try_text_sequence(idx, end_idx)
         {
             return result;
@@ -750,9 +731,7 @@ impl SakuraTree {
         let last_idx = self.leaves[idx..]
             .iter()
             .take(end_idx - idx)
-            .take_while(|leaf| {
-                matches!(leaf, Leaf::HtmlRawText(_) | Leaf::AskamaComment(_)) || leaf.is_expr()
-            })
+            .take_while(|leaf| matches!(leaf, Leaf::HtmlRawText(_) | Leaf::AskamaExpr(_)))
             .count()
             + idx
             - 1;
@@ -851,7 +830,7 @@ impl SakuraTree {
                     let is_text_and_entity_only = ring
                         .twig
                         .clone()
-                        .all(|i| self.leaves.get(i).is_some_and(Leaf::is_text_or_entity));
+                        .all(|i| self.leaves.get(i).is_some_and(Leaf::is_text_sequence));
 
                     if is_text_and_entity_only {
                         self.push_branch(&ring.twig, BranchStyle::WrappedText);
@@ -949,7 +928,7 @@ impl SakuraTree {
         if line_width > available_width {
             let is_text_entity_only = twig
                 .into_iter()
-                .all(|i| self.leaves.get(i).is_some_and(Leaf::is_text_or_entity));
+                .all(|i| self.leaves.get(i).is_some_and(Leaf::is_text_sequence));
 
             if is_text_entity_only {
                 return BranchStyle::WrappedText;
