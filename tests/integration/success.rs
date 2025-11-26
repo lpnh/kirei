@@ -78,6 +78,37 @@ fn format_is_idempotent() {
 }
 
 #[test]
+fn format_is_idempotent_2() {
+    let temp = TempDir::new().unwrap();
+    let file = temp.child("test.html");
+    file.write_str(
+        "<div>\n<p>\n{#\n    This\n    is a\n    multiline-comment\n#}\n</p>\n</div>\n{% block comment %}\n    {#\n        This is a list:\n        - Lorem ipsum dolor sit amet, qui minim labore adipisicing minim sint cillum sint consectetur cupidatat.\n        - Lorem ipsum dolor sit amet, qui minim labore adipisicing minim sint cillum sint consectetur cupidatat.\n        Lorem ipsum dolor sit amet, qui minim labore adipisicing minim sint cillum sint consectetur cupidatat.\n        - Lorem ipsum dolor sit amet, qui minim labore adipisicing minim sint cillum sint consectetur cupidatat.\n    #}\n{% endblock %}\n",
+    )
+    .unwrap();
+
+    Command::new(cargo::cargo_bin!("kirei"))
+        .arg("--write")
+        .arg(file.path())
+        .assert()
+        .success();
+
+    let first_format = read_to_string(file.path()).unwrap();
+
+    Command::new(cargo::cargo_bin!("kirei"))
+        .arg("--write")
+        .arg(file.path())
+        .assert()
+        .success();
+
+    let second_format = read_to_string(file.path()).unwrap();
+
+    assert_eq!(
+        first_format, second_format,
+        "Formatting should be idempotent for nested multiline comments"
+    );
+}
+
+#[test]
 fn passes_when_formatted() {
     let temp = TempDir::new().unwrap();
     let file = temp.child("test.html");

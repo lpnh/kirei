@@ -47,28 +47,22 @@ fn ink_comment(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
     }
 
     // Multiline
-    let indent_str = indent_for(&tree.config, branch.indent);
     let lines: Vec<&str> = content.lines().collect();
+    let delimiter_indent = indent_for(&tree.config, branch.indent);
+    let content_indent = indent_for(&tree.config, branch.indent + 1);
 
-    // Find minimum indentation across all non-empty lines
-    let min_indent = lines
-        .iter()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| line.len() - line.trim_start().len())
-        .min()
-        .unwrap_or(0);
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_start();
 
-    for line in &lines {
-        if line.trim().is_empty() {
+        if trimmed.is_empty() {
+            inked_tree.push('\n');
+        } else if i == 0 || i == lines.len() - 1 {
+            inked_tree.push_str(&delimiter_indent);
+            inked_tree.push_str(trimmed);
             inked_tree.push('\n');
         } else {
-            let current_indent = line.len() - line.trim_start().len();
-            let extra_indent = current_indent.saturating_sub(min_indent);
-            let extra_spaces = " ".repeat(extra_indent);
-
-            inked_tree.push_str(&indent_str);
-            inked_tree.push_str(&extra_spaces);
-            inked_tree.push_str(line.trim_start());
+            inked_tree.push_str(&content_indent);
+            inked_tree.push_str(trimmed);
             inked_tree.push('\n');
         }
     }

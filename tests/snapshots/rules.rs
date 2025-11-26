@@ -41,6 +41,11 @@ fn indented_multiline_comment() {
 }
 
 #[test]
+fn nested_multiline_comment() {
+    format_and_snapshot!("rules/whitespace/nested_multiline_comment.html");
+}
+
+#[test]
 fn mixed_text_sequence() {
     format_and_snapshot!("rules/whitespace/mixed_text_sequence.html");
 }

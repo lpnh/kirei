@@ -1,0 +1,22 @@
+---
+source: tests/snapshots/rules.rs
+description: "<div>\n<p>\n{#\n    This\n    is a\n    multiline-comment\n#}\n</p>\n</div>\n{% block comment %}\n    {#\n        This is a list:\n        - Lorem ipsum dolor sit amet, qui minim labore adipisicing minim sint cillum sint consectetur cupidatat.\n        - Lorem ipsum dolor sit amet, qui minim labore adipisicing minim sint cillum sint consectetur cupidatat.\n        Lorem ipsum dolor sit amet, qui minim labore adipisicing minim sint cillum sint consectetur cupidatat.\n        - Lorem ipsum dolor sit amet, qui minim labore adipisicing minim sint cillum sint consectetur cupidatat.\n    #}\n{% endblock %}\n"
+---
+<div>
+    <p>
+        {#
+            This
+            is a
+            multiline-comment
+        #}
+    </p>
+</div>
+{% block comment %}
+    {#
+        This is a list:
+        - Lorem ipsum dolor sit amet, qui minim labore adipisicing minim sint cillum sint consectetur cupidatat.
+        - Lorem ipsum dolor sit amet, qui minim labore adipisicing minim sint cillum sint consectetur cupidatat.
+        Lorem ipsum dolor sit amet, qui minim labore adipisicing minim sint cillum sint consectetur cupidatat.
+        - Lorem ipsum dolor sit amet, qui minim labore adipisicing minim sint cillum sint consectetur cupidatat.
+    #}
+{% endblock %}

@@ -231,6 +231,7 @@ impl Leaf {
         match self {
             Self::AskamaControl { tag, .. } => tag.is_opening(),
             Self::HtmlStartTag { is_phrasing, .. } => !is_phrasing,
+            Self::AskamaComment(content) | Self::HtmlComment(content) => content.contains('\n'),
             _ => false,
         }
     }
