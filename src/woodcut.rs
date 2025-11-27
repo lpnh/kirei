@@ -57,13 +57,9 @@ fn ink_comment(inked_tree: &mut String, tree: &SakuraTree, branch: &Branch) {
         if trimmed.is_empty() {
             inked_tree.push('\n');
         } else if i == 0 || i == lines.len() - 1 {
-            inked_tree.push_str(&delimiter_indent);
-            inked_tree.push_str(trimmed);
-            inked_tree.push('\n');
+            push_indented_line(inked_tree, &delimiter_indent, trimmed);
         } else {
-            inked_tree.push_str(&content_indent);
-            inked_tree.push_str(trimmed);
-            inked_tree.push('\n');
+            push_indented_line(inked_tree, &content_indent, trimmed);
         }
     }
 }
@@ -101,60 +97,29 @@ fn branch_content(tree: &SakuraTree, start: usize, end: usize) -> String {
 fn process_raw_content(
     inked_tree: &mut String,
     content: &str,
-    curr_indent: &mut i32,
+    curr_indent: &mut usize,
     config: &Config,
 ) {
-    if content.is_empty() {
-        return;
-    }
-
     for line in content.lines() {
         if line.is_empty() {
             inked_tree.push('\n');
-        } else {
-            let temp_indent_decrease = line.starts_with('}');
-
-            if temp_indent_decrease {
-                *curr_indent = curr_indent.saturating_sub(1);
-            }
-
-            let indent_str = indent_for(config, *curr_indent);
-            inked_tree.push_str(&indent_str);
-            inked_tree.push_str(line);
-            inked_tree.push('\n');
-
-            if line.ends_with('{') {
-                *curr_indent += 1;
-            }
-
-            let open_braces = line.matches('{').count();
-            let close_braces = line.matches('}').count();
-            let net_change = open_braces as i32 - close_braces as i32;
-
-            let net_change = if line.ends_with('{') && net_change > 0 {
-                net_change - 1
-            } else {
-                net_change
-            };
-
-            if net_change > 0 {
-                *curr_indent += net_change;
-            } else if net_change < 0 {
-                let decrease = (-net_change) as usize;
-                if !temp_indent_decrease || decrease > 1 {
-                    let actual_decrease = if temp_indent_decrease {
-                        decrease - 1
-                    } else {
-                        decrease
-                    };
-                    *curr_indent = curr_indent.saturating_sub(actual_decrease as i32);
-                }
-            }
+            continue;
         }
+
+        let leading_close = usize::from(line.starts_with('}'));
+        *curr_indent = curr_indent.saturating_sub(leading_close);
+
+        let indent_str = indent_for(config, *curr_indent);
+        push_indented_line(inked_tree, &indent_str, line);
+
+        let open_braces = line.matches('{').count() as isize;
+        let close_braces = line.matches('}').count() as isize;
+        let net_change = open_braces - close_braces + leading_close as isize;
+        *curr_indent = curr_indent.saturating_add_signed(net_change);
     }
 }
 
-fn wrap_inline_content(config: &Config, content: &str, indent: i32) -> String {
+fn wrap_inline_content(config: &Config, content: &str, indent: usize) -> String {
     let prefix = indent_for(config, indent);
     let available_width = config.max_width;
 
@@ -165,8 +130,8 @@ fn wrap_inline_content(config: &Config, content: &str, indent: i32) -> String {
     wrap(content, &options).join("\n")
 }
 
-fn indent_for(config: &Config, indent: i32) -> String {
-    " ".repeat(indent as usize * config.indent_size)
+fn indent_for(config: &Config, indent: usize) -> String {
+    " ".repeat(indent * config.indent_size)
 }
 
 fn push_indented_line(inked_tree: &mut String, indent_str: &str, content: &str) {

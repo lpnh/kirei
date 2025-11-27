@@ -12,7 +12,7 @@ pub struct SakuraTree {
     pub config: Config,
     pub leaves: Vec<Leaf>,
     pub branches: Vec<Branch>,
-    indent_map: Vec<i32>,
+    indent_map: Vec<usize>,
     spacing_map: Vec<(bool, bool)>, // (space_before, space_after)
 }
 
@@ -54,7 +54,7 @@ pub struct Branch {
     pub start: usize,
     pub end: usize,
     pub style: BranchStyle,
-    pub indent: i32,
+    pub indent: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -253,17 +253,6 @@ impl Leaf {
     }
 }
 
-impl Branch {
-    pub fn grow(start: usize, end: usize, style: BranchStyle, indent: i32) -> Self {
-        Self {
-            start,
-            end,
-            style,
-            indent,
-        }
-    }
-}
-
 impl SakuraTree {
     pub fn grow(
         askama_nodes: &[AskamaNode],
@@ -296,7 +285,7 @@ impl SakuraTree {
         let rings = tree.grow_rings(0, tree.leaves.len());
 
         for ring in rings {
-            tree.grow_branch(&ring);
+            tree.grow_branch_recursive(&ring);
         }
 
         tree
@@ -558,13 +547,13 @@ impl SakuraTree {
         }
     }
 
-    fn generate_indent_map(&self) -> Vec<i32> {
+    fn generate_indent_map(&self) -> Vec<usize> {
         let mut indent_map = vec![0; self.leaves.len()];
-        let mut curr_indent = 0;
+        let mut curr_indent: usize = 0;
 
         for (i, leaf) in self.leaves.iter().enumerate() {
             if leaf.is_end_tag() {
-                curr_indent = (curr_indent - 1).max(0);
+                curr_indent = curr_indent.saturating_sub(1);
             }
 
             let (pre_delta, post_delta) = match leaf {
@@ -572,9 +561,9 @@ impl SakuraTree {
                 _ => (0, 0),
             };
 
-            curr_indent = (curr_indent + pre_delta).max(0);
+            curr_indent = curr_indent.saturating_add_signed(pre_delta);
             indent_map[i] = curr_indent;
-            curr_indent = (curr_indent + post_delta).max(0);
+            curr_indent = curr_indent.saturating_add_signed(post_delta);
 
             // Only increment indent if it has a matching end tag
             if leaf.is_start_tag() && leaf.pair().is_some() {
@@ -582,6 +571,17 @@ impl SakuraTree {
             }
         }
         indent_map
+    }
+
+    fn grow_branch(&mut self, start: usize, end: usize, style: BranchStyle) {
+        let indent = self.indent(start);
+
+        self.branches.push(Branch {
+            start,
+            end,
+            style,
+            indent,
+        });
     }
 
     // Grow concentric rings
@@ -717,10 +717,10 @@ impl SakuraTree {
         })
     }
 
-    fn grow_branch(&mut self, ring: &Ring) {
+    fn grow_branch_recursive(&mut self, ring: &Ring) {
         let (start, end) = ring.range();
 
-        let indentation = self.indent(start) as usize * self.config.indent_size;
+        let indentation = self.indent_width(start);
         let fits = indentation + self.width(start, end) <= self.config.max_width;
 
         match ring {
@@ -728,35 +728,35 @@ impl SakuraTree {
                 let has_block = self.has_block_inner_rings(inner);
 
                 if fits && !has_block {
-                    self.push_branch(*start, *end, BranchStyle::Inline);
+                    self.grow_branch(*start, *end, BranchStyle::Inline);
                 } else {
-                    self.push_branch_with_single_leaf(*start);
+                    self.grow_branch(*start, *start, BranchStyle::Inline);
                     for ring in inner {
-                        self.grow_branch(ring);
+                        self.grow_branch_recursive(ring);
                     }
-                    self.push_branch_with_single_leaf(*end);
+                    self.grow_branch(*end, *end, BranchStyle::Inline);
                 }
             }
             Ring::TextSequence { start, end, inner } => {
                 if fits {
-                    self.push_branch(*start, *end, BranchStyle::Inline);
+                    self.grow_branch(*start, *end, BranchStyle::Inline);
                 } else if self.is_all_text_sequence(*start, *end) {
-                    self.push_branch(*start, *end, BranchStyle::WrappedText);
+                    self.grow_branch(*start, *end, BranchStyle::WrappedText);
                 } else {
                     self.split_text_sequence(*start, inner);
                 }
             }
             Ring::RawText { start, end } => {
-                self.push_branch(*start, *end, BranchStyle::Raw);
+                self.grow_branch(*start, *end, BranchStyle::Raw);
             }
             Ring::MatchArm { start, end } => {
-                self.push_branch(*start, *end, BranchStyle::Inline);
+                self.grow_branch(*start, *end, BranchStyle::Inline);
             }
             Ring::Single(idx) => match &self.leaves[*idx] {
                 Leaf::HtmlComment(_) | Leaf::AskamaComment(_) => {
-                    self.push_branch(*idx, *idx, BranchStyle::Comment)
+                    self.grow_branch(*idx, *idx, BranchStyle::Comment);
                 }
-                _ => self.push_branch_with_single_leaf(*idx),
+                _ => self.grow_branch(*idx, *idx, BranchStyle::Inline),
             },
         }
     }
@@ -776,8 +776,7 @@ impl SakuraTree {
     }
 
     fn split_text_sequence(&mut self, start: usize, inner: &[Ring]) {
-        let indent = self.indent(start);
-        let indent_width = self.indent_width(indent);
+        let indent_width = self.indent_width(start);
         let available_width = self.config.max_width.saturating_sub(indent_width);
 
         let mut line_start = start;
@@ -793,8 +792,7 @@ impl SakuraTree {
                 // Emit current line (before adding this ring)
                 let line_width = self.width_with_spaces(line_start, line_end);
                 let style = self.branch_style(line_start, line_end, line_width, available_width);
-                self.branches
-                    .push(Branch::grow(line_start, line_end, style, indent));
+                self.grow_branch(line_start, line_end, style);
 
                 // Start new line with this ring
                 line_start = start;
@@ -809,8 +807,7 @@ impl SakuraTree {
         if line_start <= line_end {
             let line_width = self.width_with_spaces(line_start, line_end);
             let style = self.branch_style(line_start, line_end, line_width, available_width);
-            self.branches
-                .push(Branch::grow(line_start, line_end, style, indent));
+            self.grow_branch(line_start, line_end, style);
         }
     }
 
@@ -874,22 +871,11 @@ impl SakuraTree {
         after_prev || before_curr
     }
 
-    fn indent(&self, idx: usize) -> i32 {
+    fn indent_width(&self, idx: usize) -> usize {
+        self.indent(idx) * self.config.indent_size
+    }
+
+    fn indent(&self, idx: usize) -> usize {
         self.indent_map.get(idx).copied().unwrap_or(0)
-    }
-
-    fn indent_width(&self, indent: i32) -> usize {
-        (indent as usize) * self.config.indent_size
-    }
-
-    fn push_branch(&mut self, start: usize, end: usize, style: BranchStyle) {
-        let indent = self.indent(start);
-        self.branches.push(Branch::grow(start, end, style, indent));
-    }
-
-    fn push_branch_with_single_leaf(&mut self, idx: usize) {
-        let indent = self.indent(idx);
-        self.branches
-            .push(Branch::grow(idx, idx, BranchStyle::Inline, indent));
     }
 }

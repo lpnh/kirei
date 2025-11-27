@@ -117,7 +117,7 @@ impl ControlTag {
     }
 
     #[must_use]
-    pub fn indent_delta(self) -> (i32, i32) {
+    pub fn indent_delta(self) -> (isize, isize) {
         match self {
             Self::Match(_) => (0, 2),
             Self::Endmatch(_) => (-2, 0),
