@@ -150,7 +150,7 @@ impl HtmlNode {
         PHRASING_CONTENT.contains(&name.to_lowercase().as_str())
     }
 
-    pub fn is_whitespace_sensitive(&self) -> bool {
+    pub fn is_ws_sensitive(&self) -> bool {
         let (Self::StartTag { name, .. }
         | Self::EndTag { name, .. }
         | Self::ErroneousEndTag { name, .. }) = self
@@ -161,30 +161,11 @@ impl HtmlNode {
         WHITESPACE_SENSITIVE.contains(&name.to_lowercase().as_str())
     }
 
-    pub fn is_text(&self) -> bool {
-        matches!(self, Self::Text { .. })
-    }
-
-    pub fn is_raw_text(&self) -> bool {
-        matches!(self, Self::RawText { .. })
-    }
-
-    pub fn is_start_tag_or_void(&self) -> bool {
-        matches!(
-            self,
-            Self::StartTag { .. } | Self::Void { .. } | Self::SelfClosingTag { .. }
-        )
-    }
-
     pub fn end_tag_idx(&self) -> Option<usize> {
         match self {
             Self::StartTag { end_tag_idx, .. } => *end_tag_idx,
             _ => None,
         }
-    }
-
-    pub fn is_comment(&self) -> bool {
-        matches!(self, Self::Comment { .. })
     }
 
     pub fn embed_askm(&self) -> Option<&[usize]> {
@@ -480,8 +461,7 @@ fn format_self_closing_or_void(name: &str, attr: &str) -> String {
     }
 }
 
-// Reconstruct tag content with formatted Askama expressions
-pub fn reconstruct_tag(
+pub fn format_tag(
     range: &ops::Range<usize>,
     source: &str,
     askama_nodes: &[AskamaNode],
@@ -514,8 +494,7 @@ pub fn reconstruct_tag(
     result
 }
 
-// Reconstruct comment content with formatted Askama expressions
-pub fn reconstruct_comment(
+pub fn format_comment(
     range: &ops::Range<usize>,
     source: &str,
     askama_nodes: &[AskamaNode],
@@ -544,7 +523,6 @@ pub fn reconstruct_comment(
     result
 }
 
-// Normalize tag whitespace, preserving the closing delimiter
 fn normalize_fragment(fragment: &str) -> String {
     if let Some(rest) = fragment.strip_suffix('>') {
         let normalized = normalize_preserving_ends(rest);
@@ -557,11 +535,10 @@ fn normalize_fragment(fragment: &str) -> String {
     }
 }
 
-// Normalize whitespace preserving leading/trailing spaces
 fn normalize_preserving_ends(text: &str) -> String {
     let has_leading = text.starts_with(char::is_whitespace);
     let has_trailing = text.ends_with(char::is_whitespace);
-    let normalized = crate::normalize_whitespace(text);
+    let normalized = crate::normalize_ws(text);
 
     match (has_leading, has_trailing) {
         (true, true) => format!(" {} ", normalized),

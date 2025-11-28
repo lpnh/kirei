@@ -5,11 +5,10 @@ mod config;
 pub mod formatter;
 mod html;
 mod sakura_tree;
-mod woodcut;
 
 pub use crate::formatter::AskamaFormatter;
 
 #[must_use]
-pub fn normalize_whitespace(text: &str) -> String {
+pub fn normalize_ws(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }

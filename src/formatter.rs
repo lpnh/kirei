@@ -3,7 +3,7 @@ use tree_sitter::Parser;
 use tree_sitter_askama::LANGUAGE as ASKAMA_LANGUAGE;
 use tree_sitter_html::LANGUAGE as HTML_LANGUAGE;
 
-use crate::{askama, config::Config, html, sakura_tree::SakuraTree, woodcut};
+use crate::{askama, config::Config, html, sakura_tree::SakuraTree};
 
 pub struct AskamaFormatter {
     askama_parser: Parser,
@@ -82,6 +82,6 @@ impl AskamaFormatter {
         let sakura_tree = SakuraTree::grow(&askama_nodes, &html_nodes, source, &self.config);
 
         // 6. Print
-        Ok(woodcut::print(&sakura_tree))
+        Ok(sakura_tree.print())
     }
 }

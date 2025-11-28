@@ -117,7 +117,7 @@ impl ControlTag {
     }
 
     #[must_use]
-    pub fn indent_delta(self) -> (isize, isize) {
+    pub fn indent(self) -> (isize, isize) {
         match self {
             Self::Match(_) => (0, 2),
             Self::Endmatch(_) => (-2, 0),
@@ -447,7 +447,7 @@ fn normalize_askama_node(node: &AskamaNode) -> (String, String, String) {
     let inner = if node.is_expr() {
         raw_inner.trim().to_string()
     } else {
-        crate::normalize_whitespace(raw_inner)
+        crate::normalize_ws(raw_inner)
     };
 
     (open, close, inner)
