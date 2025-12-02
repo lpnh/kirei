@@ -74,12 +74,12 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
             Processing continues
         </p>
         <p style="padding: 0.5rem 0;">
-            <strong style="color: #28a745;">2xx (Success):</strong>
-            Request succeeded
+            <strong style="color: #28a745;">2xx (Success):</strong> Request
+            succeeded
         </p>
         <p style="padding: 0.5rem 0;">
-            <strong style="color: #ffc107;">3xx (Redirection):</strong>
-            Further action needed
+            <strong style="color: #ffc107;">3xx (Redirection):</strong> Further
+            action needed
         </p>
         <p style="padding: 0.5rem 0;">
             <strong style="color: #dc3545;">
@@ -88,8 +88,8 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
             Request contains bad syntax or cannot be fulfilled
         </p>
         <p style="padding: 0.5rem 0;">
-            <strong style="color: #dc3545;">5xx (Server Error):</strong>
-            Server failed to fulfill request
+            <strong style="color: #dc3545;">5xx (Server Error):</strong> Server
+            failed to fulfill request
         </p>
     </div>
 </div>

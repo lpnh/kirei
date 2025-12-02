@@ -70,6 +70,7 @@ struct Branch {
 enum Style {
     Inline,
     WrappedText,
+    WrappedSequence,
     Comment,
     Raw,
 }
@@ -483,6 +484,7 @@ impl SakuraTree {
         let lines = match style {
             Style::Inline => vec![self.branch_content(start, end)],
             Style::WrappedText => self.render_wrapped_text(start, end, indent),
+            Style::WrappedSequence => self.render_wrapped_sequence(start, end, indent),
             Style::Comment => self.render_comment(start, end),
             Style::Raw => self.render_raw(start, end),
         };
@@ -642,10 +644,29 @@ impl SakuraTree {
             Ring::TextSequence { start, end, inner } => {
                 if fits {
                     self.grow_branch(*start, *end, &Style::Inline);
-                } else if self.is_all_text_sequence(*start, *end) {
-                    self.grow_branch(*start, *end, &Style::WrappedText);
                 } else {
-                    self.split_text_sequence(*start, inner);
+                    let mut has_expr = false;
+                    let mut all_text_seq = true;
+
+                    for i in *start..=*end {
+                        if let Some(leaf) = self.leaves.get(i) {
+                            if !leaf.is_text_sequence() {
+                                all_text_seq = false;
+                                break;
+                            }
+                            if matches!(leaf.root, Root::Expr) {
+                                has_expr = true;
+                            }
+                        }
+                    }
+
+                    if !all_text_seq {
+                        self.split_text_sequence(*start, inner);
+                    } else if has_expr {
+                        self.grow_branch(*start, *end, &Style::WrappedSequence);
+                    } else {
+                        self.grow_branch(*start, *end, &Style::WrappedText);
+                    }
                 }
             }
             Ring::RawText { start, end } => {
@@ -677,56 +698,112 @@ impl SakuraTree {
         }
     }
 
-    fn split_text_sequence(&mut self, start: usize, inner: &[Ring]) {
-        let indent_width = self.indent_width(start);
-        let available_width = self.cfg.max_width.saturating_sub(indent_width);
+    fn leaflets_from_leaf(
+        &self,
+        leaf: &Leaf,
+        current: &mut String,
+        leaflets: &mut Vec<(String, bool)>,
+    ) {
+        match &leaf.root {
+            Root::Text => {
+                let words: Vec<&str> = leaf.content.split_whitespace().collect();
 
-        let mut line_start = start;
-        let mut line_end = start;
+                for (word_idx, word) in words.iter().enumerate() {
+                    let is_first_word = word_idx == 0;
+                    let is_last_word = word_idx == words.len() - 1;
 
-        for ring in inner {
-            let (start, end) = ring.range();
+                    if is_first_word && leaf.ws_before && !current.is_empty() {
+                        leaflets.push((current.clone(), true));
+                        current.clear();
+                    }
 
-            // Calculate width of current line if we add this ring
-            let try_width = self.width_with_ws(line_start, end);
+                    if !is_first_word && !current.is_empty() {
+                        leaflets.push((current.clone(), true));
+                        current.clear();
+                    }
 
-            if try_width > available_width && line_start < start {
-                // Emit current line (before adding this ring)
-                let line_width = self.width_with_ws(line_start, line_end);
-                let style = self.branch_style(line_start, line_end, line_width, available_width);
-                self.grow_branch(line_start, line_end, &style);
+                    current.push_str(word);
 
-                // Start new line with this ring
-                line_start = start;
-                line_end = end;
-            } else {
-                // Add to current line
-                line_end = end;
+                    if is_last_word && leaf.ws_after {
+                        leaflets.push((current.clone(), true));
+                        current.clear();
+                    }
+                }
             }
-        }
+            Root::Expr | Root::Entity | Root::Tag { .. } => {
+                if leaf.ws_before && !current.is_empty() {
+                    leaflets.push((current.clone(), true));
+                    current.clear();
+                }
 
-        // Emit final line
-        if line_start <= line_end {
-            let line_width = self.width_with_ws(line_start, line_end);
-            let style = self.branch_style(line_start, line_end, line_width, available_width);
-            self.grow_branch(line_start, line_end, &style);
+                current.push_str(&leaf.content);
+
+                if leaf.ws_after {
+                    leaflets.push((current.clone(), true));
+                    current.clear();
+                }
+            }
+            _ => {}
         }
     }
 
-    fn branch_style(&self, start: usize, end: usize, line: usize, available: usize) -> Style {
-        if line > available && self.is_all_text_sequence(start, end) {
-            return Style::WrappedText;
+    fn leaflets_from_rings(&self, inner: &[Ring]) -> Vec<(String, bool)> {
+        let mut leaflets: Vec<(String, bool)> = Vec::new();
+        let mut current = String::new();
+
+        for ring in inner {
+            let (ring_start, ring_end) = ring.range();
+
+            match ring {
+                Ring::Single(idx) => {
+                    let leaf = &self.leaves[*idx];
+                    self.leaflets_from_leaf(leaf, &mut current, &mut leaflets);
+                }
+                Ring::Paired { .. } | Ring::TextSequence { .. } => {
+                    let first_leaf = &self.leaves[ring_start];
+                    let last_leaf = &self.leaves[ring_end];
+
+                    if first_leaf.ws_before && !current.is_empty() {
+                        leaflets.push((current, true));
+                        current = String::new();
+                    }
+
+                    current.push_str(&self.branch_content(ring_start, ring_end));
+
+                    let has_ws_after = last_leaf.ws_after;
+                    if !current.is_empty() {
+                        leaflets.push((current, has_ws_after));
+                        current = String::new();
+                    }
+                }
+                _ => {}
+            }
         }
 
-        Style::Inline
+        if !current.is_empty() {
+            leaflets.push((current, false));
+        }
+
+        leaflets
+    }
+
+    fn split_text_sequence(&mut self, start: usize, inner: &[Ring]) {
+        let leaflets = self.leaflets_from_rings(inner);
+
+        if leaflets.is_empty() {
+            return;
+        }
+
+        let indent = self.indent_map[start];
+        let indent_width = indent * self.cfg.indent_size;
+        let available_width = self.cfg.max_width.saturating_sub(indent_width);
+
+        let lines = self.wrap_leaflets(leaflets, available_width);
+        self.branches.push(Branch { indent, lines });
     }
 
     fn fits(&self, start: usize, end: usize) -> bool {
         self.width(start, end) <= self.cfg.max_width
-    }
-
-    fn is_all_text_sequence(&self, start: usize, end: usize) -> bool {
-        (start..=end).all(|i| self.leaves.get(i).is_some_and(Leaf::is_text_sequence))
     }
 
     fn width(&self, start: usize, end: usize) -> usize {
@@ -734,25 +811,6 @@ impl SakuraTree {
             .filter_map(|i| self.leaves.get(i))
             .map(Leaf::chars_count)
             .sum()
-    }
-
-    fn width_with_ws(&self, start: usize, end: usize) -> usize {
-        let mut width = 0;
-        let mut prev_idx = None;
-
-        for leaf_idx in start..=end {
-            if let Some(leaf) = self.leaves.get(leaf_idx) {
-                if let Some(prev) = prev_idx
-                    && self.has_ws(prev, leaf_idx)
-                {
-                    width += 1;
-                }
-                width += leaf.chars_count();
-                prev_idx = Some(leaf_idx);
-            }
-        }
-
-        width
     }
 
     fn has_ws(&self, prev_idx: usize, curr_idx: usize) -> bool {
@@ -817,6 +875,68 @@ impl SakuraTree {
             .into_iter()
             .map(std::borrow::Cow::into_owned)
             .collect()
+    }
+
+    fn grow_leaflets(&self, start: usize, end: usize) -> Vec<(String, bool)> {
+        let mut leaflets: Vec<(String, bool)> = Vec::new();
+        let mut current = String::new();
+
+        for i in start..=end {
+            let leaf = &self.leaves[i];
+
+            if !leaf.is_text_sequence() {
+                continue;
+            }
+
+            self.leaflets_from_leaf(leaf, &mut current, &mut leaflets);
+        }
+
+        if !current.is_empty() {
+            leaflets.push((current, false));
+        }
+
+        leaflets
+    }
+
+    fn wrap_leaflets(&self, leaflets: Vec<(String, bool)>, available_width: usize) -> Vec<String> {
+        let mut lines: Vec<String> = Vec::new();
+        let mut current_line = String::new();
+        let mut current_width: usize = 0;
+        let mut prev_has_space = false;
+
+        for (leaflet, has_space_after) in leaflets {
+            let leaflet_width = leaflet.chars().count();
+            let need_space = current_width > 0 && prev_has_space;
+            let projected_width = current_width + usize::from(need_space) + leaflet_width;
+
+            if projected_width > available_width && current_width > 0 {
+                lines.push(current_line);
+                current_line = String::new();
+                current_width = 0;
+            }
+
+            if current_width > 0 && prev_has_space {
+                current_line.push(' ');
+                current_width += 1;
+            }
+
+            current_line.push_str(&leaflet);
+            current_width += leaflet_width;
+            prev_has_space = has_space_after;
+        }
+
+        if !current_line.is_empty() {
+            lines.push(current_line);
+        }
+
+        lines
+    }
+
+    fn render_wrapped_sequence(&self, start: usize, end: usize, indent: usize) -> Vec<String> {
+        let indent_width = indent * self.cfg.indent_size;
+        let available_width = self.cfg.max_width.saturating_sub(indent_width);
+        let leaflets = self.grow_leaflets(start, end);
+        self.wrap_leaflets(leaflets, available_width)
     }
 
     fn render_comment(&self, start: usize, end: usize) -> Vec<String> {

@@ -109,6 +109,34 @@ fn format_is_idempotent_2() {
 }
 
 #[test]
+fn format_is_idempotent_3() {
+    let temp = TempDir::new().unwrap();
+    let file = temp.child("test.html");
+    file.write_str(r#"<div>\n<div>\n<div>\n<div>\n<div>\n<div>\n<div>\n<div>\n<p class="text-sm opacity-70">\nSensação: {{ "{:.1}"|format(data.current.feels_like) }}°\n</p>\n</div>\n</div>\n</div>\n</div>\n</div>\n</div>\n</div>\n</div>"#).unwrap();
+
+    Command::new(cargo::cargo_bin!("kirei"))
+        .arg("--write")
+        .arg(file.path())
+        .assert()
+        .success();
+
+    let first_format = read_to_string(file.path()).unwrap();
+
+    Command::new(cargo::cargo_bin!("kirei"))
+        .arg("--write")
+        .arg(file.path())
+        .assert()
+        .success();
+
+    let second_format = read_to_string(file.path()).unwrap();
+
+    assert_eq!(
+        first_format, second_format,
+        "Formatting should be idempotent for expressions"
+    );
+}
+
+#[test]
 fn passes_when_formatted() {
     let temp = TempDir::new().unwrap();
     let file = temp.child("test.html");

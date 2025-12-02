@@ -52,3 +52,8 @@ fn simple_template() {
 fn mixed_html_comment() {
     format_and_snapshot!("mixed/mixed_html_comment.html");
 }
+
+#[test]
+fn weather() {
+    format_and_snapshot!("mixed/weather.html");
+}

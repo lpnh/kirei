@@ -1,0 +1,54 @@
+---
+source: tests/snapshots/mixed.rs
+description: "{% block content %}\n    <div class=\"w-full px-4 py-8\">\n        <div class=\"container mx-auto max-w-6xl\">\n            <div class=\"card bg-base-200 shadow-xl mb-8\">\n                <div class=\"card-body\">\n                    <h2 class=\"card-title text-2xl mb-4\">Condições Atuais</h2>\n                    <div class=\"grid grid-cols-1 md:grid-cols-2 gap-6\">\n                        <div class=\"flex items-center gap-4\">\n                            <i class=\"{{ data.current.weather.icon_class }} wi-icon-xl wi-primary\" aria-label=\"{{ data.current.weather.description }}\">\n                            </i>\n                            <div class=\"text-6xl font-semibold\">\n                                {{ \"{:.1}\"|format(data.current.temp) }}°\n                            </div>\n                            <div>\n                                <p class=\"text-lg capitalize\">{{ data.current.weather.description }}</p>\n                                <p class=\"text-sm opacity-70\">\n                                    Sensação: {{ \"{:.1}\"|format(data.current.feels_like) }}°\n                                </p>\n                            </div>\n                        </div>\n                        <div class=\"grid grid-cols-2 gap-4\">\n                            <div>\n                                <p class=\"text-sm opacity-70\">UV Index</p>\n                                <p class=\"text-xl font-semibold\">\n                                    {{ data.current.uvi.value }} ({{ data.current.uvi.category }})\n                                </p>\n                            </div>\n                            <div class=\"flex items-center gap-2\">\n                                <i class=\"wi wi-sunrise wi-2xl text-warning\" aria-label=\"Nascer do Sol\"></i>\n                                <div>\n                                    <p class=\"text-sm opacity-70\">Nascer do Sol</p>\n                                    <p class=\"text-xl font-semibold\">{{ data.current.sunrise }}</p>\n                                </div>\n                            </div>\n                        </div>\n                    </div>\n                </div>\n            </div>\n        </div>\n    </div>\n{% endblock %}\n"
+---
+{% block content %}
+    <div class="w-full px-4 py-8">
+        <div class="container mx-auto max-w-6xl">
+            <div class="card bg-base-200 shadow-xl mb-8">
+                <div class="card-body">
+                    <h2 class="card-title text-2xl mb-4">Condições Atuais</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="flex items-center gap-4">
+                            <i class="{{ data.current.weather.icon_class }} wi-icon-xl wi-primary" aria-label="{{ data.current.weather.description }}">
+                            </i>
+                            <div class="text-6xl font-semibold">
+                                {{ "{:.1}"|format(data.current.temp) }}°
+                            </div>
+                            <div>
+                                <p class="text-lg capitalize">
+                                    {{ data.current.weather.description }}
+                                </p>
+                                <p class="text-sm opacity-70">
+                                    Sensação:
+                                    {{ "{:.1}"|format(data.current.feels_like) }}°
+                                </p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <p class="text-sm opacity-70">UV Index</p>
+                                <p class="text-xl font-semibold">
+                                    {{ data.current.uvi.value }}
+                                    ({{ data.current.uvi.category }})
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <i class="wi wi-sunrise wi-2xl text-warning" aria-label="Nascer do Sol">
+                                </i>
+                                <div>
+                                    <p class="text-sm opacity-70">
+                                        Nascer do Sol
+                                    </p>
+                                    <p class="text-xl font-semibold">
+                                        {{ data.current.sunrise }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
