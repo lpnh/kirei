@@ -26,10 +26,10 @@ description: "<!-- History section -->\n{% if show_history %}\n    <section id=\
             {% raw %}
                 <code>
                     {% block response %} BREW coffee://pot-1/coffee HTCPCP/1.0
-                    Content-Type: application/coffee-pot-command Accept-
-                    Additions: cream;sugar start Response: HTCPCP/1.0 418 I'm
-                    a teapot The requested entity body is short and stout. {%
-                    endblock %}
+                    Content-Type: application/coffee-pot-command
+                    Accept-Additions: cream;sugar start Response: HTCPCP/1.0 418
+                    I'm a teapot The requested entity body is short and stout.
+                    {% endblock %}
                 </code>
             {% endraw %}
         </div>

@@ -5,8 +5,8 @@ description: "<section id=\"brewing-practices\" class=\"section\">\n    <h2>Brew
 <section id="brewing-practices" class="section">
     <h2>Brewing Best Practices</h2>
     <p style="margin-bottom: 1rem;">
-        We've covered the history, the protocol, and the technical bits.
-        Now let's get back to what teapots actually do: brew tea. Here's how
+        We've covered the history, the protocol, and the technical bits. Now
+        let's get back to what teapots actually do: brew tea. Here's how
         temperature and compatibility factor in.
     </p>
     {% macro temperature_badge(temp, label="Unknown") %}
@@ -121,8 +121,8 @@ description: "<section id=\"brewing-practices\" class=\"section\">\n    <h2>Brew
         <p style="text-align: center; margin-top: 1.5rem; font-size: 1.1rem; line-height: 1.8;">
             Whether you're here for the HTTP details, the Askama examples, or
             just the story of a silly status code, hopefully you found something
-            useful. And remember: a teapot that won't brew coffee isn't broken—
-            it's just doing what it's meant to do.
+            useful. And remember: a teapot that won't brew coffee isn't
+            broken—it's just doing what it's meant to do.
         </p>
     </div>
 </section>

@@ -69,8 +69,7 @@ struct Branch {
 #[derive(Debug, Clone)]
 enum Style {
     Inline,
-    WrappedText,
-    WrappedSequence,
+    Wrapped,
     Comment,
     Raw,
 }
@@ -483,8 +482,7 @@ impl SakuraTree {
 
         let lines = match style {
             Style::Inline => vec![self.branch_content(start, end)],
-            Style::WrappedText => self.render_wrapped_text(start, end, indent),
-            Style::WrappedSequence => self.render_wrapped_sequence(start, end, indent),
+            Style::Wrapped => self.render_wrapped(start, end, indent),
             Style::Comment => self.render_comment(start, end),
             Style::Raw => self.render_raw(start, end),
         };
@@ -645,27 +643,14 @@ impl SakuraTree {
                 if fits {
                     self.grow_branch(*start, *end, &Style::Inline);
                 } else {
-                    let mut has_expr = false;
-                    let mut all_text_seq = true;
-
-                    for i in *start..=*end {
-                        if let Some(leaf) = self.leaves.get(i) {
-                            if !leaf.is_text_sequence() {
-                                all_text_seq = false;
-                                break;
-                            }
-                            if matches!(leaf.root, Root::Expr) {
-                                has_expr = true;
-                            }
-                        }
-                    }
+                    let all_text_seq = (*start..=*end)
+                        .filter_map(|i| self.leaves.get(i))
+                        .all(Leaf::is_text_sequence);
 
                     if !all_text_seq {
                         self.split_text_sequence(*start, inner);
-                    } else if has_expr {
-                        self.grow_branch(*start, *end, &Style::WrappedSequence);
                     } else {
-                        self.grow_branch(*start, *end, &Style::WrappedText);
+                        self.grow_branch(*start, *end, &Style::Wrapped);
                     }
                 }
             }
@@ -863,20 +848,6 @@ impl SakuraTree {
         content
     }
 
-    fn render_wrapped_text(&self, start: usize, end: usize, indent: usize) -> Vec<String> {
-        use textwrap::{Options, wrap};
-
-        let content = self.branch_content(start, end);
-        let indent_width = indent * self.cfg.indent_size;
-        let available_width = self.cfg.max_width.saturating_sub(indent_width);
-        let options = Options::new(available_width);
-
-        wrap(&content, &options)
-            .into_iter()
-            .map(std::borrow::Cow::into_owned)
-            .collect()
-    }
-
     fn grow_leaflets(&self, start: usize, end: usize) -> Vec<(String, bool)> {
         let mut leaflets: Vec<(String, bool)> = Vec::new();
         let mut current = String::new();
@@ -932,7 +903,7 @@ impl SakuraTree {
         lines
     }
 
-    fn render_wrapped_sequence(&self, start: usize, end: usize, indent: usize) -> Vec<String> {
+    fn render_wrapped(&self, start: usize, end: usize, indent: usize) -> Vec<String> {
         let indent_width = indent * self.cfg.indent_size;
         let available_width = self.cfg.max_width.saturating_sub(indent_width);
         let leaflets = self.grow_leaflets(start, end);
