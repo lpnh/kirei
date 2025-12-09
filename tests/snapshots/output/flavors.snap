@@ -73,17 +73,14 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}Flavors - Ice Crea
             <div style="font-size: 3em; margin-bottom: 16px;">🧪</div>
             <h3>Flavor Lab in Progress</h3>
             <p>
-                Our flavor scientists are cooking up something amazing! Check
-                back soon for our weekly flavor lineup.
+                Our flavor scientists are cooking up something amazing! Check back soon for our weekly flavor lineup.
             </p>
         </div>
     {% endif %}
     <section class="card" style="margin-top:18px">
         <h3>About Our Flavors</h3>
         <p>
-            Our flavors are handcrafted by members and change weekly based on
-            seasonality and member requests. Everyone gets a vote on what we
-            make next!
+            Our flavors are handcrafted by members and change weekly based on seasonality and member requests. Everyone gets a vote on what we make next!
         </p>
         {# Enhanced info using computed values #}
         {% if seasonal_count > 0 %}

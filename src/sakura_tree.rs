@@ -69,7 +69,7 @@ struct Branch {
 #[derive(Debug, Clone)]
 enum Style {
     Inline,
-    Wrapped,
+    // Wrapped
     Comment,
     Raw,
 }
@@ -88,7 +88,6 @@ enum Ring {
     TextSequence {
         start: usize,
         end: usize,
-        inner: Vec<Ring>,
     },
     RawText {
         start: usize,
@@ -102,7 +101,7 @@ impl Ring {
         match self {
             Ring::Paired { start, end, .. }
             | Ring::MatchArm { start, end }
-            | Ring::TextSequence { start, end, .. }
+            | Ring::TextSequence { start, end }
             | Ring::RawText { start, end } => (*start, *end),
             Ring::Single(idx) => (*idx, *idx),
         }
@@ -174,10 +173,6 @@ impl Leaf {
         };
 
         Self::grow(root, content, start, end)
-    }
-
-    fn chars_count(&self) -> usize {
-        self.content.chars().count()
     }
 
     fn is_ctrl(&self) -> bool {
@@ -482,7 +477,7 @@ impl SakuraTree {
 
         let lines = match style {
             Style::Inline => vec![self.branch_content(start, end)],
-            Style::Wrapped => self.render_wrapped(start, end, indent),
+            // Style::Wrapped => todo!()
             Style::Comment => self.render_comment(start, end),
             Style::Raw => self.render_raw(start, end),
         };
@@ -564,42 +559,16 @@ impl SakuraTree {
         rings
     }
 
-    fn grow_inner_rings(&self, start_idx: usize, end_idx: usize) -> Vec<Ring> {
-        self.grow_rings(start_idx + 1, end_idx)
-    }
-
     fn try_text_sequence(&self, start_idx: usize, end_idx: usize) -> Option<(Ring, usize)> {
         let mut last_idx = start_idx;
         let mut start = start_idx;
-        let mut inner_rings = Vec::new();
 
-        // Collect following phrasing content
         while start < end_idx {
             let leaf = &self.leaves[start];
 
             if leaf.is_phrasing() {
-                if let Some(end) = leaf.pair() {
-                    // Check if complete element fits inline
-                    if !self.fits(start, end) {
-                        if start == start_idx {
-                            return None;
-                        }
-                        break;
-                    }
-
-                    let inner = self.grow_inner_rings(start, end);
-                    if !inner.is_empty() {
-                        inner_rings.push(Ring::TextSequence { start, end, inner });
-                    }
-
-                    last_idx = end;
-                    start = end + 1;
-                    continue;
-                }
-
-                inner_rings.push(Ring::Single(start));
-                last_idx = start;
-                start += 1;
+                last_idx = leaf.pair().unwrap_or(start);
+                start = last_idx + 1;
             } else {
                 if start == start_idx {
                     return None;
@@ -608,28 +577,28 @@ impl SakuraTree {
             }
         }
 
-        (last_idx >= start_idx).then_some({
-            (
-                Ring::TextSequence {
-                    start: start_idx,
-                    end: last_idx,
-                    inner: inner_rings,
-                },
-                last_idx,
-            )
-        })
+        (last_idx >= start_idx).then_some((
+            Ring::TextSequence {
+                start: start_idx,
+                end: last_idx,
+            },
+            last_idx,
+        ))
     }
 
     fn grow_branch_recursive(&mut self, ring: &Ring) {
-        let (start, end) = ring.range();
-
-        let fits = self.indent_width(start) + self.width(start, end) <= self.cfg.max_width;
-
         match ring {
             Ring::Paired { start, end, inner } => {
-                let has_block = self.has_block_inner_rings(inner);
+                let has_block = inner.iter().any(|ring| {
+                    let first_leaf = &self.leaves[ring.range().0];
+                    match ring {
+                        Ring::Paired { .. } | Ring::Single { .. } => first_leaf.is_block_level(),
+                        Ring::RawText { .. } => true,
+                        Ring::TextSequence { .. } | Ring::MatchArm { .. } => false,
+                    }
+                });
 
-                if fits && !has_block {
+                if self.fits(*start, *end) && !has_block {
                     self.grow_branch(*start, *end, &Style::Inline);
                 } else {
                     self.grow_branch(*start, *start, &Style::Inline);
@@ -639,169 +608,28 @@ impl SakuraTree {
                     self.grow_branch(*end, *end, &Style::Inline);
                 }
             }
-            Ring::TextSequence { start, end, inner } => {
-                if fits {
-                    self.grow_branch(*start, *end, &Style::Inline);
-                } else {
-                    let all_text_seq = (*start..=*end)
-                        .filter_map(|i| self.leaves.get(i))
-                        .all(Leaf::is_text_sequence);
-
-                    if !all_text_seq {
-                        self.split_text_sequence(*start, inner);
-                    } else {
-                        self.grow_branch(*start, *end, &Style::Wrapped);
-                    }
-                }
+            Ring::TextSequence { start, end } | Ring::MatchArm { start, end } => {
+                self.grow_branch(*start, *end, &Style::Inline);
             }
             Ring::RawText { start, end } => {
                 self.grow_branch(*start, *end, &Style::Raw);
             }
-            Ring::MatchArm { start, end } => {
-                self.grow_branch(*start, *end, &Style::Inline);
-            }
             Ring::Single(idx) => match &self.leaves[*idx].root {
-                Root::Comment => {
-                    self.grow_branch(*idx, *idx, &Style::Comment);
-                }
+                Root::Comment => self.grow_branch(*idx, *idx, &Style::Comment),
                 _ => self.grow_branch(*idx, *idx, &Style::Inline),
             },
         }
     }
 
-    fn has_block_inner_rings(&self, inner: &[Ring]) -> bool {
-        inner.iter().any(|ring| self.is_ring_block_level(ring))
-    }
-
-    fn is_ring_block_level(&self, ring: &Ring) -> bool {
-        let first_leaf = &self.leaves[ring.range().0];
-
-        match ring {
-            Ring::Paired { .. } | Ring::Single { .. } => first_leaf.is_block_level(),
-            Ring::RawText { .. } => true,
-            Ring::TextSequence { .. } | Ring::MatchArm { .. } => false,
-        }
-    }
-
-    fn leaflets_from_leaf(
-        &self,
-        leaf: &Leaf,
-        current: &mut String,
-        leaflets: &mut Vec<(String, bool)>,
-    ) {
-        match &leaf.root {
-            Root::Text => {
-                let words: Vec<&str> = leaf.content.split_whitespace().collect();
-
-                for (word_idx, word) in words.iter().enumerate() {
-                    let is_first_word = word_idx == 0;
-                    let is_last_word = word_idx == words.len() - 1;
-
-                    if is_first_word && leaf.ws_before && !current.is_empty() {
-                        leaflets.push((current.clone(), true));
-                        current.clear();
-                    }
-
-                    if !is_first_word && !current.is_empty() {
-                        leaflets.push((current.clone(), true));
-                        current.clear();
-                    }
-
-                    current.push_str(word);
-
-                    if is_last_word && leaf.ws_after {
-                        leaflets.push((current.clone(), true));
-                        current.clear();
-                    }
-                }
-            }
-            Root::Expr | Root::Entity | Root::Tag { .. } => {
-                if leaf.ws_before && !current.is_empty() {
-                    leaflets.push((current.clone(), true));
-                    current.clear();
-                }
-
-                current.push_str(&leaf.content);
-
-                if leaf.ws_after {
-                    leaflets.push((current.clone(), true));
-                    current.clear();
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn leaflets_from_rings(&self, inner: &[Ring]) -> Vec<(String, bool)> {
-        let mut leaflets: Vec<(String, bool)> = Vec::new();
-        let mut current = String::new();
-
-        for ring in inner {
-            let (ring_start, ring_end) = ring.range();
-
-            match ring {
-                Ring::Single(idx) => {
-                    let leaf = &self.leaves[*idx];
-                    self.leaflets_from_leaf(leaf, &mut current, &mut leaflets);
-                }
-                Ring::Paired { .. } | Ring::TextSequence { .. } => {
-                    let first_leaf = &self.leaves[ring_start];
-                    let last_leaf = &self.leaves[ring_end];
-
-                    if first_leaf.ws_before && !current.is_empty() {
-                        leaflets.push((current, true));
-                        current = String::new();
-                    }
-
-                    current.push_str(&self.branch_content(ring_start, ring_end));
-
-                    let has_ws_after = last_leaf.ws_after;
-                    if !current.is_empty() {
-                        leaflets.push((current, has_ws_after));
-                        current = String::new();
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        if !current.is_empty() {
-            leaflets.push((current, false));
-        }
-
-        leaflets
-    }
-
-    fn split_text_sequence(&mut self, start: usize, inner: &[Ring]) {
-        let leaflets = self.leaflets_from_rings(inner);
-
-        if leaflets.is_empty() {
-            return;
-        }
-
-        let indent = self.indent_map[start];
-        let indent_width = indent * self.cfg.indent_size;
-        let available_width = self.cfg.max_width.saturating_sub(indent_width);
-
-        let lines = self.wrap_leaflets(leaflets, available_width);
-        self.branches.push(Branch { indent, lines });
-    }
-
     fn fits(&self, start: usize, end: usize) -> bool {
-        self.width(start, end) <= self.cfg.max_width
+        self.indent_map[start] * self.cfg.indent_size + self.width(start, end) <= self.cfg.max_width
     }
 
     fn width(&self, start: usize, end: usize) -> usize {
         (start..=end)
             .filter_map(|i| self.leaves.get(i))
-            .map(Leaf::chars_count)
+            .map(|l| l.content.chars().count())
             .sum()
-    }
-
-    fn has_ws(&self, prev_idx: usize, curr_idx: usize) -> bool {
-        let after_prev = self.leaves.get(prev_idx).is_some_and(|l| l.ws_after);
-        let before_curr = self.leaves.get(curr_idx).is_some_and(|l| l.ws_before);
-        after_prev || before_curr
     }
 
     pub fn print(&self) -> String {
@@ -835,10 +663,12 @@ impl SakuraTree {
 
         for leaf_idx in start..=end {
             if let Some(leaf) = self.leaves.get(leaf_idx) {
-                if let Some(prev) = prev_idx
-                    && self.has_ws(prev, leaf_idx)
-                {
-                    content.push(' ');
+                if let Some(prev) = prev_idx {
+                    let has_ws =
+                        self.leaves.get(prev).is_some_and(|l: &Leaf| l.ws_after) || leaf.ws_before;
+                    if has_ws {
+                        content.push(' ');
+                    }
                 }
                 content.push_str(&leaf.content);
                 prev_idx = Some(leaf_idx);
@@ -846,68 +676,6 @@ impl SakuraTree {
         }
 
         content
-    }
-
-    fn grow_leaflets(&self, start: usize, end: usize) -> Vec<(String, bool)> {
-        let mut leaflets: Vec<(String, bool)> = Vec::new();
-        let mut current = String::new();
-
-        for i in start..=end {
-            let leaf = &self.leaves[i];
-
-            if !leaf.is_text_sequence() {
-                continue;
-            }
-
-            self.leaflets_from_leaf(leaf, &mut current, &mut leaflets);
-        }
-
-        if !current.is_empty() {
-            leaflets.push((current, false));
-        }
-
-        leaflets
-    }
-
-    fn wrap_leaflets(&self, leaflets: Vec<(String, bool)>, available_width: usize) -> Vec<String> {
-        let mut lines: Vec<String> = Vec::new();
-        let mut current_line = String::new();
-        let mut current_width: usize = 0;
-        let mut prev_has_space = false;
-
-        for (leaflet, has_space_after) in leaflets {
-            let leaflet_width = leaflet.chars().count();
-            let need_space = current_width > 0 && prev_has_space;
-            let projected_width = current_width + usize::from(need_space) + leaflet_width;
-
-            if projected_width > available_width && current_width > 0 {
-                lines.push(current_line);
-                current_line = String::new();
-                current_width = 0;
-            }
-
-            if current_width > 0 && prev_has_space {
-                current_line.push(' ');
-                current_width += 1;
-            }
-
-            current_line.push_str(&leaflet);
-            current_width += leaflet_width;
-            prev_has_space = has_space_after;
-        }
-
-        if !current_line.is_empty() {
-            lines.push(current_line);
-        }
-
-        lines
-    }
-
-    fn render_wrapped(&self, start: usize, end: usize, indent: usize) -> Vec<String> {
-        let indent_width = indent * self.cfg.indent_size;
-        let available_width = self.cfg.max_width.saturating_sub(indent_width);
-        let leaflets = self.grow_leaflets(start, end);
-        self.wrap_leaflets(leaflets, available_width)
     }
 
     fn render_comment(&self, start: usize, end: usize) -> Vec<String> {
@@ -964,9 +732,5 @@ impl SakuraTree {
 
     fn indent_as_string(&self, indent: usize) -> String {
         " ".repeat(indent * self.cfg.indent_size)
-    }
-
-    fn indent_width(&self, idx: usize) -> usize {
-        self.indent_map[idx] * self.cfg.indent_size
     }
 }

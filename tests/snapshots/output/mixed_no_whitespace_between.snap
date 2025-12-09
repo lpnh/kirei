@@ -3,6 +3,5 @@ source: tests/snapshots/rules.rs
 description: "<p>This is a{{ single_line }}paragraph{{ not_surrounded }}by whitespaces{{ and }}{{ blank }}lines.{{ lol }}!</p>\n"
 ---
 <p>
-    This is a{{ single_line }}paragraph{{ not_surrounded }}by
-    whitespaces{{ and }}{{ blank }}lines.{{ lol }}!
+    This is a{{ single_line }}paragraph{{ not_surrounded }}by whitespaces{{ and }}{{ blank }}lines.{{ lol }}!
 </p>
