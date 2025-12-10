@@ -15,9 +15,16 @@ const PHRASING_CONTENT: &[&str] = &[
     "samp", "script", "select", "slot", "small", "span", "strong", "sub", "sup", "svg", "template",
     "textarea", "time", "u", "var", "video", "wbr",
     //
-    //  Conditionally phrasing
+    // === Conditionally phrasing ===
     //
-    "a", "area", "del", "ins", "link", "map", "meta",
+    // only if it contains only phrasing content:
+    "a", "del", "ins", "map",
+    //
+    // only if it is a descendant of a <map> element:
+    "area",
+    //
+    // only if the `itemprop` attribute is present (exclude them for now):
+    // "link", "meta",
 ];
 
 // https://developer.mozilla.org/en-US/docs/Glossary/Void_element

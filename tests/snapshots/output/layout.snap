@@ -58,23 +58,17 @@ description: "{#-\n    This is the basic layout of our example application.\n   
     <ul id="lang-select">
         {%- if lang != Lang::en -%}
             <li>
-                <a href="/en/{{ page }}.html{{ query }}">
-                    This page in English
-                </a>
+                <a href="/en/{{ page }}.html{{ query }}">This page in English</a>
             </li>
         {%- endif -%}
         {%- if lang != Lang::de -%}
             <li>
-                <a href="/de/{{ page }}.html{{ query }}">
-                    Diese Seite auf deutsch.
-                </a>
+                <a href="/de/{{ page }}.html{{ query }}">Diese Seite auf deutsch.</a>
             </li>
         {%- endif -%}
         {%- if lang != Lang::fr -%}
             <li>
-                <a href="/fr/{{ page }}.html{{ query }}">
-                    Cette page est en français.
-                </a>
+                <a href="/fr/{{ page }}.html{{ query }}">Cette page est en français.</a>
             </li>
         {%- endif -%}
     </ul>

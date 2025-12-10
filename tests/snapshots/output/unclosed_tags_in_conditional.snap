@@ -6,8 +6,7 @@ description: "<div>\n    {% if first %}\n        <strong>\n    {% elif last %}\n
     {% if first %}
         <strong>
     {% elif last %}
-        <strong>
-        {{ foo }}<span>
+        <strong>{{ foo }}<span>
     {% else %}
     {% endif %}
 </strong>

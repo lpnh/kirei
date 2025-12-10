@@ -8,9 +8,7 @@ description: "<section id=\"brewing-practices\" class=\"section\">\n    <h2>Brew
         We've covered the history, the protocol, and the technical bits. Now let's get back to what teapots actually do: brew tea. Here's how temperature and compatibility factor in.
     </p>
     {% macro temperature_badge(temp, label="Unknown") %}
-        <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.9rem; font-weight: bold; {% if *temp < 85 %}background: #d4edda; color: #155724;{% elif *temp < 95 %}background: #fff3cd; color: #856404;{% else %}background: #f8d7da; color: #721c24;{% endif %}">
-            {{ label }}: {{ *temp }}°C
-        </span>
+        <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.9rem; font-weight: bold; {% if *temp < 85 %}background: #d4edda; color: #155724;{% elif *temp < 95 %}background: #fff3cd; color: #856404;{% else %}background: #f8d7da; color: #721c24;{% endif %}"> {{ label }}: {{ *temp }}°C </span>
     {% endmacro %}
     <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;">
         <h3 style="color: var(--teapot-brown); margin-top: 0;">

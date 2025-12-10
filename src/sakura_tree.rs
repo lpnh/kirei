@@ -57,7 +57,6 @@ enum Root {
     Text,
     Entity,
     RawText,
-    Doctype,
 }
 
 #[derive(Debug, Clone)]
@@ -76,7 +75,7 @@ enum Style {
 
 #[derive(Debug, Clone)]
 enum Ring {
-    Paired {
+    Block {
         start: usize,
         end: usize,
         inner: Vec<Ring>,
@@ -85,7 +84,7 @@ enum Ring {
         start: usize,
         end: usize,
     },
-    TextSequence {
+    Phrasing {
         start: usize,
         end: usize,
     },
@@ -93,19 +92,8 @@ enum Ring {
         start: usize,
         end: usize,
     },
+    Comment(usize),
     Single(usize),
-}
-
-impl Ring {
-    fn range(&self) -> (usize, usize) {
-        match self {
-            Ring::Paired { start, end, .. }
-            | Ring::MatchArm { start, end }
-            | Ring::TextSequence { start, end }
-            | Ring::RawText { start, end } => (*start, *end),
-            Ring::Single(idx) => (*idx, *idx),
-        }
-    }
 }
 
 impl Leaf {
@@ -153,12 +141,14 @@ impl Leaf {
                 is_ws_sensitive: html_node.is_ws_sensitive(),
                 end: None,
             },
-            HtmlNode::Void { .. } | HtmlNode::SelfClosingTag { .. } => Root::Tag {
-                indent: 0,
-                is_phrasing: html_node.is_phrasing(),
-                is_ws_sensitive: false,
-                end: None,
-            },
+            HtmlNode::Void { .. } | HtmlNode::SelfClosingTag { .. } | HtmlNode::Doctype { .. } => {
+                Root::Tag {
+                    indent: 0,
+                    is_phrasing: html_node.is_phrasing(),
+                    is_ws_sensitive: false,
+                    end: None,
+                }
+            }
             HtmlNode::EndTag { .. } | HtmlNode::ErroneousEndTag { .. } => Root::Tag {
                 indent: -1,
                 is_phrasing: html_node.is_phrasing(),
@@ -169,7 +159,6 @@ impl Leaf {
             HtmlNode::Entity { .. } => Root::Entity,
             HtmlNode::RawText { .. } => Root::RawText,
             HtmlNode::Comment { .. } => Root::Comment,
-            HtmlNode::Doctype { .. } => Root::Doctype,
         };
 
         Self::grow(root, content, start, end)
@@ -192,27 +181,16 @@ impl Leaf {
             )
     }
 
-    fn is_block_level(&self) -> bool {
-        match &self.root {
-            Root::Control { tag, .. } => tag.is_opening(),
-            Root::Tag { is_phrasing, .. } => !is_phrasing,
-            Root::Comment => self.content.contains('\n'),
-            _ => false,
-        }
-    }
-
     fn is_phrasing(&self) -> bool {
         matches!(
             &self.root,
-                | Root::Tag {
-                    is_phrasing: true,
-                    ..
-                }
-        ) | self.is_text_sequence()
-    }
-
-    fn is_text_sequence(&self) -> bool {
-        matches!(&self.root, Root::Text | Root::Entity | Root::Expr)
+            Root::Tag {
+                is_phrasing: true,
+                ..
+            } | Root::Text
+                | Root::Entity
+                | Root::Expr
+        )
     }
 
     fn from_text_or_raw(text: &str, is_raw: bool, start: usize, end: usize) -> Self {
@@ -324,11 +302,11 @@ impl SakuraTree {
             if let (Some(range), Some(end_tag)) = (html_node.range(), html_node.end_tag_idx())
                 && let Some(end_node) = html_nodes.get(end_tag)
                 && let Some(start) = leaves.iter().position(|l| l.start == range.start)
-                && let Some(end_idx) = leaves.iter().position(|l| l.start == end_node.start())
+                && let end_idx = leaves.iter().position(|l| l.start == end_node.start())
                 && askama::is_inside_same_ctrl(range.start, end_node.start(), askama_nodes)
                 && let Root::Tag { end, indent, .. } = &mut leaves[start].root
             {
-                *end = Some(end_idx);
+                *end = end_idx;
                 *indent = 1;
             }
         }
@@ -492,51 +470,19 @@ impl SakuraTree {
 
         while start < end_idx {
             let leaf = &self.leaves[start];
-            let fallback_to_single_ring = || (Ring::Single(start), start);
 
             let (ring, last) = match &leaf.root {
                 Root::Control { tag, .. } if tag.is_match_arm() => {
                     let mut curr = start + 1;
-
-                    while curr < end_idx {
-                        let Some(leaf) = self.leaves.get(curr) else {
-                            break;
-                        };
-                        if leaf.is_ctrl() {
-                            break;
-                        }
-                        curr = leaf.pair().map_or(curr + 1, |end| end + 1);
+                    while curr < end_idx && !self.leaves.get(curr).is_none_or(Leaf::is_ctrl) {
+                        curr = self.leaves[curr].pair().map_or(curr + 1, |end| end + 1);
                     }
-
                     let end = if self.fits(start, curr - 1) {
                         curr - 1
                     } else {
                         start
                     };
                     (Ring::MatchArm { start, end }, end)
-                }
-                Root::Control { tag, .. } if tag.is_opening() => {
-                    if let Some(end) = leaf.pair() {
-                        let inner = self.grow_rings(start + 1, end);
-                        (Ring::Paired { start, end, inner }, end)
-                    } else {
-                        fallback_to_single_ring()
-                    }
-                }
-                Root::Tag { .. } => {
-                    if let Some(end) = leaf.pair() {
-                        if leaf.is_phrasing()
-                            && self.leaves.get(end + 1).is_some_and(Leaf::is_text_sequence)
-                            && let Some((ring, next)) = self.try_text_sequence(start, end_idx)
-                        {
-                            (ring, next)
-                        } else {
-                            let inner = self.grow_rings(start + 1, end);
-                            (Ring::Paired { start, end, inner }, end)
-                        }
-                    } else {
-                        fallback_to_single_ring()
-                    }
                 }
                 Root::RawText => {
                     let count = self.leaves[start..end_idx]
@@ -546,10 +492,28 @@ impl SakuraTree {
                     let end = start + count - 1;
                     (Ring::RawText { start, end }, end)
                 }
-                Root::Text | Root::Entity | Root::Expr => self
-                    .try_text_sequence(start, end_idx)
-                    .unwrap_or_else(fallback_to_single_ring),
-                _ => fallback_to_single_ring(),
+                Root::Comment => (Ring::Comment(start), start),
+                _ if leaf.is_phrasing()
+                    && leaf.pair().is_none_or(|end| {
+                        self.leaves[start + 1..end].iter().all(Leaf::is_phrasing)
+                    }) =>
+                {
+                    let (mut curr, mut end) = (start, start);
+
+                    while curr < end_idx && self.leaves[curr].is_phrasing() {
+                        end = self.leaves[curr].pair().unwrap_or(curr);
+                        curr = end + 1;
+                    }
+
+                    (Ring::Phrasing { start, end }, end)
+                }
+                _ => match leaf.pair() {
+                    Some(end) => {
+                        let inner = self.grow_rings(start + 1, end);
+                        (Ring::Block { start, end, inner }, end)
+                    }
+                    None => (Ring::Single(start), start),
+                },
             };
 
             rings.push(ring);
@@ -559,46 +523,14 @@ impl SakuraTree {
         rings
     }
 
-    fn try_text_sequence(&self, start_idx: usize, end_idx: usize) -> Option<(Ring, usize)> {
-        let mut last_idx = start_idx;
-        let mut start = start_idx;
-
-        while start < end_idx {
-            let leaf = &self.leaves[start];
-
-            if leaf.is_phrasing() {
-                last_idx = leaf.pair().unwrap_or(start);
-                start = last_idx + 1;
-            } else {
-                if start == start_idx {
-                    return None;
-                }
-                break;
-            }
-        }
-
-        (last_idx >= start_idx).then_some((
-            Ring::TextSequence {
-                start: start_idx,
-                end: last_idx,
-            },
-            last_idx,
-        ))
-    }
-
     fn grow_branch_recursive(&mut self, ring: &Ring) {
         match ring {
-            Ring::Paired { start, end, inner } => {
-                let has_block = inner.iter().any(|ring| {
-                    let first_leaf = &self.leaves[ring.range().0];
-                    match ring {
-                        Ring::Paired { .. } | Ring::Single { .. } => first_leaf.is_block_level(),
-                        Ring::RawText { .. } => true,
-                        Ring::TextSequence { .. } | Ring::MatchArm { .. } => false,
-                    }
-                });
-
-                if self.fits(*start, *end) && !has_block {
+            Ring::Block { start, end, inner } => {
+                if self.fits(*start, *end)
+                    && inner
+                        .iter()
+                        .all(|r| matches!(r, Ring::Phrasing { .. } | Ring::Single(_)))
+                {
                     self.grow_branch(*start, *end, &Style::Inline);
                 } else {
                     self.grow_branch(*start, *start, &Style::Inline);
@@ -608,16 +540,12 @@ impl SakuraTree {
                     self.grow_branch(*end, *end, &Style::Inline);
                 }
             }
-            Ring::TextSequence { start, end } | Ring::MatchArm { start, end } => {
+            Ring::Phrasing { start, end } | Ring::MatchArm { start, end } => {
                 self.grow_branch(*start, *end, &Style::Inline);
             }
-            Ring::RawText { start, end } => {
-                self.grow_branch(*start, *end, &Style::Raw);
-            }
-            Ring::Single(idx) => match &self.leaves[*idx].root {
-                Root::Comment => self.grow_branch(*idx, *idx, &Style::Comment),
-                _ => self.grow_branch(*idx, *idx, &Style::Inline),
-            },
+            Ring::RawText { start, end } => self.grow_branch(*start, *end, &Style::Raw),
+            Ring::Comment(idx) => self.grow_branch(*idx, *idx, &Style::Comment),
+            Ring::Single(idx) => self.grow_branch(*idx, *idx, &Style::Inline),
         }
     }
 

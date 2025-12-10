@@ -21,29 +21,19 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
                     {% if method.skip %}{% continue %}{% endif %}
                     <li style="padding: 0.75rem 0; border-bottom: 1px solid #e9ecef;">
                         {% if loop.first %}
-                            <strong style="color: var(--teapot-brown);">
-                            →
+                            <strong style="color: var(--teapot-brown);">→
                         {% elif loop.last %}
-                            <span style="font-size: 1.2rem;">
-                            🫖
+                            <span style="font-size: 1.2rem;">🫖
                         {% else %}
-                            <strong style="color: var(--teapot-brown);">
-                            →
+                            <strong style="color: var(--teapot-brown);">→
                         {% endif %}
-                    </strong>
-                    <span style="font-weight: bold; color: var(--code-bg);">
-                        {{ method.name ~ ":" }}
-                    </span>
+                    </strong> <span style="font-weight: bold; color: var(--code-bg);">{{ method.name ~ ":" }}</span>
                     {% if let Some(msg) = error_message %}
                         {% if method.name == "BREW" %}
-                            <span style="color: var(--error-red);">
-                                (returns {{ status_code }}!)
-                            </span>
+                            <span style="color: var(--error-red);"> (returns {{ status_code }}!) </span>
                         {% endif %}
                     {% endif %}
-                    <span style="color: #6c757d;">
-                        {{ method.description }}
-                    </span>
+                    <span style="color: #6c757d;">{{ method.description }}</span>
                 </li>
             {% endfor %}
         </ul>
@@ -97,9 +87,7 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
             <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
                 <strong>Coffee Support:</strong>
                 {% if coffee_support is not defined %}
-                    <span style="color: #dc3545;">
-                        ✗ Not Available (Teapot Mode)
-                    </span>
+                    <span style="color: #dc3545;">✗ Not Available (Teapot Mode)</span>
                 {% else %}
                     <span style="color: #28a745;">✓ Available</span>
                 {% endif %}
@@ -124,9 +112,7 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
                 </p>
             {% else %}
                 <p style="color: var(--error-red); padding: 1rem; background: #ffe6e6; border-radius: 8px; text-align: center;">
-                    <strong>⚠️ No coffee support</strong>
-                    <br />
-                    <small>This is a teapot implementation!</small>
+                    <strong>⚠️ No coffee support</strong><br /><small>This is a teapot implementation!</small>
                 </p>
             {% endfor %}
         </div>

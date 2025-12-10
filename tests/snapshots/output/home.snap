@@ -45,8 +45,7 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}Home - Ice Cream S
                         {% for star in 1..=5 %}
                             {% if star <= review.1 %}⭐{% else %}☆{% endif %}
                         {% endfor %}
-                        <br />
-                        <em>"{{ review.2 }}"</em>
+                        <br /> <em>"{{ review.2 }}"</em>
                     </div>
                 {% endfor %}
             {% else %}
