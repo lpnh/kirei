@@ -590,56 +590,46 @@ impl SakuraTree {
             return vec![content];
         }
 
-        let source_lines: Vec<&str> = content.lines().collect();
-        let relative_indent = self.indent_as_string(1);
-        let mut formatted_lines = Vec::new();
+        let lines: Vec<&str> = content.lines().collect();
+        let indent = self.indent_as_string(1);
 
-        for (i, line) in source_lines.iter().enumerate() {
-            let trimmed = line.trim_start();
-
-            if trimmed.is_empty() {
-                formatted_lines.push(String::new());
-            } else if i == 0 || i == source_lines.len() - 1 {
-                formatted_lines.push(trimmed.to_string());
-            } else {
-                formatted_lines.push(format!("{}{}", relative_indent, trimmed));
-            }
-        }
-
-        formatted_lines
+        lines
+            .iter()
+            .enumerate()
+            .map(|(i, line)| {
+                let line = line.trim_start();
+                if line.is_empty() || i == 0 || i == lines.len() - 1 {
+                    line.to_string()
+                } else {
+                    format!("{}{}", indent, line)
+                }
+            })
+            .collect()
     }
 
     fn render_raw(&self, start: usize, end: usize) -> Vec<String> {
         let content = self.branch_content(start, end);
-        let source_lines: Vec<&str> = content.lines().collect();
+        let lines: Vec<&str> = content.lines().collect();
 
-        let base_indent = source_lines
+        let indent = lines
             .iter()
-            .filter(|l| !l.trim().is_empty())
             .filter_map(|l| l.chars().position(|c| !c.is_whitespace()))
             .min()
             .unwrap_or(0);
 
-        let mut lines = Vec::new();
-
-        for (i, line) in source_lines.iter().enumerate() {
-            if line.trim().is_empty() {
-                if i == 0 || i == source_lines.len() - 1 {
-                    continue;
-                } else {
-                    lines.push(String::new());
-                }
-            } else {
-                let stripped = if line.len() > base_indent {
-                    &line[base_indent..]
-                } else {
-                    line
-                };
-                lines.push(stripped.to_string());
-            }
-        }
-
         lines
+            .iter()
+            .enumerate()
+            .filter_map(|(i, line)| {
+                if !line.trim().is_empty() {
+                    Some(line.get(indent..).unwrap_or(line).to_string())
+                } else if i != 0 && i != lines.len() - 1 {
+                    Some(String::new())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     fn indent_as_string(&self, indent: usize) -> String {
