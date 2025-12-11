@@ -88,10 +88,7 @@ enum Ring {
         start: usize,
         end: usize,
     },
-    RawText {
-        start: usize,
-        end: usize,
-    },
+    RawText(usize),
     Comment(usize),
     Single(usize),
 }
@@ -193,51 +190,34 @@ impl Leaf {
         )
     }
 
-    fn from_text_or_raw(text: &str, is_raw: bool, start: usize, end: usize) -> Self {
-        let (content, root) = if is_raw {
-            (
-                text.trim_matches('\n')
-                    .lines()
-                    .map(str::trim)
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-                Root::RawText,
-            )
-        } else {
-            (crate::normalize_ws(text), Root::Text)
-        };
-
-        Self::grow(root, content, start, end)
+    fn from_text(text: &str, start: usize, end: usize) -> Self {
+        Self::grow(Root::Text, crate::normalize_ws(text), start, end)
     }
 
-    fn split_text(
+    fn from_mixed_text(
         range: &Range<usize>,
         askama_nodes: &[AskamaNode],
-        embed_askm: &[usize],
+        embed_askama: &[usize],
         source: &str,
-        is_raw: bool,
     ) -> Vec<Self> {
         let mut segments = Vec::new();
-        let mut current_pos = range.start;
+        let mut curr_pos = range.start;
 
-        for &idx in embed_askm {
-            let askama = &askama_nodes[idx];
-            if askama.start() > current_pos {
-                segments.push((current_pos, askama.start()));
+        for &idx in embed_askama {
+            let node = &askama_nodes[idx];
+            if node.start() > curr_pos {
+                segments.push((curr_pos, node.start()));
             }
-            current_pos = askama.end();
+            curr_pos = node.end();
         }
 
-        if current_pos < range.end {
-            segments.push((current_pos, range.end));
+        if curr_pos < range.end {
+            segments.push((curr_pos, range.end));
         }
 
         segments
             .into_iter()
-            .map(|(start, end)| {
-                let text = &source[start..end];
-                Self::from_text_or_raw(text, is_raw, start, end)
-            })
+            .map(|(start, end)| Self::from_text(&source[start..end], start, end))
             .collect()
     }
 }
@@ -357,23 +337,27 @@ impl SakuraTree {
                         leaves.insert(Leaf::from_html(node));
                     }
                 }
-                HtmlNode::Text { text, .. } | HtmlNode::RawText { text, .. } => {
-                    let is_raw = matches!(node, HtmlNode::RawText { .. });
+                HtmlNode::Text { text, .. } => {
                     let Some(range) = node.range() else { continue };
 
                     if let Some(embed) = node.embed_askm() {
-                        leaves.extend(Leaf::split_text(range, askama_nodes, embed, source, is_raw));
+                        leaves.extend(Leaf::from_mixed_text(range, askama_nodes, embed, source));
                     } else {
-                        leaves.insert(Leaf::from_text_or_raw(text, is_raw, range.start, range.end));
+                        leaves.insert(Leaf::from_text(text, range.start, range.end));
                     }
                 }
-                HtmlNode::Comment { .. } => {
+                HtmlNode::RawText { .. } | HtmlNode::Comment { .. } => {
                     let Some(range) = node.range() else { continue };
 
                     if let Some(embed) = node.embed_askm() {
                         pruned.extend(embed.iter().copied());
-                        let content = html::format_comment(range, source, askama_nodes, embed, cfg);
-                        leaves.insert(Leaf::grow(Root::Comment, content, range.start, range.end));
+                        let content = html::format_opaque(range, source, askama_nodes, embed, cfg);
+                        let root = match node {
+                            HtmlNode::RawText { .. } => Root::RawText,
+                            HtmlNode::Comment { .. } => Root::Comment,
+                            _ => unreachable!(),
+                        };
+                        leaves.insert(Leaf::grow(root, content, range.start, range.end));
                     } else {
                         leaves.insert(Leaf::from_html(node));
                     }
@@ -484,14 +468,7 @@ impl SakuraTree {
                     };
                     (Ring::MatchArm { start, end }, end)
                 }
-                Root::RawText => {
-                    let count = self.leaves[start..end_idx]
-                        .iter()
-                        .take_while(|l| matches!(l.root, Root::RawText | Root::Expr))
-                        .count();
-                    let end = start + count - 1;
-                    (Ring::RawText { start, end }, end)
-                }
+                Root::RawText => (Ring::RawText(start), start),
                 Root::Comment => (Ring::Comment(start), start),
                 _ if leaf.is_phrasing()
                     && leaf.pair().is_none_or(|end| {
@@ -543,7 +520,7 @@ impl SakuraTree {
             Ring::Phrasing { start, end } | Ring::MatchArm { start, end } => {
                 self.grow_branch(*start, *end, &Style::Inline);
             }
-            Ring::RawText { start, end } => self.grow_branch(*start, *end, &Style::Raw),
+            Ring::RawText(idx) => self.grow_branch(*idx, *idx, &Style::Raw),
             Ring::Comment(idx) => self.grow_branch(*idx, *idx, &Style::Comment),
             Ring::Single(idx) => self.grow_branch(*idx, *idx, &Style::Inline),
         }
@@ -634,25 +611,32 @@ impl SakuraTree {
 
     fn render_raw(&self, start: usize, end: usize) -> Vec<String> {
         let content = self.branch_content(start, end);
+        let source_lines: Vec<&str> = content.lines().collect();
+
+        let base_indent = source_lines
+            .iter()
+            .filter(|l| !l.trim().is_empty())
+            .filter_map(|l| l.chars().position(|c| !c.is_whitespace()))
+            .min()
+            .unwrap_or(0);
+
         let mut lines = Vec::new();
-        let mut curr_indent: usize = 0;
 
-        for line in content.lines() {
-            if line.is_empty() {
-                lines.push(String::new());
-                continue;
+        for (i, line) in source_lines.iter().enumerate() {
+            if line.trim().is_empty() {
+                if i == 0 || i == source_lines.len() - 1 {
+                    continue;
+                } else {
+                    lines.push(String::new());
+                }
+            } else {
+                let stripped = if line.len() > base_indent {
+                    &line[base_indent..]
+                } else {
+                    line
+                };
+                lines.push(stripped.to_string());
             }
-
-            let leading_close = usize::from(line.starts_with('}'));
-            curr_indent = curr_indent.saturating_sub(leading_close);
-
-            let indent_str = self.indent_as_string(curr_indent);
-            lines.push(format!("{}{}", indent_str, line));
-
-            let open_braces = line.matches('{').count() as isize;
-            let close_braces = line.matches('}').count() as isize;
-            let net_change = open_braces - close_braces + leading_close as isize;
-            curr_indent = curr_indent.saturating_add_signed(net_change);
         }
 
         lines

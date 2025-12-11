@@ -59,8 +59,8 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
         <script type="application/json" id="ice-cream-data">
             {
                 "menu": [
-                {"name": "Vanilla Bean Dream", "price": 4.99, "cold": true},
-                {"name": "Spicy Chili Chocolate", "price": 6.99, "cold": false}
+                    {"name": "Vanilla Bean Dream", "price": 4.99, "cold": true},
+                    {"name": "Spicy Chili Chocolate", "price": 6.99, "cold": false}
                 ],
                 "specials": {
                     "monday": "Buy 2 Scoops Get 1 Free",
@@ -330,9 +330,9 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
 
             // Global ice cream wisdom
             window.iceCreamWisdom = [
-            "Life is like ice cream: enjoy it before it melts!",
-            "Ice cream is the answer. What was the question again?",
-            "We all scream for ice cream! 🍦"
+                "Life is like ice cream: enjoy it before it melts!",
+                "Ice cream is the answer. What was the question again?",
+                "We all scream for ice cream! 🍦"
             ];
         </script>
         <!-- Comments scattered throughout -->

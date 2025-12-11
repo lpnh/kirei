@@ -46,7 +46,7 @@ description: "{#-\n    This is the basic layout of our example application.\n   
         ~#}
         <style>
             /*<![CDATA[*/
-            {%~ include "_layout.css" ~%}
+                {%~ include "_layout.css" ~%}
             /*]]>*/
         </style>
     </head>

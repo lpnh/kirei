@@ -333,12 +333,12 @@ fn parse_recursive(
             }
         }
         "raw_text" => {
-            let text = node.utf8_text(source)?;
+            let text = node.utf8_text(source)?.to_string();
             if !text.trim().is_empty() {
                 let range = node.start_byte()..node.end_byte();
                 let embed_askm = find_askama_in_range(askama_nodes, &range);
                 html_nodes.push(HtmlNode::RawText {
-                    text: text.to_string(),
+                    text,
                     embed_askm,
                     range,
                 });
@@ -501,7 +501,7 @@ pub fn format_tag(
     result
 }
 
-pub fn format_comment(
+pub fn format_opaque(
     range: &ops::Range<usize>,
     source: &str,
     askama_nodes: &[AskamaNode],

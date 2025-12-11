@@ -1,0 +1,16 @@
+---
+source: tests/snapshots/phrasing.rs
+description: "<div>\n  <h1>The <span class=\"highlight\">Mad Tea-Party</span></h1>\n  <p>\n    <script type=\"application/json\" id=\"tea-party-metadata\">\n      {\n        \"host\": \"The Hatter\",\n        \"guests\": [\"March Hare\", \"Dormouse\", \"Alice\"]\n      }\n    </script>\n    —<cite>Why is a raven like a writing-desk?</cite><br />\n\n        Twinkle,<br />\n\n        twinkle,<br />\n\n\n        little bat!<br />\n\n\n\n        How I wonder what you’re at!\n  </p>\n</div>\n"
+---
+<div>
+    <h1>The <span class="highlight">Mad Tea-Party</span></h1>
+    <p>
+        <script type="application/json" id="tea-party-metadata">
+            {
+              "host": "The Hatter",
+              "guests": ["March Hare", "Dormouse", "Alice"]
+            }
+        </script>
+        —<cite>Why is a raven like a writing-desk?</cite><br /> Twinkle,<br /> twinkle,<br /> little bat!<br /> How I wonder what you’re at!
+    </p>
+</div>

@@ -23,5 +23,6 @@ mod html;
 mod ice_cream_club;
 mod malformed;
 mod mixed;
+mod phrasing;
 mod rules;
 mod teapot;

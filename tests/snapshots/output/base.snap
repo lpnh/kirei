@@ -12,9 +12,9 @@ description: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8
         </title>
         <style>
             :root{
-                --brand:#FFB6C1;
-                --accent:#87CEEB;
-                --muted:#666;
+            --brand:#FFB6C1;
+            --accent:#87CEEB;
+            --muted:#666;
             }
 
             body{margin:0;padding:20px;font-family:system-ui;background:#fffaf5;color:#333;line-height:1.6}
