@@ -19,7 +19,8 @@ description: "{% block content %}\n    <div class=\"w-full px-4 py-8\">\n       
                                     {{ data.current.weather.description }}
                                 </p>
                                 <p class="text-sm opacity-70">
-                                    Sensação: {{ "{:.1}"|format(data.current.feels_like) }}°
+                                    Sensação:
+                                    {{ "{:.1}"|format(data.current.feels_like) }}°
                                 </p>
                             </div>
                         </div>

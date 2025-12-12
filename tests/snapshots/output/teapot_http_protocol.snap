@@ -27,7 +27,8 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
                         {% else %}
                             <strong style="color: var(--teapot-brown);">→
                         {% endif %}
-                    </strong> <span style="font-weight: bold; color: var(--code-bg);">{{ method.name ~ ":" }}</span>
+                    </strong>
+                    <span style="font-weight: bold; color: var(--code-bg);">{{ method.name ~ ":" }}</span>
                     {% if let Some(msg) = error_message %}
                         {% if method.name == "BREW" %}
                             <span style="color: var(--error-red);"> (returns {{ status_code }}!) </span>
@@ -52,19 +53,24 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
         {% let status_labels = ["Informational", "Success", "Redirection", "Client Error", "Server Error"] %}
         {% let category_index = (status_code / 100 - 1) as usize %}
         <p style="padding: 0.5rem 0;">
-            <strong style="color: #17a2b8;">1xx (Informational):</strong> Processing continues
+            <strong style="color: #17a2b8;">1xx (Informational):</strong>
+            Processing continues
         </p>
         <p style="padding: 0.5rem 0;">
-            <strong style="color: #28a745;">2xx (Success):</strong> Request succeeded
+            <strong style="color: #28a745;">2xx (Success):</strong>
+            Request succeeded
         </p>
         <p style="padding: 0.5rem 0;">
-            <strong style="color: #ffc107;">3xx (Redirection):</strong> Further action needed
+            <strong style="color: #ffc107;">3xx (Redirection):</strong>
+            Further action needed
         </p>
         <p style="padding: 0.5rem 0;">
-            <strong style="color: #dc3545;">4xx ({{ status_labels[*category_index] }}):</strong> Request contains bad syntax or cannot be fulfilled
+            <strong style="color: #dc3545;">4xx ({{ status_labels[*category_index] }}):</strong>
+            Request contains bad syntax or cannot be fulfilled
         </p>
         <p style="padding: 0.5rem 0;">
-            <strong style="color: #dc3545;">5xx (Server Error):</strong> Server failed to fulfill request
+            <strong style="color: #dc3545;">5xx (Server Error):</strong>
+            Server failed to fulfill request
         </p>
     </div>
 </div>

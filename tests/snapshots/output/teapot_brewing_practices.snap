@@ -17,7 +17,8 @@ description: "<section id=\"brewing-practices\" class=\"section\">\n    <h2>Brew
         <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
             {% for (tea_name, temp) in temperature_readings %}
                 <div style="padding: 0.75rem 0; {% if !loop.last %}border-bottom: 1px solid #e9ecef;{% endif %}">
-                    <strong>{{ loop.index }}.</strong> {{ temperature_badge(temp, tea_name) }}
+                    <strong>{{ loop.index }}.</strong>
+                    {{ temperature_badge(temp, tea_name) }}
                 </div>
             {% endfor %}
         </div>

@@ -68,7 +68,7 @@ struct Branch {
 #[derive(Debug, Clone)]
 enum Style {
     Inline,
-    // Wrapped
+    Wrapped,
     Comment,
     Raw,
 }
@@ -415,7 +415,7 @@ impl SakuraTree {
 
         let lines = match style {
             Style::Inline => vec![self.branch_content(start, end)],
-            // Style::Wrapped => todo!()
+            Style::Wrapped => self.render_wrapped(start, end),
             Style::Comment => self.render_comment(start, end),
             Style::Raw => self.render_raw(start, end),
         };
@@ -496,9 +496,8 @@ impl SakuraTree {
                     self.grow_branch(*end, *end, &Style::Inline);
                 }
             }
-            Ring::Phrasing { start, end } | Ring::MatchArm { start, end } => {
-                self.grow_branch(*start, *end, &Style::Inline);
-            }
+            Ring::Phrasing { start, end } => self.grow_branch(*start, *end, &Style::Wrapped),
+            Ring::MatchArm { start, end } => self.grow_branch(*start, *end, &Style::Inline),
             Ring::Raw(idx) => self.grow_branch(*idx, *idx, &Style::Raw),
             Ring::Comment(idx) => self.grow_branch(*idx, *idx, &Style::Comment),
             Ring::Single(idx) => self.grow_branch(*idx, *idx, &Style::Inline),
@@ -560,6 +559,59 @@ impl SakuraTree {
         }
 
         content
+    }
+
+    // Assumes all the whitespace between nodes is already trimmed
+    // Pairs and all the leaves between them are kept together
+    // The content inside each leaf is not split yet
+    // TODO: Split the `Text` node
+    // NOTE: Is the `fits` function counting the trimmed whitespaces?
+    fn render_wrapped(&self, start: usize, end: usize) -> Vec<String> {
+        if start == end {
+            return vec![self.branch_content(start, end)];
+        }
+
+        let leaves = &self.leaves[start..=end];
+        let mut lines = Vec::new();
+        let mut curr_line = String::new();
+        let mut start_idx = start;
+        let mut pair = leaves[0].pair();
+
+        for (i, leaf) in leaves.iter().enumerate() {
+            curr_line.push_str(&leaf.content);
+
+            let Some(next_leaf) = leaves.get(i + 1) else {
+                lines.push(curr_line);
+                // No more leaf, no more lines
+                break;
+            };
+
+            let curr_leaf_idx = start + i;
+
+            // Concat until we reach the closing pair
+            if pair.is_some_and(|pair_idx| curr_leaf_idx < pair_idx) {
+                if leaf.ws_after || next_leaf.ws_before {
+                    curr_line.push(' ');
+                }
+                continue;
+            }
+
+            let next_leaf_idx = curr_leaf_idx + 1;
+
+            // Consider breaking (starting new line with the next leaf)
+            if leaf.ws_after || next_leaf.ws_before {
+                if self.fits(start_idx, next_leaf.pair().unwrap_or(next_leaf_idx)) {
+                    curr_line.push(' ');
+                } else {
+                    // Has whitespace and doesn't fit in the current line
+                    lines.push(std::mem::take(&mut curr_line));
+                    start_idx = next_leaf_idx;
+                    pair = next_leaf.pair()
+                }
+            }
+        }
+
+        lines
     }
 
     fn render_comment(&self, start: usize, end: usize) -> Vec<String> {

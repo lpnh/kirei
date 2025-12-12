@@ -10,13 +10,16 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}Flavors - Ice Crea
         <h3>📊 Statistics</h3>
         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; text-align: center;">
             <div>
-                <strong style="color: var(--brand);">{{ total }}</strong><br /> <small>Total Flavors</small>
+                <strong style="color: var(--brand);">{{ total }}</strong><br />
+                <small>Total Flavors</small>
             </div>
             <div>
-                <strong style="color: green;">{{ available }}</strong><br /> <small>Available Today</small>
+                <strong style="color: green;">{{ available }}</strong><br />
+                <small>Available Today</small>
             </div>
             <div>
-                <strong style="color: orange;">{{ seasonal }}</strong><br /> <small>Seasonal Specials</small>
+                <strong style="color: orange;">{{ seasonal }}</strong><br />
+                <small>Seasonal Specials</small>
             </div>
         </div>
     </div>

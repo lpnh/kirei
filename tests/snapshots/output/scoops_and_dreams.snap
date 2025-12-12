@@ -76,7 +76,8 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 🍦 Scoops &#38; Dreams 🍦
             </h1>
             <p class="tagline">
-                Where <em>every</em> <strong>scoop</strong> is a <mark>frozen delight</mark>!
+                Where <em>every</em> <strong>scoop</strong> is a
+                <mark>frozen delight</mark>!
             </p>
         </header>
         <!-- Navigation with various link types -->
@@ -146,44 +147,59 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                     <fieldset>
                         <legend>Customer Information</legend>
                         <div style="margin: 10px 0;">
-                            <label for="customer-name">Name:</label> <input type="text" id="customer-name" name="name" required placeholder="Ice Cream Enthusiast" maxlength="50" autocomplete="name" />
+                            <label for="customer-name">Name:</label>
+                            <input type="text" id="customer-name" name="name" required placeholder="Ice Cream Enthusiast" maxlength="50" autocomplete="name" />
                         </div>
                         <div style="margin: 10px 0;">
-                            <label for="email">Email:</label> <input type="email" id="email" name="email" placeholder="scoops@lover.com" pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$" />
+                            <label for="email">Email:</label>
+                            <input type="email" id="email" name="email" placeholder="scoops@lover.com" pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$" />
                         </div>
                     </fieldset>
                     <fieldset>
                         <legend>Ice Cream Preferences</legend>
                         <!-- Radio buttons with inline elements -->
                         <p>
-                            Size: <label><input type="radio" name="size" value="single" checked /> Single Scoop 🍦</label> <label><input type="radio" name="size" value="double" /> Double Scoop 🍦🍦</label>
+                            Size:
+                            <label><input type="radio" name="size" value="single" checked /> Single Scoop 🍦</label>
+                            <label><input type="radio" name="size" value="double" /> Double Scoop 🍦🍦</label>
                         </p>
                         <!-- Checkboxes with various formatting -->
                         <p>Flavors:</p>
                         <div class="flavors-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
-                            <label class="flavor"><input type="checkbox" name="flavors" value="vanilla" /> 🤍 Vanilla Bean</label> <label class="flavor"><input type="checkbox" name="flavors" value="chocolate" /> 🤎 Chocolate Fudge</label> <label class="flavor"><input type="checkbox" name="flavors" value="strawberry" /> 🍓 Strawberry <em>(seasonal!)</em></label> <label class="flavor"><input type="checkbox" name="flavors" value="mint" /> 🌿 Mint Chip <small>(refreshing)</small></label>
+                            <label class="flavor"><input type="checkbox" name="flavors" value="vanilla" /> 🤍 Vanilla Bean</label>
+                            <label class="flavor"><input type="checkbox" name="flavors" value="chocolate" /> 🤎 Chocolate Fudge</label>
+                            <label class="flavor"><input type="checkbox" name="flavors" value="strawberry" /> 🍓 Strawberry <em>(seasonal!)</em></label>
+                            <label class="flavor"><input type="checkbox" name="flavors" value="mint" /> 🌿 Mint Chip <small>(refreshing)</small></label>
                         </div>
                         <!-- Range and number inputs -->
                         <p>
-                            <label for="sweetness-level">Sweetness Level (1-10):</label> <input type="range" id="sweetness-level" name="sweetness" min="1" max="10" value="7" oninput="document.getElementById('sweetness-display').textContent=this.value" /> <output id="sweetness-display">7</output> 🍯
+                            <label for="sweetness-level">Sweetness Level (1-10):</label>
+                            <input type="range" id="sweetness-level" name="sweetness" min="1" max="10" value="7" oninput="document.getElementById('sweetness-display').textContent=this.value" />
+                            <output id="sweetness-display">7</output> 🍯
                         </p>
                         <p>
-                            <label for="quantity">Quantity:</label> <input type="number" id="quantity" name="quantity" min="1" max="99" value="1" step="1" />
+                            <label for="quantity">Quantity:</label>
+                            <input type="number" id="quantity" name="quantity" min="1" max="99" value="1" step="1" />
                         </p>
                         <!-- Textarea and select -->
                         <p>
-                            <label for="special-instructions">Special Instructions:</label><br /> <textarea id="special-instructions" name="instructions" rows="3" cols="50" placeholder="Extra sprinkles, waffle cone, birthday candle..."></textarea>
+                            <label for="special-instructions">Special Instructions:</label><br />
+                            <textarea id="special-instructions" name="instructions" rows="3" cols="50" placeholder="Extra sprinkles, waffle cone, birthday candle..."></textarea>
                         </p>
                         <p>
-                            <label for="pickup-time">Preferred Pickup Time:</label> <select id="pickup-time" name="pickup-time"><option value="">Select a time</option><optgroup label="Today"><option value="asap">ASAP! 🏃‍♂️</option><option value="lunch">Lunch Time (12-1 PM)</option><option value="afternoon">Afternoon Treat (3-4 PM)</option></optgroup><optgroup label="Tomorrow"><option value="tomorrow-lunch">Tomorrow Lunch</option><option value="tomorrow-afternoon">Tomorrow Afternoon</option></optgroup></select>
+                            <label for="pickup-time">Preferred Pickup Time:</label>
+                            <select id="pickup-time" name="pickup-time"><option value="">Select a time</option><optgroup label="Today"><option value="asap">ASAP! 🏃‍♂️</option><option value="lunch">Lunch Time (12-1 PM)</option><option value="afternoon">Afternoon Treat (3-4 PM)</option></optgroup><optgroup label="Tomorrow"><option value="tomorrow-lunch">Tomorrow Lunch</option><option value="tomorrow-afternoon">Tomorrow Afternoon</option></optgroup></select>
                         </p>
                     </fieldset>
                     <!-- Buttons with different types and styles -->
                     <div style="text-align: center; margin: 20px 0;">
-                        <button type="submit" onclick="return orderIceCream('custom')" style="background: #87CEEB; color: white; padding: 15px 30px; border: none; border-radius: 25px; font-size: 1.2em; cursor: pointer;"> 🍦 Order My Ice Cream! 🍦 </button> <button type="reset" style="margin-left: 10px; padding: 10px 20px;">Clear Order</button> <input type="button" value="Surprise Me!" onclick="alert('🎲 Random flavor incoming!')" style="margin-left: 10px; padding: 10px 20px;" />
+                        <button type="submit" onclick="return orderIceCream('custom')" style="background: #87CEEB; color: white; padding: 15px 30px; border: none; border-radius: 25px; font-size: 1.2em; cursor: pointer;"> 🍦 Order My Ice Cream! 🍦 </button>
+                        <button type="reset" style="margin-left: 10px; padding: 10px 20px;">Clear Order</button>
+                        <input type="button" value="Surprise Me!" onclick="alert('🎲 Random flavor incoming!')" style="margin-left: 10px; padding: 10px 20px;" />
                     </div>
                     <!-- Hidden inputs -->
-                    <input type="hidden" name="store-id" value="scoops-and-dreams-001" /> <input type="hidden" name="session-id" value="abc123xyz" />
+                    <input type="hidden" name="store-id" value="scoops-and-dreams-001" />
+                    <input type="hidden" name="session-id" value="abc123xyz" />
                 </form>
             </section>
             <!-- Lists with various nesting levels -->
@@ -211,7 +227,8 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 <dl>
                     <dt><strong>Gelato</strong></dt>
                     <dd>
-                        The <em>Italian</em> style of ice cream - denser and more flavorful
+                        The <em>Italian</em>
+                        style of ice cream - denser and more flavorful
                     </dd>
                     <dt><strong>Soft Serve</strong></dt>
                     <dd>
@@ -219,7 +236,8 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                     </dd>
                     <dt><strong>Sundae</strong></dt>
                     <dd>
-                        Ice cream topped with <mark>delicious sauces</mark> and toppings
+                        Ice cream topped with <mark>delicious sauces</mark>
+                        and toppings
                     </dd>
                 </dl>
             </section>
@@ -228,22 +246,35 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 <h2>Customer Testimonials</h2>
                 <blockquote cite="https://example.com/review1" style="background: #f0f0f0; padding: 15px; border-left: 5px solid #87CEEB; font-style: italic;">
                     <p>
-                        "This ice cream is <strong>absolutely</strong> <em>incredible</em>! I've never tasted anything so <mark>creamy</mark>. The texture was <u>perfectly smooth</u>, and the flavor was <s>good</s> AMAZING!"
+                        "This ice cream is <strong>absolutely</strong>
+                        <em>incredible</em>! I've never tasted anything so
+                        <mark>creamy</mark>. The texture was
+                        <u>perfectly smooth</u>, and the flavor was <s>good</s>
+                        AMAZING!"
                     </p>
                     <footer>
-                        — <cite>Emma Wilson</cite>, <time datetime="2024-12-15">December 15, 2024</time>
+                        — <cite>Emma Wilson</cite>,
+                        <time datetime="2024-12-15">December 15, 2024</time>
                     </footer>
                 </blockquote>
                 <p>
-                    Our ice cream contains the following <abbr title="Generally Recognized as Safe">GRAS</abbr> ingredients. We use <code>document.cookie</code> to remember your favorites! For nutrition info, check our <a href="#nutrition">nutrition section</a>.
+                    Our ice cream contains the following
+                    <abbr title="Generally Recognized as Safe">GRAS</abbr>
+                    ingredients. We use <code>document.cookie</code>
+                    to remember your favorites! For nutrition info, check our
+                    <a href="#nutrition">nutrition section</a>.
                 </p>
                 <!-- Mixed inline elements -->
                 <p>
-                    Scoops &#38; Dreams: Where <sup>super</sup> meets <sub>creamy</sub>! We've been serving <small>(big)</small> smiles since 1985. Mathematical proof: Ice Cream + Love = ∞ Happiness!
+                    Scoops &#38; Dreams: Where <sup>super</sup> meets
+                    <sub>creamy</sub>! We've been serving <small>(big)</small>
+                    smiles since 1985. Mathematical proof: Ice Cream + Love = ∞ Happiness!
                 </p>
                 <!-- Keyboard and sample elements -->
                 <p>
-                    To order by phone, press <kbd>Ctrl</kbd> + <kbd>S</kbd> to save this menu, then call us! Our system will display <samp>Order confirmed!</samp> when your ice cream is ready.
+                    To order by phone, press <kbd>Ctrl</kbd> + <kbd>S</kbd>
+                    to save this menu, then call us! Our system will display
+                    <samp>Order confirmed!</samp> when your ice cream is ready.
                 </p>
             </section>
             <!-- Media elements -->
@@ -252,7 +283,8 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 <figure style="text-align: center;">
                     <img src="https://via.placeholder.com/400x300/87CEEB/ffffff?text=🍦+Delicious+Ice+Cream" alt="A mouth-watering ice cream cone with perfect swirls" width="400" height="300" loading="lazy" />
                     <figcaption>
-                        Our signature <strong>Vanilla Bean Dream</strong> - frozen perfection!
+                        Our signature <strong>Vanilla Bean Dream</strong>
+                        - frozen perfection!
                     </figcaption>
                 </figure>
                 <!-- Self-closing tags with various formats -->
@@ -270,13 +302,17 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 </summary>
                 <ul>
                     <li>
-                        Ice cream was invented in <time datetime="1665">1665</time> in England
+                        Ice cream was invented in
+                        <time datetime="1665">1665</time> in England
                     </li>
                     <li>
-                        Americans consume approximately <data value="1600000000">1.6 billion</data> gallons of ice cream annually
+                        Americans consume approximately
+                        <data value="1600000000">1.6 billion</data>
+                        gallons of ice cream annually
                     </li>
                     <li>
-                        The world's largest ice cream sundae weighed <meter value="24910" max="30000">24,910 pounds</meter>!
+                        The world's largest ice cream sundae weighed
+                        <meter value="24910" max="30000">24,910 pounds</meter>!
                     </li>
                 </ul>
             </details>
@@ -284,17 +320,22 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
             <section>
                 <h2>Your Order Progress</h2>
                 <p>
-                    Freezing process: <progress value="75" max="100">75%</progress>
+                    Freezing process:
+                    <progress value="75" max="100">75%</progress>
                 </p>
                 <p>
-                    Freezer temperature: <meter value="-10" min="-20" max="0" optimum="-18" title="-10°F">-10°F</meter>
+                    Freezer temperature:
+                    <meter value="-10" min="-20" max="0" optimum="-18" title="-10°F">-10°F</meter>
                 </p>
             </section>
         </main>
         <!-- Footer with contact info -->
         <footer style="background: #333; color: white; padding: 20px; text-align: center; margin-top: 40px;">
             <address>
-                <strong>Scoops &#38; Dreams</strong><br /> 456 Frozen Lane<br /> Sweet City, SC 67890<br /> <a href="tel:+1-555-SCOOPS" style="color: #87CEEB;">📞 1-555-SCOOPS</a><br /> <a href="mailto:info@scoopsanddreams.com" style="color: #87CEEB;">📧 info@scoopsanddreams.com</a>
+                <strong>Scoops &#38; Dreams</strong><br /> 456 Frozen Lane<br />
+                Sweet City, SC 67890<br />
+                <a href="tel:+1-555-SCOOPS" style="color: #87CEEB;">📞 1-555-SCOOPS</a><br />
+                <a href="mailto:info@scoopsanddreams.com" style="color: #87CEEB;">📧 info@scoopsanddreams.com</a>
             </address>
             <p style="margin-top: 20px;">
                 <small>© 2024 Scoops &#38; Dreams. All rights reserved. No ice cream was melted in the making of this website.</small>

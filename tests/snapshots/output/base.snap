@@ -32,7 +32,9 @@ description: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8
             <p class="tagline">Where sweet treats meet sweet people.</p>
         </header>
         <nav style="text-align:center;margin:12px 0">
-            <a href="/home" class="btn ghost">Home</a> <a href="/flavors" class="btn ghost">Flavors</a> <a href="/club" class="btn ghost">Club</a>
+            <a href="/home" class="btn ghost">Home</a>
+            <a href="/flavors" class="btn ghost">Flavors</a>
+            <a href="/club" class="btn ghost">Club</a>
         </nav>
         <main>
             {% block content %}{% endblock %}

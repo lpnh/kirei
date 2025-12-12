@@ -10,7 +10,8 @@ description: "<!-- History section -->\n{% if show_history %}\n    <section id=\
         </p>
         <h2>The Story Behind the Teapot</h2>
         <p style="margin-bottom: 1rem;">
-            In 1998, Larry Masinter wrote <strong><a href="https://www.rfc-editor.org/rfc/rfc2324" target="_blank" style="color: var(--teapot-brown); text-decoration: underline;">RFC 2324</a></strong>—the Hyper Text Coffee Pot Control Protocol (HTCPCP)—as an April Fools' Day joke. It described a protocol for controlling networked coffee pots over the internet, complete with status codes for different brewing situations.
+            In 1998, Larry Masinter wrote
+            <strong><a href="https://www.rfc-editor.org/rfc/rfc2324" target="_blank" style="color: var(--teapot-brown); text-decoration: underline;">RFC 2324</a></strong>—the Hyper Text Coffee Pot Control Protocol (HTCPCP)—as an April Fools' Day joke. It described a protocol for controlling networked coffee pots over the internet, complete with status codes for different brewing situations.
         </p>
         <div class="code-block">
             {% raw %}
@@ -19,16 +20,22 @@ description: "<!-- History section -->\n{% if show_history %}\n    <section id=\
         </div>
         <div {% for attempt in 0..10 %}{% if attempt > 0 %}{% break %}{% endif %}data-init="complete"{% endfor %}>
             <p style="margin-top: 1rem;">
-                Despite being a joke, the <code>418 I'm a teapot</code> status code ended up getting implemented in various web frameworks and libraries. It stuck around as a fun reminder that the people writing these protocols have a sense of humor.
+                Despite being a joke, the <code>418 I'm a teapot</code>
+                status code ended up getting implemented in various web frameworks and libraries. It stuck around as a fun reminder that the people writing these protocols have a sense of humor.
             </p>
             <h3 style="margin-top: 2rem; color: var(--teapot-brown);">
                 The Save 418 Movement
             </h3>
             <p style="margin-top: 1rem;">
-                In 2017, there were proposals to remove status code 418 from various programming language implementations since it had no practical use. A 15-year-old developer named Shane Brunswick wasn't having it. He created <strong>save418.com</strong> and the "Save 418 Movement," arguing that references to 418 serve as <em>"a reminder that the underlying processes of computers are still made by humans."</em>
+                In 2017, there were proposals to remove status code 418 from various programming language implementations since it had no practical use. A 15-year-old developer named Shane Brunswick wasn't having it. He created
+                <strong>save418.com</strong>
+                and the "Save 418 Movement," arguing that references to 418 serve as
+                <em>"a reminder that the underlying processes of computers are still made by humans."</em>
             </p>
             <p style="margin-top: 1rem;">
-                The campaign got traction on Reddit and Twitter with the <strong>#save418</strong> hashtag. It worked: Node.js, Go, Python's Requests, and ASP.NET kept 418 in their libraries. The IETF officially reserved status code 418, so it won't be replaced. Crisis averted.
+                The campaign got traction on Reddit and Twitter with the
+                <strong>#save418</strong>
+                hashtag. It worked: Node.js, Go, Python's Requests, and ASP.NET kept 418 in their libraries. The IETF officially reserved status code 418, so it won't be replaced. Crisis averted.
             </p>
         </div>
     </section>
@@ -43,9 +50,11 @@ description: "<!-- History section -->\n{% if show_history %}\n    <section id=\
         It's not stubbornness—teapots just aren't built for coffee. They're designed for tea: the shape, materials, spout, everything. Asking a teapot to brew coffee is like asking a violin to play drums—wrong tool for the job.
     </p>
     <p style="margin-top: 1rem;">
-        When you try to make a teapot brew coffee, the only reasonable response is <strong class="highlight">I'm a teapot</strong>. It's not really an error—more like a proud declaration of identity. 🫖
+        When you try to make a teapot brew coffee, the only reasonable response is
+        <strong class="highlight">I'm a teapot</strong>. It's not really an error—more like a proud declaration of identity. 🫖
     </p>
     <p style="margin-top: 1.5rem; padding: 1rem; background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); border-radius: 10px; border-left: 4px solid var(--teapot-brown);">
-        💡 <strong>Understanding the Protocol:</strong> The 418 status code lives within the HTTP protocol. To get why teapots reject coffee requests, let's look at the HTTP semantics that make this status code work.
+        💡 <strong>Understanding the Protocol:</strong>
+        The 418 status code lives within the HTTP protocol. To get why teapots reject coffee requests, let's look at the HTTP semantics that make this status code work.
     </p>
 </section>

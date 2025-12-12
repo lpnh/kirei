@@ -5,7 +5,9 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
 <section id="status-code-details" class="section">
     <h2>The 418 Status Code in Detail</h2>
     <p style="margin-bottom: 1rem;">
-        Status code 418 started in HTCPCP (RFC 2324), but it's now referenced in the HTTP semantics spec <strong><a href="https://www.rfc-editor.org/rfc/rfc9110" target="_blank" style="color: var(--teapot-brown); text-decoration: underline;">RFC 9110</a></strong> and officially reserved. Here are some technical details about how it's implemented.
+        Status code 418 started in HTCPCP (RFC 2324), but it's now referenced in the HTTP semantics spec
+        <strong><a href="https://www.rfc-editor.org/rfc/rfc9110" target="_blank" style="color: var(--teapot-brown); text-decoration: underline;">RFC 9110</a></strong>
+        and officially reserved. Here are some technical details about how it's implemented.
     </p>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin: 2rem 0;">
         <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px;">
@@ -51,10 +53,13 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
                 {% let resource_type = "teapot" %}
                 {% let resource_ref = &resource_type %}
                 <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
-                    <strong>Resource Type:</strong> <span style="color: var(--teapot-brown);">{{ *resource_ref }}</span>
+                    <strong>Resource Type:</strong>
+                    <span style="color: var(--teapot-brown);">{{ *resource_ref }}</span>
                 </p>
                 <p style="padding: 0.5rem 0;">
-                    <strong>URI Scheme:</strong> <code style="background: #f8f9fa; padding: 0.2rem 0.5rem; border-radius: 4px;">coffee://</code> <span style="color: var(--error-red);">(incompatible with {{ *resource_ref }}s)</span>
+                    <strong>URI Scheme:</strong>
+                    <code style="background: #f8f9fa; padding: 0.2rem 0.5rem; border-radius: 4px;">coffee://</code>
+                    <span style="color: var(--error-red);">(incompatible with {{ *resource_ref }}s)</span>
                 </p>
             </div>
         </div>
@@ -74,7 +79,9 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
                 <span style="color: var(--teapot-brown); font-size: 1.5rem; font-weight: bold;">{{ (brew_attempts + successful_teas) * 2 / 10 }}</span>
             </p>
             <p style="padding: 0.5rem 0;">
-                <strong>Success Rate:</strong> <span style="color: #28a745;">High for tea</span>, <span style="color: #dc3545;">zero for coffee</span>
+                <strong>Success Rate:</strong>
+                <span style="color: #28a745;">High for tea</span>,
+                <span style="color: #dc3545;">zero for coffee</span>
             </p>
         </div>
     </div>
@@ -89,7 +96,8 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
             {% match raw_status.canonical_reason() %}
                 {% when Some(reason) %}
                     <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
-                        <strong>Canonical Reason Phrase:</strong> <span style="color: var(--teapot-brown); font-family: monospace; font-size: 1.1rem;">"{{ reason }}"</span>
+                        <strong>Canonical Reason Phrase:</strong>
+                        <span style="color: var(--teapot-brown); font-family: monospace; font-size: 1.1rem;">"{{ reason }}"</span>
                     </p>
                     <p style="padding: 0.5rem 0;">
                         <strong>Authenticity Check:</strong>
