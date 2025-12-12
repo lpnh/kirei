@@ -56,7 +56,7 @@ enum Root {
 
     Text,
     Entity,
-    RawText,
+    Raw,
 }
 
 #[derive(Debug, Clone)]
@@ -88,7 +88,7 @@ enum Ring {
         start: usize,
         end: usize,
     },
-    RawText(usize),
+    Raw(usize),
     Comment(usize),
     Single(usize),
 }
@@ -112,12 +112,12 @@ impl Leaf {
         }
     }
 
-    fn from_askama(cfg: &Config, askama_node: &AskamaNode) -> Self {
-        let content = askama::format_askama_node(cfg, askama_node);
+    fn from_askama(askama_node: &AskamaNode) -> Self {
+        let content = askama::format_askama_node(askama_node);
 
         let root = match askama_node {
-            AskamaNode::Control { ctrl_tag, .. } => Root::Control {
-                tag: *ctrl_tag,
+            AskamaNode::Control { tag, .. } => Root::Control {
+                tag: *tag,
                 end: None,
             },
             AskamaNode::Expression { .. } => Root::Expr,
@@ -132,13 +132,13 @@ impl Leaf {
         let start = html_node.start();
         let end = html_node.range().map_or(start, |r| r.end);
         let root = match html_node {
-            HtmlNode::StartTag { .. } => Root::Tag {
+            HtmlNode::Start { .. } => Root::Tag {
                 indent: 0,
                 is_phrasing: html_node.is_phrasing(),
                 is_ws_sensitive: html_node.is_ws_sensitive(),
                 end: None,
             },
-            HtmlNode::Void { .. } | HtmlNode::SelfClosingTag { .. } | HtmlNode::Doctype { .. } => {
+            HtmlNode::Void { .. } | HtmlNode::SelfClosing { .. } | HtmlNode::Doctype { .. } => {
                 Root::Tag {
                     indent: 0,
                     is_phrasing: html_node.is_phrasing(),
@@ -146,7 +146,7 @@ impl Leaf {
                     end: None,
                 }
             }
-            HtmlNode::EndTag { .. } | HtmlNode::ErroneousEndTag { .. } => Root::Tag {
+            HtmlNode::End { .. } | HtmlNode::ErroneousEnd { .. } => Root::Tag {
                 indent: -1,
                 is_phrasing: html_node.is_phrasing(),
                 is_ws_sensitive: html_node.is_ws_sensitive(),
@@ -154,7 +154,7 @@ impl Leaf {
             },
             HtmlNode::Text { .. } => Root::Text,
             HtmlNode::Entity { .. } => Root::Entity,
-            HtmlNode::RawText { .. } => Root::RawText,
+            HtmlNode::Raw { .. } => Root::Raw,
             HtmlNode::Comment { .. } => Root::Comment,
         };
 
@@ -170,7 +170,7 @@ impl Leaf {
             || self.is_ctrl()
             || matches!(
                 &self.root,
-                Root::RawText
+                Root::Raw
                     | Root::Tag {
                         is_ws_sensitive: true,
                         ..
@@ -229,7 +229,7 @@ impl SakuraTree {
         source: &str,
         cfg: &Config,
     ) -> Self {
-        let leaves = Self::grow_leaves(askama_nodes, html_nodes, source, cfg);
+        let leaves = Self::grow_leaves(askama_nodes, html_nodes, source);
 
         let mut tree = Self {
             cfg: cfg.clone(),
@@ -253,10 +253,9 @@ impl SakuraTree {
         askama_nodes: &[AskamaNode],
         html_nodes: &[HtmlNode],
         source: &str,
-        cfg: &Config,
     ) -> Vec<Leaf> {
-        let (mut leaves, pruned) = Self::leaves_from_html(html_nodes, askama_nodes, source, cfg);
-        leaves.extend(Self::leaves_from_askama(askama_nodes, &pruned, cfg));
+        let (mut leaves, pruned) = Self::leaves_from_html(html_nodes, askama_nodes, source);
+        leaves.extend(Self::leaves_from_askama(askama_nodes, &pruned));
 
         let mut leaves: Vec<Leaf> = leaves.into_iter().collect();
 
@@ -264,12 +263,12 @@ impl SakuraTree {
 
         for node in askama_nodes {
             if let AskamaNode::Control {
-                ctrl_tag,
-                close_tag: Some(end),
+                tag,
+                end: Some(end),
                 range,
                 ..
             } = node
-                && ctrl_tag.is_opening()
+                && tag.is_opening()
                 && let Some(start) = leaves.iter().position(|l| l.start == range.start)
                 && let Some(end_idx) = leaves.iter().position(|l| l.start == *end)
                 && let Root::Control { end, .. } = &mut leaves[start].root
@@ -279,8 +278,8 @@ impl SakuraTree {
         }
 
         for html_node in html_nodes {
-            if let (Some(range), Some(end_tag)) = (html_node.range(), html_node.end_tag_idx())
-                && let Some(end_node) = html_nodes.get(end_tag)
+            if let (Some(range), Some(end)) = (html_node.range(), html_node.end())
+                && let Some(end_node) = html_nodes.get(end)
                 && let Some(start) = leaves.iter().position(|l| l.start == range.start)
                 && let end_idx = leaves.iter().position(|l| l.start == end_node.start())
                 && askama::is_inside_same_ctrl(range.start, end_node.start(), askama_nodes)
@@ -294,16 +293,12 @@ impl SakuraTree {
         leaves
     }
 
-    fn leaves_from_askama(
-        askama_nodes: &[AskamaNode],
-        pruned: &HashSet<usize>,
-        cfg: &Config,
-    ) -> BTreeSet<Leaf> {
+    fn leaves_from_askama(askama_nodes: &[AskamaNode], pruned: &HashSet<usize>) -> BTreeSet<Leaf> {
         askama_nodes
             .iter()
             .enumerate()
             .filter(|(idx, _)| !pruned.contains(idx))
-            .map(|(_, node)| Leaf::from_askama(cfg, node))
+            .map(|(_, node)| Leaf::from_askama(node))
             .collect()
     }
 
@@ -311,27 +306,24 @@ impl SakuraTree {
         html_nodes: &[HtmlNode],
         askama_nodes: &[AskamaNode],
         source: &str,
-        cfg: &Config,
     ) -> (BTreeSet<Leaf>, HashSet<usize>) {
         let mut leaves = BTreeSet::new();
         let mut pruned = HashSet::new();
 
         for node in html_nodes {
             match node {
-                HtmlNode::StartTag { .. }
-                | HtmlNode::Void { .. }
-                | HtmlNode::SelfClosingTag { .. } => {
+                HtmlNode::Start { .. } | HtmlNode::Void { .. } | HtmlNode::SelfClosing { .. } => {
                     let Some(range) = node.range() else { continue };
 
                     if let Some(embed) = node.embed_askm() {
                         pruned.extend(embed.iter().copied());
-                        let content = html::format_tag(range, source, askama_nodes, embed, cfg);
                         let root = Root::Tag {
                             indent: 0,
                             is_phrasing: node.is_phrasing(),
                             is_ws_sensitive: node.is_ws_sensitive(),
                             end: None,
                         };
+                        let content = html::format_tag(range, source, askama_nodes, embed);
                         leaves.insert(Leaf::grow(root, content, range.start, range.end));
                     } else {
                         leaves.insert(Leaf::from_html(node));
@@ -346,17 +338,17 @@ impl SakuraTree {
                         leaves.insert(Leaf::from_text(text, range.start, range.end));
                     }
                 }
-                HtmlNode::RawText { .. } | HtmlNode::Comment { .. } => {
+                HtmlNode::Raw { .. } | HtmlNode::Comment { .. } => {
                     let Some(range) = node.range() else { continue };
 
                     if let Some(embed) = node.embed_askm() {
                         pruned.extend(embed.iter().copied());
-                        let content = html::format_opaque(range, source, askama_nodes, embed, cfg);
                         let root = match node {
-                            HtmlNode::RawText { .. } => Root::RawText,
+                            HtmlNode::Raw { .. } => Root::Raw,
                             HtmlNode::Comment { .. } => Root::Comment,
                             _ => unreachable!(),
                         };
+                        let content = html::format_opaque(range, source, askama_nodes, embed);
                         leaves.insert(Leaf::grow(root, content, range.start, range.end));
                     } else {
                         leaves.insert(Leaf::from_html(node));
@@ -379,36 +371,20 @@ impl SakuraTree {
                 continue;
             }
 
-            // Check if the node itself has internal leading/trailing whitespace
-            let node_src = &source[leaf.start..leaf.end];
-            let ws_start = node_src.starts_with(char::is_whitespace);
-            let ws_end = node_src.ends_with(char::is_whitespace);
+            let (start, end) = (leaf.start, leaf.end);
+            let node = &source[start..end];
 
-            // Get adjacent nodes for context
-            let prev = i.checked_sub(1).map(|p| &leaves[p]);
-            let next = leaves.get(i + 1);
-
-            // Check if there is whitespace between nodes
-            let gap_before =
-                prev.is_some_and(|p| source[p.end..leaf.start].contains(char::is_whitespace));
-            let gap_after =
-                next.is_some_and(|n| source[leaf.end..n.start].contains(char::is_whitespace));
-
-            // Whitespace exists if it's internal to the node OR between nodes
-            let ws_before = ws_start || gap_before;
-            let ws_after = ws_end || gap_after;
-
-            let (before, after) = if leaf.is_ctrl() {
-                (ws_before, ws_after)
-            } else {
-                (
-                    ws_before && prev.is_some_and(Leaf::preserves_ws),
-                    ws_after && next.is_some_and(Leaf::preserves_ws),
-                )
-            };
-
-            leaves[i].ws_before = before;
-            leaves[i].ws_after = after;
+            leaves[i].ws_before = i.checked_sub(1).is_some_and(|idx| {
+                let prev = &leaves[idx];
+                prev.preserves_ws()
+                    && (node.starts_with(char::is_whitespace)
+                        || source[prev.end..start].contains(char::is_whitespace))
+            });
+            leaves[i].ws_after = leaves.get(i + 1).is_some_and(|next| {
+                next.preserves_ws()
+                    && (node.ends_with(char::is_whitespace)
+                        || source[end..next.start].contains(char::is_whitespace))
+            });
         }
     }
 
@@ -456,7 +432,10 @@ impl SakuraTree {
             let leaf = &self.leaves[start];
 
             let (ring, last) = match &leaf.root {
-                Root::Control { tag, .. } if tag.is_match_arm() => {
+                Root::Control {
+                    tag: ControlTag::When | ControlTag::MatchElse,
+                    ..
+                } => {
                     let mut curr = start + 1;
                     while curr < end_idx && !self.leaves.get(curr).is_none_or(Leaf::is_ctrl) {
                         curr = self.leaves[curr].pair().map_or(curr + 1, |end| end + 1);
@@ -468,7 +447,7 @@ impl SakuraTree {
                     };
                     (Ring::MatchArm { start, end }, end)
                 }
-                Root::RawText => (Ring::RawText(start), start),
+                Root::Raw => (Ring::Raw(start), start),
                 Root::Comment => (Ring::Comment(start), start),
                 _ if leaf.is_phrasing()
                     && leaf.pair().is_none_or(|end| {
@@ -520,7 +499,7 @@ impl SakuraTree {
             Ring::Phrasing { start, end } | Ring::MatchArm { start, end } => {
                 self.grow_branch(*start, *end, &Style::Inline);
             }
-            Ring::RawText(idx) => self.grow_branch(*idx, *idx, &Style::Raw),
+            Ring::Raw(idx) => self.grow_branch(*idx, *idx, &Style::Raw),
             Ring::Comment(idx) => self.grow_branch(*idx, *idx, &Style::Comment),
             Ring::Single(idx) => self.grow_branch(*idx, *idx, &Style::Inline),
         }
@@ -585,11 +564,6 @@ impl SakuraTree {
 
     fn render_comment(&self, start: usize, end: usize) -> Vec<String> {
         let content = self.branch_content(start, end);
-
-        if !content.contains('\n') {
-            return vec![content];
-        }
-
         let lines: Vec<&str> = content.lines().collect();
         let indent = self.indent_as_string(1);
 

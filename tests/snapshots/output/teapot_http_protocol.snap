@@ -49,9 +49,7 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
         protocol uses three-digit status codes to indicate what happened with a request. They're organized into five categories:
     </p>
     <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
-        {%
-    let status_labels = ["Informational", "Success", "Redirection", "Client Error", "Server Error"]
-%}
+        {% let status_labels = ["Informational", "Success", "Redirection", "Client Error", "Server Error"] %}
         {% let category_index = (status_code / 100 - 1) as usize %}
         <p style="padding: 0.5rem 0;">
             <strong style="color: #17a2b8;">1xx (Informational):</strong> Processing continues

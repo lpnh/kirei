@@ -2,128 +2,123 @@ use anyhow::Result;
 use std::ops;
 use tree_sitter::{Node, Range};
 
-use crate::config::Config;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Boundary {
-    Open,       // Tags that start blocks: if, for, block, etc.
-    Inner,      // Tags that continue blocks with new indent: when
-    Clause,     // Tags that continue blocks at same indent: else, else if
-    Close,      // Tags that end blocks: endif, endfor, endblock, etc.
-    Standalone, // Tags that are "standalone": extends, import, etc.
+enum Boundary {
+    Open,       // if, for, block, etc.
+    Inner,      // when, else, else if, etc.
+    Close,      // endif, endfor, endblock, etc.
+    Standalone, // extends, import, etc.
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ControlTag {
-    Block(Boundary),
-    Endblock(Boundary),
-    Filter(Boundary),
-    Endfilter(Boundary),
-    Extends(Boundary),
-    Include(Boundary),
-    Import(Boundary),
-    Let(Boundary),
-    For(Boundary),
-    Break(Boundary),
-    Continue(Boundary),
-    Endfor(Boundary),
-    If(Boundary),
-    ElseIf(Boundary),
-    Else(Boundary),
-    Endif(Boundary),
-    Match(Boundary),
-    Endmatch(Boundary),
-    When(Boundary),
-    Endwhen(Boundary),
-    Macro(Boundary),
-    Endmacro(Boundary),
-    MacroCall(Boundary),
-    Endcall(Boundary),
-    Raw(Boundary),
-    Endraw(Boundary),
+    Block,
+    Endblock,
+    Filter,
+    Endfilter,
+    Extends,
+    Include,
+    Import,
+    Let,
+    For,
+    Break,
+    Continue,
+    Endfor,
+    If,
+    ElseIf,
+    Else,
+    MatchElse,
+    Endif,
+    Match,
+    Endmatch,
+    When,
+    Endwhen,
+    Macro,
+    Endmacro,
+    MacroCall,
+    Endcall,
+    Raw,
+    Endraw,
 }
 
 impl ControlTag {
     fn from_node(node: Node) -> Self {
         let child = node.child(1).unwrap();
         match child.kind() {
-            "if_statement" => Self::If(Boundary::Open),
-            "for_statement" => Self::For(Boundary::Open),
-            "block_statement" => Self::Block(Boundary::Open),
-            "filter_statement" => Self::Filter(Boundary::Open),
-            "match_statement" => Self::Match(Boundary::Open),
-            "macro_statement" => Self::Macro(Boundary::Open),
-            "macro_call_statement" => Self::MacroCall(Boundary::Open),
+            "if_statement" => Self::If,
+            "for_statement" => Self::For,
+            "block_statement" => Self::Block,
+            "filter_statement" => Self::Filter,
+            "match_statement" => Self::Match,
+            "macro_statement" => Self::Macro,
+            "macro_call_statement" => Self::MacroCall,
 
             "else_statement" => {
-                let boundary = if belongs_to_match_statement(node) {
-                    Boundary::Inner
+                if is_match_arm(node) {
+                    Self::MatchElse
                 } else {
-                    Boundary::Clause
-                };
-                Self::Else(boundary)
+                    Self::Else
+                }
             }
-            "else_if_statement" => Self::ElseIf(Boundary::Clause),
-            "when_statement" => Self::When(Boundary::Inner),
+            "else_if_statement" => Self::ElseIf,
+            "when_statement" => Self::When,
 
-            "endif_statement" => Self::Endif(Boundary::Close),
-            "endfor_statement" => Self::Endfor(Boundary::Close),
-            "endblock_statement" => Self::Endblock(Boundary::Close),
-            "endfilter_statement" => Self::Endfilter(Boundary::Close),
-            "endmatch_statement" => Self::Endmatch(Boundary::Close),
-            "endmacro_statement" => Self::Endmacro(Boundary::Close),
-            "endcall_statement" => Self::Endcall(Boundary::Close),
-            "endwhen_statement" => Self::Endwhen(Boundary::Close),
+            "endif_statement" => Self::Endif,
+            "endfor_statement" => Self::Endfor,
+            "endblock_statement" => Self::Endblock,
+            "endfilter_statement" => Self::Endfilter,
+            "endmatch_statement" => Self::Endmatch,
+            "endmacro_statement" => Self::Endmacro,
+            "endcall_statement" => Self::Endcall,
+            "endwhen_statement" => Self::Endwhen,
 
-            "extends_statement" => Self::Extends(Boundary::Standalone),
-            "include_statement" => Self::Include(Boundary::Standalone),
-            "import_statement" => Self::Import(Boundary::Standalone),
-            "let_statement" => Self::Let(Boundary::Standalone),
-            "break_statement" => Self::Break(Boundary::Standalone),
-            "continue_statement" => Self::Continue(Boundary::Standalone),
+            "extends_statement" => Self::Extends,
+            "include_statement" => Self::Include,
+            "import_statement" => Self::Import,
+            "let_statement" => Self::Let,
+            "break_statement" => Self::Break,
+            "continue_statement" => Self::Continue,
             _ => unreachable!(),
         }
     }
 
     fn boundary(self) -> Boundary {
         match self {
-            Self::Block(b)
-            | Self::Endblock(b)
-            | Self::Filter(b)
-            | Self::Endfilter(b)
-            | Self::Extends(b)
-            | Self::Include(b)
-            | Self::Import(b)
-            | Self::Let(b)
-            | Self::For(b)
-            | Self::Break(b)
-            | Self::Continue(b)
-            | Self::Endfor(b)
-            | Self::If(b)
-            | Self::ElseIf(b)
-            | Self::Else(b)
-            | Self::Endif(b)
-            | Self::Match(b)
-            | Self::Endmatch(b)
-            | Self::When(b)
-            | Self::Endwhen(b)
-            | Self::Macro(b)
-            | Self::Endmacro(b)
-            | Self::MacroCall(b)
-            | Self::Endcall(b)
-            | Self::Raw(b)
-            | Self::Endraw(b) => b,
+            Self::If
+            | Self::For
+            | Self::Block
+            | Self::Filter
+            | Self::Match
+            | Self::Macro
+            | Self::MacroCall
+            | Self::Raw => Boundary::Open,
+            Self::ElseIf | Self::Else | Self::When | Self::MatchElse => Boundary::Inner,
+            Self::Endif
+            | Self::Endfor
+            | Self::Endblock
+            | Self::Endfilter
+            | Self::Endmatch
+            | Self::Endwhen
+            | Self::Endmacro
+            | Self::Endcall
+            | Self::Endraw => Boundary::Close,
+            Self::Extends
+            | Self::Include
+            | Self::Import
+            | Self::Let
+            | Self::Break
+            | Self::Continue => Boundary::Standalone,
         }
     }
 
     #[must_use]
     pub fn indent(self) -> (isize, isize) {
         match self {
-            Self::Match(_) => (0, 2),
-            Self::Endmatch(_) => (-2, 0),
+            Self::Match => (0, 2),
+            Self::Endmatch => (-2, 0),
             _ => match self.boundary() {
                 Boundary::Open => (0, 1),
-                Boundary::Clause | Boundary::Inner => (-1, 1),
+                Boundary::Inner => (-1, 1),
                 Boundary::Close => (-1, 0),
                 Boundary::Standalone => (0, 0),
             },
@@ -137,22 +132,22 @@ impl ControlTag {
 
     #[must_use]
     pub fn is_match_arm(self) -> bool {
-        matches!(self, Self::When(_) | Self::Else(Boundary::Inner))
+        matches!(self, Self::When | Self::MatchElse)
     }
 
     #[must_use]
     pub fn matches_close(self, close: Self) -> bool {
         matches!(
             (self, close),
-            (Self::Block(_), Self::Endblock(_))
-                | (Self::Filter(_), Self::Endfilter(_))
-                | (Self::For(_), Self::Endfor(_))
-                | (Self::If(_), Self::Endif(_))
-                | (Self::Match(_), Self::Endmatch(_))
-                | (Self::When(_), Self::Endwhen(_))
-                | (Self::Macro(_), Self::Endmacro(_))
-                | (Self::MacroCall(_), Self::Endcall(_))
-                | (Self::Raw(_), Self::Endraw(_))
+            (Self::Block, Self::Endblock)
+                | (Self::Filter, Self::Endfilter)
+                | (Self::For, Self::Endfor)
+                | (Self::If, Self::Endif)
+                | (Self::Match, Self::Endmatch)
+                | (Self::When, Self::Endwhen)
+                | (Self::Macro, Self::Endmacro)
+                | (Self::MacroCall, Self::Endcall)
+                | (Self::Raw, Self::Endraw)
         )
     }
 }
@@ -168,9 +163,9 @@ pub enum AskamaNode {
     Control {
         dlmts: Delimiters,
         inner: String,
-        ctrl_tag: ControlTag,
+        tag: ControlTag,
         range: ops::Range<usize>,
-        close_tag: Option<usize>,
+        end: Option<usize>,
     },
     Expression {
         dlmts: Delimiters,
@@ -239,20 +234,15 @@ pub fn extract_askama_nodes(root: &Node, source: &str) -> Result<(Vec<AskamaNode
             | "endraw_statement" => {
                 let mut node = parse_askama_node(child, source)?;
 
-                // Pair opening and closing control blocks
-                if let AskamaNode::Control {
-                    ctrl_tag, range, ..
-                } = &mut node
-                {
-                    if ctrl_tag.is_opening() {
-                        stack.push((nodes.len(), *ctrl_tag));
-                    } else if let Some(pos) = stack
-                        .iter()
-                        .rposition(|(_, open_tag)| open_tag.matches_close(*ctrl_tag))
+                if let AskamaNode::Control { tag, range, .. } = &mut node {
+                    if tag.is_opening() {
+                        stack.push((nodes.len(), *tag));
+                    } else if let Some(pos) =
+                        stack.iter().rposition(|(_, open)| open.matches_close(*tag))
                     {
                         let (open_idx, _) = stack.remove(pos);
-                        if let AskamaNode::Control { close_tag, .. } = &mut nodes[open_idx] {
-                            *close_tag = Some(range.start);
+                        if let AskamaNode::Control { end, .. } = &mut nodes[open_idx] {
+                            *end = Some(range.start);
                         }
                     }
                 }
@@ -279,16 +269,13 @@ fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode> {
     let range = node.start_byte()..node.end_byte();
 
     let askama_node = match node.kind() {
-        "control_tag" => {
-            let ctrl_tag = ControlTag::from_node(node);
-            AskamaNode::Control {
-                dlmts,
-                inner,
-                ctrl_tag,
-                range,
-                close_tag: None,
-            }
-        }
+        "control_tag" => AskamaNode::Control {
+            dlmts,
+            inner,
+            tag: ControlTag::from_node(node),
+            range,
+            end: None,
+        },
         "render_expression" => AskamaNode::Expression {
             dlmts,
             inner,
@@ -297,16 +284,16 @@ fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode> {
         "raw_statement" => AskamaNode::Control {
             dlmts,
             inner,
-            ctrl_tag: ControlTag::Raw(Boundary::Open),
+            tag: ControlTag::Raw,
             range,
-            close_tag: None,
+            end: None,
         },
         "endraw_statement" => AskamaNode::Control {
             dlmts,
             inner,
-            ctrl_tag: ControlTag::Endraw(Boundary::Close),
+            tag: ControlTag::Endraw,
             range,
-            close_tag: None,
+            end: None,
         },
         "comment" => AskamaNode::Comment {
             dlmts,
@@ -319,7 +306,7 @@ fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode> {
     Ok(askama_node)
 }
 
-fn belongs_to_match_statement(node: Node) -> bool {
+fn is_match_arm(node: Node) -> bool {
     let Some(parent) = node.parent() else {
         return false;
     };
@@ -364,7 +351,7 @@ fn extract_delimiters(node: Node, source: &str) -> Result<(Delimiters, String)> 
     Ok((Delimiters { open, close }, inner))
 }
 
-#[must_use]
+// TODO: find better way to solve this
 pub fn is_inside_same_ctrl(start: usize, end: usize, nodes: &[AskamaNode]) -> bool {
     innermost_ctrl_idx(start, nodes) == innermost_ctrl_idx(end, nodes)
 }
@@ -376,7 +363,7 @@ fn innermost_ctrl_idx(pos: usize, nodes: &[AskamaNode]) -> Option<usize> {
         .filter_map(|(idx, node)| {
             if let AskamaNode::Control {
                 range,
-                close_tag: Some(close_idx),
+                end: Some(close_idx),
                 ..
             } = node
                 && pos >= range.end
@@ -392,63 +379,26 @@ fn innermost_ctrl_idx(pos: usize, nodes: &[AskamaNode]) -> Option<usize> {
 }
 
 #[must_use]
-pub fn format_askama_node(config: &Config, node: &AskamaNode) -> String {
-    // Return comments as-is
+pub fn format_askama_node(node: &AskamaNode) -> String {
     if let AskamaNode::Comment { dlmts, inner, .. } = node {
         return format!("{}{}{}", dlmts.open, inner, dlmts.close);
     }
 
-    // Normalize whitespace inside delimiters
-    let (open, close, inner) = normalize_askama_node(node);
-
-    // If no inner content, return delimiters
-    if inner.is_empty() {
-        return format!("{}{}", open, close);
-    }
-
-    let total_inline_len = open.len() + 1 + inner.len() + 1 + close.len();
-
-    if total_inline_len > config.max_width {
-        // Multiline format
-        let content_indent = " ".repeat(config.indent_size);
-
-        // Respect user's line breaks by processing each line separately
-        let mut formatted_lines = Vec::new();
-
-        // Remove whitespace to avoid extra empty lines
-        let trimmed_inner = inner.trim();
-
-        for line in trimmed_inner.lines() {
-            let trimmed_line = line.trim();
-            if trimmed_line.is_empty() {
-                // Preserve empty lines
-                formatted_lines.push(String::new());
-            } else {
-                formatted_lines.push(format!("{}{}", content_indent, trimmed_line));
-            }
-        }
-
-        // The closing delimiter should be aligned with the opening delimiter
-        format!("{}\n{}\n{}", open, formatted_lines.join("\n"), close)
-    } else {
-        // Inline format with enforced single space padding
-        format!("{} {} {}", open, inner, close)
-    }
-}
-
-fn normalize_askama_node(node: &AskamaNode) -> (String, String, String) {
     let (raw_open, raw_close) = node.delimiters();
     let raw_inner = node.inner();
 
     let open = raw_open.to_string();
     let close = raw_close.to_string();
 
-    // Normalize inner content
     let inner = if node.is_expr() {
         raw_inner.trim().to_string()
     } else {
         crate::normalize_ws(raw_inner)
     };
 
-    (open, close, inner)
+    if inner.is_empty() {
+        return format!("{}{}", open, close);
+    }
+
+    format!("{} {} {}", open, inner, close)
 }
