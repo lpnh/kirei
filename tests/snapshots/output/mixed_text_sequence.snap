@@ -3,6 +3,6 @@ source: tests/snapshots/rules.rs
 description: "<p>    \n    This    is\n\n\n    a    {{ multi_line }}\n\n        paragraph     {{ surrounded }}    \n\n            by whitespaces \n\n    {{ and }} \n\n        {{ blank }}               lines !   \n    \n        and\n         \n             {{ expressions }}   .\n    \n        {{ lol }}\n</p>\n"
 ---
 <p>
-    This is a {{ multi_line }} paragraph {{ surrounded }} by whitespaces
-    {{ and }} {{ blank }} lines ! and {{ expressions }} . {{ lol }}
+    This is a {{ multi_line }} paragraph {{ surrounded }} by whitespaces {{ and }}
+    {{ blank }} lines ! and {{ expressions }} . {{ lol }}
 </p>

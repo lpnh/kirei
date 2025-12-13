@@ -4,6 +4,6 @@ description: "<script>\n  document.querySelector(\"button\").addEventListener(\"
 ---
 <script>
     document.querySelector("button").addEventListener("click", () => {
-        alert("Button clicked!");
+      alert("Button clicked!");
     });
 </script>

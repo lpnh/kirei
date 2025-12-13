@@ -18,7 +18,7 @@ description: "{% extends \"_layout.html\" %}\n{%- block title -%}\n{%- match err
     </h1>
     {%- match err -%}
         {% when AppError::NotFound -%}
-        {% when AppError::Render(err) -%} <pre>{{ err }}</pre>
+        {% when AppError::Render(err) -%}<pre>{{ err }}</pre>
     {%- endmatch -%}
     <h2><a href="/">Back to the first page.</a></h2>
 {%- endblock -%}

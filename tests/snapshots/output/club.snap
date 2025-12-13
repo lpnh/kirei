@@ -8,8 +8,7 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}Club - Ice Cream S
     <h2>Meet Our Members</h2>
     <div class="card">
         <p>
-            We're ice cream lovers who think the best conversations happen over
-            a scoop (or two!).
+            We're ice cream lovers who think the best conversations happen over a scoop (or two!).
         </p>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:18px">
@@ -24,12 +23,10 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}Club - Ice Cream S
     <div class="card" style="margin-top:18px">
         <h3>Join Our Next Social</h3>
         <p>
-            We meet every Sunday at the club center. New faces are always
-            welcome!
+            We meet every Sunday at the club center. New faces are always welcome!
         </p>
         <p>
-            Bring your sweet tooth, your stories, and your love for frozen
-            delights.
+            Bring your sweet tooth, your stories, and your love for frozen delights.
         </p>
     </div>
 {% endblock %}
