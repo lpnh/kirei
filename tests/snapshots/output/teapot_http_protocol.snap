@@ -57,20 +57,20 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
             Processing continues
         </p>
         <p style="padding: 0.5rem 0;">
-            <strong style="color: #28a745;">2xx (Success):</strong>
-            Request succeeded
+            <strong style="color: #28a745;">2xx (Success):</strong> Request
+            succeeded
         </p>
         <p style="padding: 0.5rem 0;">
-            <strong style="color: #ffc107;">3xx (Redirection):</strong>
-            Further action needed
+            <strong style="color: #ffc107;">3xx (Redirection):</strong> Further
+            action needed
         </p>
         <p style="padding: 0.5rem 0;">
             <strong style="color: #dc3545;">4xx ({{ status_labels[*category_index] }}):</strong>
             Request contains bad syntax or cannot be fulfilled
         </p>
         <p style="padding: 0.5rem 0;">
-            <strong style="color: #dc3545;">5xx (Server Error):</strong>
-            Server failed to fulfill request
+            <strong style="color: #dc3545;">5xx (Server Error):</strong> Server
+            failed to fulfill request
         </p>
     </div>
 </div>
@@ -116,7 +116,8 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
                 </p>
             {% else %}
                 <p style="color: var(--error-red); padding: 1rem; background: #ffe6e6; border-radius: 8px; text-align: center;">
-                    <strong>⚠️ No coffee support</strong><br /><small>This is a teapot implementation!</small>
+                    <strong>⚠️ No coffee support</strong><br /><small>This is a
+                    teapot implementation!</small>
                 </p>
             {% endfor %}
         </div>

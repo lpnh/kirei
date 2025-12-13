@@ -508,6 +508,11 @@ impl SakuraTree {
         self.indent_map[start] * self.cfg.indent_size + self.width(start, end) <= self.cfg.max_width
     }
 
+    fn fits_2(&self, start: usize, line: &str, extra: usize) -> bool {
+        self.indent_map[start] * self.cfg.indent_size + line.chars().count() + extra + 1
+            > self.cfg.max_width
+    }
+
     fn width(&self, start: usize, end: usize) -> usize {
         (start..=end)
             .filter_map(|i| self.leaves.get(i))
@@ -561,11 +566,6 @@ impl SakuraTree {
         content
     }
 
-    // Assumes all the whitespace between nodes is already trimmed
-    // Pairs and all the leaves between them are kept together
-    // The content inside each leaf is not split yet
-    // TODO: Split the `Text` node
-    // NOTE: Is the `fits` function counting the trimmed whitespaces?
     fn render_wrapped(&self, start: usize, end: usize) -> Vec<String> {
         if start == end {
             return vec![self.branch_content(start, end)];
@@ -576,41 +576,54 @@ impl SakuraTree {
         let mut curr_line = String::new();
         let mut start_idx = start;
         let mut pair = leaves[0].pair();
+        let mut has_ws = false;
 
         for (i, leaf) in leaves.iter().enumerate() {
-            curr_line.push_str(&leaf.content);
+            let leaf_idx = start + i;
 
-            let Some(next_leaf) = leaves.get(i + 1) else {
-                lines.push(curr_line);
-                // No more leaf, no more lines
-                break;
-            };
-
-            let curr_leaf_idx = start + i;
-
-            // Concat until we reach the closing pair
-            if pair.is_some_and(|pair_idx| curr_leaf_idx < pair_idx) {
-                if leaf.ws_after || next_leaf.ws_before {
-                    curr_line.push(' ');
-                }
-                continue;
-            }
-
-            let next_leaf_idx = curr_leaf_idx + 1;
-
-            // Consider breaking (starting new line with the next leaf)
-            if leaf.ws_after || next_leaf.ws_before {
-                if self.fits(start_idx, next_leaf.pair().unwrap_or(next_leaf_idx)) {
-                    curr_line.push(' ');
-                } else {
-                    // Has whitespace and doesn't fit in the current line
+            if i.checked_sub(1)
+                .and_then(|prev_idx| leaves.get(prev_idx))
+                .is_some_and(|prev| prev.ws_after || leaf.ws_before)
+                && pair.is_none_or(|pair_idx| leaf_idx > pair_idx)
+                && !matches!(leaf.root, Root::Text)
+            {
+                let content_end = leaf.pair().unwrap_or(leaf_idx);
+                if self.fits_2(start_idx, &curr_line, self.width(leaf_idx, content_end)) {
                     lines.push(std::mem::take(&mut curr_line));
-                    start_idx = next_leaf_idx;
-                    pair = next_leaf.pair()
+                    start_idx = leaf_idx;
+                    pair = leaf.pair();
+                    has_ws = false;
+                } else {
+                    has_ws = true;
                 }
             }
+
+            if pair.is_none_or(|pair_idx| leaf_idx > pair_idx) && matches!(leaf.root, Root::Text) {
+                for word in leaf.content.split_whitespace() {
+                    if has_ws && self.fits_2(start_idx, &curr_line, word.chars().count()) {
+                        lines.push(std::mem::take(&mut curr_line));
+                        start_idx = leaf_idx;
+                        has_ws = false;
+                    }
+                    if has_ws {
+                        curr_line.push(' ');
+                    }
+                    curr_line.push_str(word);
+                    has_ws = true;
+                }
+            } else {
+                if has_ws {
+                    curr_line.push(' ');
+                }
+                curr_line.push_str(&leaf.content);
+            }
+
+            has_ws = leaves
+                .get(i + 1)
+                .is_some_and(|next| leaf.ws_after || next.ws_before);
         }
 
+        lines.push(curr_line);
         lines
     }
 

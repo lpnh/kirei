@@ -5,9 +5,11 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
 <section id="status-code-details" class="section">
     <h2>The 418 Status Code in Detail</h2>
     <p style="margin-bottom: 1rem;">
-        Status code 418 started in HTCPCP (RFC 2324), but it's now referenced in the HTTP semantics spec
+        Status code 418 started in HTCPCP (RFC 2324), but it's now referenced in
+        the HTTP semantics spec
         <strong><a href="https://www.rfc-editor.org/rfc/rfc9110" target="_blank" style="color: var(--teapot-brown); text-decoration: underline;">RFC 9110</a></strong>
-        and officially reserved. Here are some technical details about how it's implemented.
+        and officially reserved. Here are some technical details about how it's
+        implemented.
     </p>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin: 2rem 0;">
         <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px;">

@@ -227,8 +227,8 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 <dl>
                     <dt><strong>Gelato</strong></dt>
                     <dd>
-                        The <em>Italian</em>
-                        style of ice cream - denser and more flavorful
+                        The <em>Italian</em> style of ice cream - denser and
+                        more flavorful
                     </dd>
                     <dt><strong>Soft Serve</strong></dt>
                     <dd>
@@ -236,8 +236,8 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                     </dd>
                     <dt><strong>Sundae</strong></dt>
                     <dd>
-                        Ice cream topped with <mark>delicious sauces</mark>
-                        and toppings
+                        Ice cream topped with <mark>delicious sauces</mark> and
+                        toppings
                     </dd>
                 </dl>
             </section>
@@ -260,20 +260,21 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 <p>
                     Our ice cream contains the following
                     <abbr title="Generally Recognized as Safe">GRAS</abbr>
-                    ingredients. We use <code>document.cookie</code>
-                    to remember your favorites! For nutrition info, check our
+                    ingredients. We use <code>document.cookie</code> to remember
+                    your favorites! For nutrition info, check our
                     <a href="#nutrition">nutrition section</a>.
                 </p>
                 <!-- Mixed inline elements -->
                 <p>
                     Scoops &#38; Dreams: Where <sup>super</sup> meets
                     <sub>creamy</sub>! We've been serving <small>(big)</small>
-                    smiles since 1985. Mathematical proof: Ice Cream + Love = ∞ Happiness!
+                    smiles since 1985. Mathematical proof: Ice Cream + Love = ∞
+                    Happiness!
                 </p>
                 <!-- Keyboard and sample elements -->
                 <p>
-                    To order by phone, press <kbd>Ctrl</kbd> + <kbd>S</kbd>
-                    to save this menu, then call us! Our system will display
+                    To order by phone, press <kbd>Ctrl</kbd> + <kbd>S</kbd> to
+                    save this menu, then call us! Our system will display
                     <samp>Order confirmed!</samp> when your ice cream is ready.
                 </p>
             </section>
@@ -283,13 +284,14 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 <figure style="text-align: center;">
                     <img src="https://via.placeholder.com/400x300/87CEEB/ffffff?text=🍦+Delicious+Ice+Cream" alt="A mouth-watering ice cream cone with perfect swirls" width="400" height="300" loading="lazy" />
                     <figcaption>
-                        Our signature <strong>Vanilla Bean Dream</strong>
-                        - frozen perfection!
+                        Our signature <strong>Vanilla Bean Dream</strong> -
+                        frozen perfection!
                     </figcaption>
                 </figure>
                 <!-- Self-closing tags with various formats -->
                 <p>
-                    Flavor 1<br />Flavor 2 with space<br />Flavor 3 with self-closing<br />Flavor 4 compact
+                    Flavor 1<br />Flavor 2 with space<br />Flavor 3 with
+                    self-closing<br />Flavor 4 compact
                 </p>
                 <hr style="margin: 20px 0; border: 2px dashed #87CEEB;" />
                 <p>Ice cream gallery:</p>
@@ -307,8 +309,8 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                     </li>
                     <li>
                         Americans consume approximately
-                        <data value="1600000000">1.6 billion</data>
-                        gallons of ice cream annually
+                        <data value="1600000000">1.6 billion</data> gallons of
+                        ice cream annually
                     </li>
                     <li>
                         The world's largest ice cream sundae weighed

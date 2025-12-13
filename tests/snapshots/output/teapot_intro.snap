@@ -6,15 +6,17 @@ description: "{% if is_teapot %}\n    <div class=\"hero\">\n        <h1>🫖 I'm
     <div class="hero">
         <h1>🫖 I'm a Teapot! 🫖</h1>
         <p style="font-size: 1.2rem; margin-bottom: 1rem;">
-            Welcome! Status <span class="highlight">418 I'm a teapot</span>
-            is a real HTTP status code that exists to declare one simple truth: teapots don't brew coffee.
+            Welcome! Status <span class="highlight">418 I'm a teapot</span> is a
+            real HTTP status code that exists to declare one simple truth:
+            teapots don't brew coffee.
         </p>
         <p>
             Born from an April Fools' joke in 1998, this status code somehow stuck around and became a quirky part of web development lore. Here we'll look at its history, explore the HTTP protocol bits that make it work, and see why it's still hanging around today.
         </p>
         <p style="margin-top: 1rem; font-style: italic; opacity: 0.9;">
-            Any attempt to brew coffee with a teapot should result in the error code
-            <span class="highlight">"418 I'm a teapot"</span>. The resulting entity body MAY be short and stout.
+            Any attempt to brew coffee with a teapot should result in the error
+            code <span class="highlight">"418 I'm a teapot"</span>. The
+            resulting entity body MAY be short and stout.
         </p>
     </div>
 {% endif %}
@@ -49,8 +51,8 @@ description: "{% if is_teapot %}\n    <div class=\"hero\">\n        <h1>🫖 I'm
     </div>
     {% let success_rate = successful_teas * 100 / total_brews %}
     <p style="text-align: center; margin-top: 2rem; font-size: 1.2rem;">
-        Tea Success Rate: <strong>{{ success_rate }}%</strong>
-        | Coffee Success Rate: <strong>0%</strong> (as it should be!)
+        Tea Success Rate: <strong>{{ success_rate }}%</strong> | Coffee Success
+        Rate: <strong>0%</strong> (as it should be!)
     </p>
 </section>
 <!-- Teapot types section -->
