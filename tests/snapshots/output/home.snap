@@ -63,7 +63,8 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}Home - Ice Cream S
         <div class="card">
             <p>🍨 Sundae Workshop - Build your perfect sundae (Next Sunday)</p>
             <p>
-                🌈 Rainbow Day - Extra sprinkles for everyone! (First Monday of each month)
+                🌈 Rainbow Day - Extra sprinkles for everyone! (First Monday of
+                each month)
             </p>
         </div>
     </section>

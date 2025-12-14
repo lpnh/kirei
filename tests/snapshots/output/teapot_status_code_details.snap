@@ -93,7 +93,9 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
         </h3>
         <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
             <p style="margin-bottom: 1rem; color: #6c757d;">
-                Every HTTP status code has a canonical reason phrase—a brief, human-readable explanation of what it means. Status code 418 has a pretty memorable one.
+                Every HTTP status code has a canonical reason phrase—a brief,
+                human-readable explanation of what it means. Status code 418 has
+                a pretty memorable one.
             </p>
             {% match raw_status.canonical_reason() %}
                 {% when Some(reason) %}
@@ -122,7 +124,9 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
         </h3>
         <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
             <p style="margin-bottom: 1rem; color: #6c757d;">
-                Understanding the structure and classification of HTTP status codes helps explain why 418 is so special. Let's analyze its numeric properties and category placement.
+                Understanding the structure and classification of HTTP status
+                codes helps explain why 418 is so special. Let's analyze its
+                numeric properties and category placement.
             </p>
             {% let status_u16 = raw_status.as_u16() %}
             {% let status_category = status_u16 / 100 %}
@@ -146,6 +150,7 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
         </div>
     </div>
     <p style="text-align: center; margin-top: 2rem; padding: 1rem; background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); border-radius: 10px;">
-        🫖 That covers the technical side. Now let's look at what teapots actually do: brew tea.
+        🫖 That covers the technical side. Now let's look at what teapots
+        actually do: brew tea.
     </p>
 </section>

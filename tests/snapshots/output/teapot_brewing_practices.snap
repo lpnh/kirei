@@ -5,7 +5,9 @@ description: "<section id=\"brewing-practices\" class=\"section\">\n    <h2>Brew
 <section id="brewing-practices" class="section">
     <h2>Brewing Best Practices</h2>
     <p style="margin-bottom: 1rem;">
-        We've covered the history, the protocol, and the technical bits. Now let's get back to what teapots actually do: brew tea. Here's how temperature and compatibility factor in.
+        We've covered the history, the protocol, and the technical bits. Now
+        let's get back to what teapots actually do: brew tea. Here's how
+        temperature and compatibility factor in.
     </p>
     {% macro temperature_badge(temp, label="Unknown") %}
         <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.9rem; font-weight: bold; {% if *temp < 85 %}background: #d4edda; color: #155724;{% elif *temp < 95 %}background: #fff3cd; color: #856404;{% else %}background: #f8d7da; color: #721c24;{% endif %}"> {{ label }}: {{ *temp }}°C </span>
@@ -109,10 +111,16 @@ description: "<section id=\"brewing-practices\" class=\"section\">\n    <h2>Brew
             🫖 Wrapping Up 🫖
         </h3>
         <p style="text-align: center; font-size: 1.1rem; line-height: 1.8;">
-            So there you have it: HTTP status code 418 started as an April Fools' joke in 1998, almost got removed in 2017, but survived thanks to some vocal fans. It's still around today, a quirky reminder that the people writing these specs have a sense of humor.
+            So there you have it: HTTP status code 418 started as an April
+            Fools' joke in 1998, almost got removed in 2017, but survived thanks
+            to some vocal fans. It's still around today, a quirky reminder that
+            the people writing these specs have a sense of humor.
         </p>
         <p style="text-align: center; margin-top: 1.5rem; font-size: 1.1rem; line-height: 1.8;">
-            Whether you're here for the HTTP details, the Askama examples, or just the story of a silly status code, hopefully you found something useful. And remember: a teapot that won't brew coffee isn't broken—it's just doing what it's meant to do.
+            Whether you're here for the HTTP details, the Askama examples, or
+            just the story of a silly status code, hopefully you found something
+            useful. And remember: a teapot that won't brew coffee isn't
+            broken—it's just doing what it's meant to do.
         </p>
     </div>
 </section>

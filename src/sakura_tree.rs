@@ -567,10 +567,6 @@ impl SakuraTree {
     }
 
     fn render_wrapped(&self, start: usize, end: usize) -> Vec<String> {
-        if start == end {
-            return vec![self.branch_content(start, end)];
-        }
-
         let leaves = &self.leaves[start..=end];
         let mut lines = Vec::new();
         let mut curr_line = String::new();

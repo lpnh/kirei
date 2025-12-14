@@ -5,7 +5,10 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
 <section id="semantics" class="section">
     <h2>HTTP Protocol Fundamentals</h2>
     <p style="margin-bottom: 1rem;">
-        To understand why status code 418 matters, let's look at how HTTP works. HTTP is the protocol that powers the web—it's stateless and handles communication between clients and servers using request methods and status codes.
+        To understand why status code 418 matters, let's look at how HTTP works.
+        HTTP is the protocol that powers the web—it's stateless and handles
+        communication between clients and servers using request methods and
+        status codes.
     </p>
     {# HTTP Methods section {# with details about verbs #} for protocol operations #}
     <div style="background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); padding: 2rem; border-radius: 15px; margin: 2rem 0;">
@@ -13,7 +16,9 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
             HTTP Request Methods
         </h3>
         <p style="margin-bottom: 1rem;">
-            HTTP defines standard request methods (often called "verbs") that tell servers what to do with a resource. Each method has a specific meaning:
+            HTTP defines standard request methods (often called "verbs") that
+            tell servers what to do with a resource. Each method has a specific
+            meaning:
         </p>
         <div {# comment between attributes #} style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
             <ul style="list-style: none; padding: 0; margin: 0;">
@@ -47,7 +52,8 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
     <p style="margin-bottom: 1rem;">
         The
         {% if is_teapot -%} {{ protocol | lower | capitalize }} {%- endif %}
-        protocol uses three-digit status codes to indicate what happened with a request. They're organized into five categories:
+        protocol uses three-digit status codes to indicate what happened with a
+        request. They're organized into five categories:
     </p>
     <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
         {% let status_labels = ["Informational", "Success", "Redirection", "Client Error", "Server Error"] %}
@@ -124,6 +130,7 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
     </div>
 </div>
 <p style="text-align: center; margin-top: 2rem; padding: 1rem; background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 100%); border-radius: 10px;">
-    💡 Now that we've covered the basics, let's look at the technical details of how status code 418 actually works.
+    💡 Now that we've covered the basics, let's look at the technical details of
+    how status code 418 actually works.
 </p>
 </section>

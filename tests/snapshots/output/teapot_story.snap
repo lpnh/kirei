@@ -6,7 +6,8 @@ description: "<!-- History section -->\n{% if show_history %}\n    <section id=\
 {% if show_history %}
     <section id="history" class="section">
         <p style="text-align: center; margin-bottom: 2rem; color: #666;">
-            Those are the basics, but there's more to the story—including how this joke status code almost got removed and what happened next.
+            Those are the basics, but there's more to the story—including how
+            this joke status code almost got removed and what happened next.
         </p>
         <h2>The Story Behind the Teapot</h2>
         <p style="margin-bottom: 1rem;">
@@ -53,11 +54,15 @@ description: "<!-- History section -->\n{% if show_history %}\n    <section id=\
 <!-- Theme demo section -->
 <section id="coffee-incompatibility" class="section {% if is_teapot %}teapot-theme{% endif %}">
     <p style="text-align: center; margin-bottom: 2rem; color: #666;">
-        Now that we understand the history, let's address the fundamental question at the heart of HTTP 418.
+        Now that we understand the history, let's address the fundamental
+        question at the heart of HTTP 418.
     </p>
     <h2>Why Can't Teapots Brew Coffee?</h2>
     <p>
-        It's not stubbornness—teapots just aren't built for coffee. They're designed for tea: the shape, materials, spout, everything. Asking a teapot to brew coffee is like asking a violin to play drums—wrong tool for the job.
+        It's not stubbornness—teapots just aren't built for coffee. They're
+        designed for tea: the shape, materials, spout, everything. Asking a
+        teapot to brew coffee is like asking a violin to play drums—wrong tool
+        for the job.
     </p>
     <p style="margin-top: 1rem;">
         When you try to make a teapot brew coffee, the only reasonable response

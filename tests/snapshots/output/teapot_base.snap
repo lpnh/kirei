@@ -65,7 +65,8 @@ description: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"U
             <footer>
                 <p>🫖 Built with tea and Askama templates 🫖</p>
                 <p style="margin-top: 0.5rem; font-size: 0.9rem; opacity: 0.8;">
-                    RFC 2324 Forever | HTCPCP/1.0 | No Coffee Will Ever Be Brewed Here
+                    RFC 2324 Forever | HTCPCP/1.0 | No Coffee Will Ever Be
+                    Brewed Here
                 </p>
             </footer>
         </div>
