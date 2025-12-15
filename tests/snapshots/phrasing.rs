@@ -33,3 +33,13 @@ fn phrasing_quotes() {
 fn phrasing_small_cake() {
     format_and_snapshot!("phrasing/small_cake.html");
 }
+
+#[test]
+fn phrasing_mixed_ws_1() {
+    format_and_snapshot!("phrasing/mixed_ws_1.html");
+}
+
+#[test]
+fn phrasing_mixed_ws_2() {
+    format_and_snapshot!("phrasing/mixed_ws_2.html");
+}

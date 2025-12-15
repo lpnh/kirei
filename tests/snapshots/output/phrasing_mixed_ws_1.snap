@@ -1,0 +1,28 @@
+---
+source: tests/snapshots/phrasing.rs
+description: "<p>{{ expr1 }} word1 word2 {{ expr2 }} {{ expr3 }} {{ expr4 }} word3 word4 word5{{ expr5 }}</p>\n<p>word1 word2 word3{{ expr1 }} word4 word5 word6 {{ expr2 }}{{ expr3 }} {{ expr4 }}{{ expr5 }}</p>\n<p>{{ expr1 }} word1 word2 word3 {{ expr2 }} {{ expr3 }} {{ expr4 }} word4 word5 word6{{ expr5 }}</p>\n<p>{{ expr1 }} word1 word2 word3 {{ expr2 }} {{ expr3 }} {{ expr4 }} word4 word5 {{ expr5 }}word6</p>\n<p>word1{{ expression_1 }} word2 {{ expression_2 }}word3 {{ expression_3 }} word4 word5 word6{{ expression_4 }}</p>\n<p>word1 {{ expression_1 }} word2 {{ expression_2 }}word3 {{ expression_3 }} word4 word5 word6{{ expression_4 }}</p>\n"
+---
+<p>
+    {{ expr1 }} word1 word2 {{ expr2 }} {{ expr3 }} {{ expr4 }} word3 word4
+    word5{{ expr5 }}
+</p>
+<p>
+    word1 word2 word3{{ expr1 }} word4 word5 word6 {{ expr2 }}{{ expr3 }}
+    {{ expr4 }}{{ expr5 }}
+</p>
+<p>
+    {{ expr1 }} word1 word2 word3 {{ expr2 }} {{ expr3 }} {{ expr4 }} word4
+    word5 word6{{ expr5 }}
+</p>
+<p>
+    {{ expr1 }} word1 word2 word3 {{ expr2 }} {{ expr3 }} {{ expr4 }} word4
+    word5 {{ expr5 }}word6
+</p>
+<p>
+    word1{{ expression_1 }} word2 {{ expression_2 }}word3 {{ expression_3 }}
+    word4 word5 word6{{ expression_4 }}
+</p>
+<p>
+    word1 {{ expression_1 }} word2 {{ expression_2 }}word3 {{ expression_3 }}
+    word4 word5 word6{{ expression_4 }}
+</p>

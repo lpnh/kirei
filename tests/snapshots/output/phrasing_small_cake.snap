@@ -4,6 +4,5 @@ description: "<p>\n    <small style=\"white-space: pre;\" id=\"exclaim\" style=\
 ---
 <p>
     <small style="white-space: pre;" id="exclaim" style="white-space: pre;" hidden> <u>Curiouser</u> and <u>curiouser</u>! </small><br />
-    <span>.............................................</span><br /><span>.......................🍰.................</span><br /><span>..........................<button title="small cake" onclick="exclaim.toggleAttribute('hidden')">🏷️
-    <i>eat me</i></button></span><br />
+    <span>.............................................</span><br /><span>.......................🍰.................</span><br /><span>..........................<button title="small cake" onclick="exclaim.toggleAttribute('hidden')">🏷️ <i>eat me</i></button></span><br />
 </p>

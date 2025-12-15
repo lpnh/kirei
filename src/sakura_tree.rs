@@ -60,6 +60,13 @@ enum Root {
 }
 
 #[derive(Debug, Clone)]
+struct Leaflet<'a> {
+    content: &'a str,
+    ws_before: bool,
+    pair_end: Option<usize>,
+}
+
+#[derive(Debug, Clone)]
 struct Branch {
     indent: usize,
     lines: Vec<String>,
@@ -509,8 +516,8 @@ impl SakuraTree {
     }
 
     fn fits_2(&self, start: usize, line: &str, extra: usize) -> bool {
-        self.indent_map[start] * self.cfg.indent_size + line.chars().count() + extra + 1
-            > self.cfg.max_width
+        self.indent_map[start] * self.cfg.indent_size + line.chars().count() + extra
+            < self.cfg.max_width
     }
 
     fn width(&self, start: usize, end: usize) -> usize {
@@ -566,57 +573,83 @@ impl SakuraTree {
         content
     }
 
-    fn render_wrapped(&self, start: usize, end: usize) -> Vec<String> {
-        let leaves = &self.leaves[start..=end];
-        let mut lines = Vec::new();
-        let mut curr_line = String::new();
-        let mut start_idx = start;
-        let mut pair = leaves[0].pair();
-        let mut has_ws = false;
+    fn grow_leaflets(&self, branch_start: usize, branch_end: usize) -> Vec<Leaflet<'_>> {
+        let leaves = &self.leaves[branch_start..=branch_end];
+        let mut leaflets = Vec::new();
+        let mut pairs = Vec::new();
 
-        for (i, leaf) in leaves.iter().enumerate() {
-            let leaf_idx = start + i;
+        for leaf in leaves {
+            pairs.push(leaflets.len());
 
-            if i.checked_sub(1)
-                .and_then(|prev_idx| leaves.get(prev_idx))
-                .is_some_and(|prev| prev.ws_after || leaf.ws_before)
-                && pair.is_none_or(|pair_idx| leaf_idx > pair_idx)
-                && !matches!(leaf.root, Root::Text)
-            {
-                let content_end = leaf.pair().unwrap_or(leaf_idx);
-                if self.fits_2(start_idx, &curr_line, self.width(leaf_idx, content_end)) {
-                    lines.push(std::mem::take(&mut curr_line));
-                    start_idx = leaf_idx;
-                    pair = leaf.pair();
-                    has_ws = false;
-                } else {
-                    has_ws = true;
-                }
-            }
-
-            if pair.is_none_or(|pair_idx| leaf_idx > pair_idx) && matches!(leaf.root, Root::Text) {
-                for word in leaf.content.split_whitespace() {
-                    if has_ws && self.fits_2(start_idx, &curr_line, word.chars().count()) {
-                        lines.push(std::mem::take(&mut curr_line));
-                        start_idx = leaf_idx;
-                        has_ws = false;
-                    }
-                    if has_ws {
-                        curr_line.push(' ');
-                    }
-                    curr_line.push_str(word);
-                    has_ws = true;
+            if leaf.root == Root::Text {
+                for (i, content) in leaf.content.split_whitespace().enumerate() {
+                    leaflets.push(Leaflet {
+                        content,
+                        ws_before: i > 0 || leaf.ws_before,
+                        pair_end: None,
+                    });
                 }
             } else {
-                if has_ws {
-                    curr_line.push(' ');
-                }
-                curr_line.push_str(&leaf.content);
+                leaflets.push(Leaflet {
+                    content: leaf.content.as_str(),
+                    ws_before: leaf.ws_before,
+                    pair_end: None,
+                });
+            }
+        }
+
+        for (i, leaf) in leaves.iter().enumerate() {
+            if let Some(leaf_pair) = leaf.pair().and_then(|p| p.checked_sub(branch_start))
+                && let (Some(start), Some(end)) = (pairs.get(i), pairs.get(leaf_pair))
+                && let Some(leaflet) = leaflets.get_mut(*start)
+            {
+                leaflet.pair_end = Some(*end);
             }
 
-            has_ws = leaves
-                .get(i + 1)
-                .is_some_and(|next| leaf.ws_after || next.ws_before);
+            if leaf.ws_after
+                && let Some(next) = pairs.get(i + 1)
+                && let Some(leaflet) = leaflets.get_mut(*next)
+            {
+                leaflet.ws_before = true;
+            }
+        }
+
+        leaflets
+    }
+
+    fn render_wrapped(&self, start: usize, end: usize) -> Vec<String> {
+        let leaflets = self.grow_leaflets(start, end);
+        let mut lines = Vec::new();
+        let mut curr_line = String::new();
+        let mut pair = None;
+
+        for (i, leaflet) in leaflets.iter().enumerate() {
+            let mut end = leaflets[i].pair_end.unwrap_or(i);
+
+            while let Some(next) = leaflets.get(end + 1).filter(|n| !n.ws_before) {
+                end = next.pair_end.unwrap_or(end + 1);
+            }
+
+            let curr_width = leaflets[i..=end]
+                .iter()
+                .enumerate()
+                .map(|(i, ll)| ll.content.chars().count() + usize::from(i > 0 && ll.ws_before))
+                .sum();
+
+            if leaflet.ws_before
+                && pair.is_none_or(|p| i > p)
+                && !curr_line.is_empty()
+                && !self.fits_2(start, &curr_line, curr_width)
+            {
+                lines.push(std::mem::take(&mut curr_line));
+            }
+
+            if leaflet.ws_before && !curr_line.is_empty() {
+                curr_line.push(' ');
+            }
+
+            curr_line.push_str(leaflet.content);
+            pair = pair.max(leaflet.pair_end);
         }
 
         lines.push(curr_line);

@@ -28,7 +28,8 @@ description: "{% block content %}\n    <div class=\"w-full px-4 py-8\">\n       
                             <div>
                                 <p class="text-sm opacity-70">UV Index</p>
                                 <p class="text-xl font-semibold">
-                                    {{ data.current.uvi.value }} ({{ data.current.uvi.category }})
+                                    {{ data.current.uvi.value }}
+                                    ({{ data.current.uvi.category }})
                                 </p>
                             </div>
                             <div class="flex items-center gap-2">

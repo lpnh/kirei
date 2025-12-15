@@ -122,8 +122,7 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
                 </p>
             {% else %}
                 <p style="color: var(--error-red); padding: 1rem; background: #ffe6e6; border-radius: 8px; text-align: center;">
-                    <strong>⚠️ No coffee support</strong><br /><small>This is a
-                    teapot implementation!</small>
+                    <strong>⚠️ No coffee support</strong><br /><small>This is a teapot implementation!</small>
                 </p>
             {% endfor %}
         </div>
