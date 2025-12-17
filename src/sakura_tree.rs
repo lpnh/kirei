@@ -86,6 +86,7 @@ enum Ring {
         start: usize,
         end: usize,
         inner: Vec<Ring>,
+        trailing: usize,
     },
     MatchArm {
         start: usize,
@@ -172,19 +173,6 @@ impl Leaf {
         matches!(self.root, Root::Control { .. })
     }
 
-    fn preserves_ws(&self) -> bool {
-        self.is_phrasing()
-            || self.is_ctrl()
-            || matches!(
-                &self.root,
-                Root::Raw
-                    | Root::Tag {
-                        is_ws_sensitive: true,
-                        ..
-                    }
-            )
-    }
-
     fn is_phrasing(&self) -> bool {
         matches!(
             &self.root,
@@ -195,6 +183,10 @@ impl Leaf {
                 | Root::Entity
                 | Root::Expr
         )
+    }
+
+    fn can_be_inline(&self) -> bool {
+        self.is_phrasing() || (self.is_ctrl() && !self.ws_before && !self.ws_after)
     }
 
     fn from_text(text: &str, start: usize, end: usize) -> Self {
@@ -256,40 +248,51 @@ impl SakuraTree {
         tree
     }
 
-    fn grow_leaves(
-        askama_nodes: &[AskamaNode],
-        html_nodes: &[HtmlNode],
-        source: &str,
-    ) -> Vec<Leaf> {
-        let (mut leaves, pruned) = Self::leaves_from_html(html_nodes, askama_nodes, source);
+    fn grow_leaves(askama_nodes: &[AskamaNode], html_nodes: &[HtmlNode], src: &str) -> Vec<Leaf> {
+        let (mut leaves, pruned) = Self::leaves_from_html(html_nodes, askama_nodes, src);
         leaves.extend(Self::leaves_from_askama(askama_nodes, &pruned));
 
         let mut leaves: Vec<Leaf> = leaves.into_iter().collect();
 
-        Self::preserve_ws(&mut leaves, source);
+        let preserves: Vec<bool> = leaves
+            .iter()
+            .map(|l| {
+                l.is_phrasing()
+                    || l.is_ctrl()
+                    || matches!(
+                        l.root,
+                        Root::Tag {
+                            is_ws_sensitive: true,
+                            ..
+                        }
+                    )
+            })
+            .collect();
+
+        for (i, leaf) in leaves.iter_mut().enumerate().filter(|(i, _)| preserves[*i]) {
+            leaf.ws_before = preserves.get(i.wrapping_sub(1)).copied().unwrap_or(false)
+                && Self::source_has_ws(src, leaf.start.wrapping_sub(1));
+
+            leaf.ws_after = preserves.get(i + 1).copied().unwrap_or(false)
+                && Self::source_has_ws(src, leaf.end);
+        }
 
         for node in askama_nodes {
-            if let AskamaNode::Control {
-                tag,
-                end: Some(end),
-                range,
-                ..
-            } = node
-                && tag.is_opening()
+            if let AskamaNode::Control { end, range, .. } = node
                 && let Some(start) = leaves.iter().position(|l| l.start == range.start)
-                && let Some(end_idx) = leaves.iter().position(|l| l.start == *end)
+                && let end_idx = leaves.iter().position(|l| Some(l.start) == *end)
                 && let Root::Control { end, .. } = &mut leaves[start].root
             {
-                *end = Some(end_idx);
+                *end = end_idx;
             }
         }
 
         for html_node in html_nodes {
             if let (Some(range), Some(end)) = (html_node.range(), html_node.end())
-                && let Some(end_node) = html_nodes.get(end)
                 && let Some(start) = leaves.iter().position(|l| l.start == range.start)
+                && let Some(end_node) = html_nodes.get(end)
+                && askama::is_inside_same_ctrl(range.start, end_node.start(), askama_nodes) // TODO: remove this
                 && let end_idx = leaves.iter().position(|l| l.start == end_node.start())
-                && askama::is_inside_same_ctrl(range.start, end_node.start(), askama_nodes)
                 && let Root::Tag { end, indent, .. } = &mut leaves[start].root
             {
                 *end = end_idx;
@@ -370,29 +373,8 @@ impl SakuraTree {
         (leaves, pruned)
     }
 
-    fn preserve_ws(leaves: &mut [Leaf], source: &str) {
-        for i in 0..leaves.len() {
-            let leaf = &leaves[i];
-
-            if !leaf.preserves_ws() {
-                continue;
-            }
-
-            let (start, end) = (leaf.start, leaf.end);
-            let node = &source[start..end];
-
-            leaves[i].ws_before = i.checked_sub(1).is_some_and(|idx| {
-                let prev = &leaves[idx];
-                prev.preserves_ws()
-                    && (node.starts_with(char::is_whitespace)
-                        || source[prev.end..start].contains(char::is_whitespace))
-            });
-            leaves[i].ws_after = leaves.get(i + 1).is_some_and(|next| {
-                next.preserves_ws()
-                    && (node.ends_with(char::is_whitespace)
-                        || source[end..next.start].contains(char::is_whitespace))
-            });
-        }
+    fn source_has_ws(src: &str, pos: usize) -> bool {
+        src.as_bytes().get(pos).is_some_and(u8::is_ascii_whitespace)
     }
 
     fn generate_indent_map(&mut self) {
@@ -430,7 +412,6 @@ impl SakuraTree {
         self.branches.push(Branch { indent, lines });
     }
 
-    // Grow concentric rings
     fn grow_rings(&self, start_idx: usize, end_idx: usize) -> Vec<Ring> {
         let mut rings = Vec::new();
         let mut start = start_idx;
@@ -438,7 +419,7 @@ impl SakuraTree {
         while start < end_idx {
             let leaf = &self.leaves[start];
 
-            let (ring, last) = match &leaf.root {
+            let (ring, last) = match leaf.root {
                 Root::Control {
                     tag: ControlTag::When | ControlTag::MatchElse,
                     ..
@@ -456,24 +437,52 @@ impl SakuraTree {
                 }
                 Root::Raw => (Ring::Raw(start), start),
                 Root::Comment => (Ring::Comment(start), start),
-                _ if leaf.is_phrasing()
+                _ if leaf.can_be_inline()
+                    && (leaf.pair().is_none() || !leaf.ws_after)
                     && leaf.pair().is_none_or(|end| {
-                        self.leaves[start + 1..end].iter().all(Leaf::is_phrasing)
+                        self.leaves[start + 1..end].iter().all(Leaf::can_be_inline)
                     }) =>
                 {
                     let (mut curr, mut end) = (start, start);
-
-                    while curr < end_idx && self.leaves[curr].is_phrasing() {
-                        end = self.leaves[curr].pair().unwrap_or(curr);
+                    while curr < end_idx {
+                        let curr_leaf = &self.leaves[curr];
+                        if !curr_leaf.can_be_inline()
+                            || (curr > start
+                                && curr_leaf
+                                    .pair()
+                                    .is_some_and(|idx| !self.fits(curr, idx) && curr_leaf.ws_after))
+                        {
+                            break;
+                        }
+                        end = curr_leaf.pair().unwrap_or(curr);
+                        if curr_leaf.is_ctrl() && self.leaves[end].ws_after {
+                            break;
+                        }
                         curr = end + 1;
                     }
-
                     (Ring::Phrasing { start, end }, end)
                 }
                 _ => match leaf.pair() {
                     Some(end) => {
                         let inner = self.grow_rings(start + 1, end);
-                        (Ring::Block { start, end, inner }, end)
+                        let mut trailing = end;
+                        if leaf.is_phrasing() || leaf.is_ctrl() {
+                            while let Some(next) = self.leaves.get(trailing + 1)
+                                && next.is_phrasing()
+                                && !next.ws_before
+                            {
+                                trailing += 1;
+                            }
+                        }
+                        (
+                            Ring::Block {
+                                start,
+                                end,
+                                inner,
+                                trailing,
+                            },
+                            trailing,
+                        )
                     }
                     None => (Ring::Single(start), start),
                 },
@@ -488,11 +497,18 @@ impl SakuraTree {
 
     fn grow_branch_recursive(&mut self, ring: &Ring) {
         match ring {
-            Ring::Block { start, end, inner } => {
-                if self.fits(*start, *end)
-                    && inner
-                        .iter()
-                        .all(|r| matches!(r, Ring::Phrasing { .. } | Ring::Single(_)))
+            Ring::Block {
+                start,
+                end,
+                inner,
+                trailing,
+            } => {
+                let is_ctrl = self.leaves[*start].is_ctrl();
+                let start_has_ws = self.leaves[*start].ws_after;
+                let end_has_ws = self.leaves[*end].ws_after;
+
+                if inner.iter().all(|r| matches!(r, Ring::Phrasing { .. }))
+                    && (is_ctrl && !start_has_ws || !is_ctrl && self.fits(*start, *trailing))
                 {
                     self.grow_branch(*start, *end, &Style::Inline);
                 } else {
@@ -500,7 +516,12 @@ impl SakuraTree {
                     for ring in inner {
                         self.grow_branch_recursive(ring);
                     }
-                    self.grow_branch(*end, *end, &Style::Inline);
+                    if end_has_ws && trailing > end {
+                        self.grow_branch(*end, *end, &Style::Inline);
+                        self.grow_branch(*end + 1, *trailing, &Style::Wrapped);
+                    } else {
+                        self.grow_branch(*end, *trailing, &Style::Inline);
+                    }
                 }
             }
             Ring::Phrasing { start, end } => self.grow_branch(*start, *end, &Style::Wrapped),

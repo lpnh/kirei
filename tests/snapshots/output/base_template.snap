@@ -5,9 +5,7 @@ description: "<!DOCTYPE html><html lang=\"en\"><head><title>{% block title %}{{ 
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        <title>
-            {% block title %}{{ title }} - My Site{% endblock %}
-        </title>
+        <title>{% block title %}{{ title }} - My Site{% endblock %}</title>
         {% block head %}{% endblock %}
     </head>
     <body>

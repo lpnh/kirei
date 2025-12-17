@@ -3,6 +3,8 @@ source: tests/snapshots/phrasing.rs
 description: "<p>\n    <small style=\"white-space: pre;\" id=\"exclaim\" style=\"white-space: pre;\" hidden>\n\n\n                                                        <u>Curiouser</u>\n                                             and\n                        <u>curiouser</u>!\n\n    </small><br>\n\n<span>.............................................</span><br><span>.......................🍰.................</span><br><span>..........................<button title=\"small cake\" onclick=\"exclaim.toggleAttribute('hidden')\">🏷️ <i>eat me</i></button></span><br>\n</p>\n"
 ---
 <p>
-    <small style="white-space: pre;" id="exclaim" style="white-space: pre;" hidden> <u>Curiouser</u> and <u>curiouser</u>! </small><br />
+    <small style="white-space: pre;" id="exclaim" style="white-space: pre;" hidden>
+        <u>Curiouser</u> and <u>curiouser</u>!
+    </small><br />
     <span>.............................................</span><br /><span>.......................🍰.................</span><br /><span>..........................<button title="small cake" onclick="exclaim.toggleAttribute('hidden')">🏷️ <i>eat me</i></button></span><br />
 </p>

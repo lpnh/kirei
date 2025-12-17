@@ -193,7 +193,9 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                     </fieldset>
                     <!-- Buttons with different types and styles -->
                     <div style="text-align: center; margin: 20px 0;">
-                        <button type="submit" onclick="return orderIceCream('custom')" style="background: #87CEEB; color: white; padding: 15px 30px; border: none; border-radius: 25px; font-size: 1.2em; cursor: pointer;"> 🍦 Order My Ice Cream! 🍦 </button>
+                        <button type="submit" onclick="return orderIceCream('custom')" style="background: #87CEEB; color: white; padding: 15px 30px; border: none; border-radius: 25px; font-size: 1.2em; cursor: pointer;">
+                            🍦 Order My Ice Cream! 🍦
+                        </button>
                         <button type="reset" style="margin-left: 10px; padding: 10px 20px;">Clear Order</button>
                         <input type="button" value="Surprise Me!" onclick="alert('🎲 Random flavor incoming!')" style="margin-left: 10px; padding: 10px 20px;" />
                     </div>

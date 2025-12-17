@@ -2,4 +2,8 @@
 source: tests/snapshots/html.rs
 description: "<div><foo>Some text</bar></div>\n"
 ---
-<div><foo>Some text</bar></div>
+<div>
+    <foo>
+    Some text
+</bar>
+</div>

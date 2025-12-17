@@ -43,3 +43,13 @@ fn phrasing_mixed_ws_1() {
 fn phrasing_mixed_ws_2() {
     format_and_snapshot!("phrasing/mixed_ws_2.html");
 }
+
+#[test]
+fn phrasing_nested_lorem() {
+    format_and_snapshot!("phrasing/nested_lorem.html");
+}
+
+#[test]
+fn phrasing_mixed_roots() {
+    format_and_snapshot!("phrasing/mixed_roots.html");
+}

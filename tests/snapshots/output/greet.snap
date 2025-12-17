@@ -46,6 +46,5 @@ description: "{% extends \"_layout.html\" %}\n{%- block title -%}\n{%- match lan
             {%- endmatch -%}
         </a>
     </h2>
-    {%- call lang_select("greet-me", name|urlencode|fmt("?name={}")) -%}
-    {%- endcall -%}
+    {%- call lang_select("greet-me", name|urlencode|fmt("?name={}")) -%}{%- endcall -%}
 {%- endblock -%}

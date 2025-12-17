@@ -2,4 +2,6 @@
 source: tests/snapshots/askama.rs
 description: "{% filter lower|capitalize %} {{ t }} / HELLO / {{ u }} {% endfilter %}\n"
 ---
-{% filter lower|capitalize %} {{ t }} / HELLO / {{ u }} {% endfilter %}
+{% filter lower|capitalize %}
+    {{ t }} / HELLO / {{ u }}
+{% endfilter %}

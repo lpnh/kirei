@@ -23,27 +23,15 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
                 </p>
                 <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
                     <strong>Tea Support:</strong>
-                    {% if feature_flags bitand 1 == 1 %}
-                        <span style="color: #28a745;">✓ Enabled</span>
-                    {% else %}
-                        <span style="color: #dc3545;">✗ Disabled</span>
-                    {% endif %}
+                    {% if feature_flags bitand 1 == 1 %}<span style="color: #28a745;">✓ Enabled</span>{% else %}<span style="color: #dc3545;">✗ Disabled</span>{% endif %}
                 </p>
                 <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
                     <strong>HTCPCP Compatible:</strong>
-                    {% if feature_flags bitand 4 == 4 %}
-                        <span style="color: #28a745;">✓ Yes</span>
-                    {% else %}
-                        <span style="color: #dc3545;">✗ No</span>
-                    {% endif %}
+                    {% if feature_flags bitand 4 == 4 %}<span style="color: #28a745;">✓ Yes</span>{% else %}<span style="color: #dc3545;">✗ No</span>{% endif %}
                 </p>
                 <p style="padding: 0.5rem 0;">
                     <strong>RFC 2324 Compliant:</strong>
-                    {% if feature_flags bitand 8 == 8 %}
-                        <span style="color: #28a745;">✓ Yes</span>
-                    {% else %}
-                        <span style="color: #dc3545;">✗ No</span>
-                    {% endif %}
+                    {% if feature_flags bitand 8 == 8 %}<span style="color: #28a745;">✓ Yes</span>{% else %}<span style="color: #dc3545;">✗ No</span>{% endif %}
                 </p>
             </div>
         </div>
@@ -135,9 +123,7 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
             </p>
             <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
                 <strong>Status Category:</strong> {{ status_category }}xx class
-                {% if status_category == 4 %}
-                    <span style="color: var(--error-red);">(Client Error - you tried to make a teapot brew coffee!)</span>
-                {% endif %}
+                {% if status_category == 4 %}<span style="color: var(--error-red);">(Client Error - you tried to make a teapot brew coffee!)</span>{% endif %}
             </p>
             <p style="padding: 0.5rem 0;">
                 <strong>Teapot Verification:</strong>

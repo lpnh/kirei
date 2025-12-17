@@ -26,8 +26,7 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}Flavors - Ice Crea
 {% endmacro %}
 {% macro section_header(title, count, emoji = "🍦") %}
     <h3 style="color: var(--brand); margin: 16px 0 8px 0;">
-        {{ emoji }} {{ title }}
-        {% if count > 0 %}({{ count }}){% endif %}
+        {{ emoji }} {{ title }} {% if count > 0 %}({{ count }}){% endif %}
     </h3>
 {% endmacro %}
 {% block content %}
@@ -85,8 +84,8 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}Flavors - Ice Crea
         {# Enhanced info using computed values #}
         {% if seasonal_count > 0 %}
             <p style="color: orange; font-style: italic;">
-                🌱 We currently have {{ seasonal_count }} seasonal special
-                {% if seasonal_count != 1 %}s{% endif %}
+                🌱 We currently have {{ seasonal_count }} seasonal
+                special{% if seasonal_count != 1 %}s{% endif %}
                 celebrating the current season!
             </p>
         {% endif %}

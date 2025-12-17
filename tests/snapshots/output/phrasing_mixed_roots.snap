@@ -1,0 +1,14 @@
+---
+source: tests/snapshots/phrasing.rs
+description: "{% block phrasing%}<p>{% if no_whitespace %}Lorem{% endif %}<u><em>ipsum</em></u>{% if some_whitespace %} some <small> whitespace </small> {% else %}{% block single %}word{% endblock %}<br />{% endif %}.</p>{% endblock %}\n"
+---
+{% block phrasing %}
+    <p>
+        {% if no_whitespace %}Lorem{% endif %}<u><em>ipsum</em></u>
+        {% if some_whitespace %}
+            some <small> whitespace </small>
+        {% else %}
+            {% block single %}word{% endblock %}<br />
+        {% endif %}.
+    </p>
+{% endblock %}

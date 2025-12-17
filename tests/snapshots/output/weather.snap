@@ -10,7 +10,8 @@ description: "{% block content %}\n    <div class=\"w-full px-4 py-8\">\n       
                     <h2 class="card-title text-2xl mb-4">Condições Atuais</h2>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="flex items-center gap-4">
-                            <i class="{{ data.current.weather.icon_class }} wi-icon-xl wi-primary" aria-label="{{ data.current.weather.description }}"> </i>
+                            <i class="{{ data.current.weather.icon_class }} wi-icon-xl wi-primary" aria-label="{{ data.current.weather.description }}">
+                            </i>
                             <div class="text-6xl font-semibold">
                                 {{ "{:.1}"|format(data.current.temp) }}°
                             </div>

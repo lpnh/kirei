@@ -30,9 +30,7 @@ description: "{#\nIce cream card component - supports various display modes\nVar
     {# Name and popularity badge #}
     <h3 style="margin:8px 0">
         {{ ice_cream.name }}
-        {% if ice_cream.popularity == 5 %}
-            <span class="popular-badge">Member Favorite</span>
-        {% endif %}
+        {% if ice_cream.popularity == 5 %}<span class="popular-badge">Member Favorite</span>{% endif %}
     </h3>
     {# Description #}
     <p style="color:var(--muted);font-size:0.95em">
