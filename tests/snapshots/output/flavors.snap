@@ -85,8 +85,8 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}Flavors - Ice Crea
         {% if seasonal_count > 0 %}
             <p style="color: orange; font-style: italic;">
                 🌱 We currently have {{ seasonal_count }} seasonal
-                special{% if seasonal_count != 1 %}s{% endif %}
-                celebrating the current season!
+                special{% if seasonal_count != 1 %}s{% endif %} celebrating the
+                current season!
             </p>
         {% endif %}
     </section>

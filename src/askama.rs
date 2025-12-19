@@ -125,8 +125,7 @@ impl ControlTag {
         }
     }
 
-    #[must_use]
-    pub fn is_opening(self) -> bool {
+    fn is_opening(self) -> bool {
         matches!(self.boundary(), Boundary::Open)
     }
 

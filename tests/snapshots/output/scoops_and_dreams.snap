@@ -188,7 +188,26 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                         </p>
                         <p>
                             <label for="pickup-time">Preferred Pickup Time:</label>
-                            <select id="pickup-time" name="pickup-time"><option value="">Select a time</option><optgroup label="Today"><option value="asap">ASAP! 🏃‍♂️</option><option value="lunch">Lunch Time (12-1 PM)</option><option value="afternoon">Afternoon Treat (3-4 PM)</option></optgroup><optgroup label="Tomorrow"><option value="tomorrow-lunch">Tomorrow Lunch</option><option value="tomorrow-afternoon">Tomorrow Afternoon</option></optgroup></select>
+                            <select id="pickup-time" name="pickup-time">
+                                <option value="">Select a time</option>
+                                <optgroup label="Today">
+                                    <option value="asap">ASAP! 🏃‍♂️</option>
+                                    <option value="lunch">
+                                        Lunch Time (12-1 PM)
+                                    </option>
+                                    <option value="afternoon">
+                                        Afternoon Treat (3-4 PM)
+                                    </option>
+                                </optgroup>
+                                <optgroup label="Tomorrow">
+                                    <option value="tomorrow-lunch">
+                                        Tomorrow Lunch
+                                    </option>
+                                    <option value="tomorrow-afternoon">
+                                        Tomorrow Afternoon
+                                    </option>
+                                </optgroup>
+                            </select>
                         </p>
                     </fieldset>
                     <!-- Buttons with different types and styles -->

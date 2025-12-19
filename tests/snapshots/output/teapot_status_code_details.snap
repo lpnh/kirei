@@ -60,12 +60,7 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
         </h3>
         <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
             <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
-                <strong>
-                    {#- Performance statistics for HTTP operations -#}
-                    Total
-                    {#~ operations ~#}
-                    Processed:
-                </strong>
+                <strong>{#- Performance statistics for HTTP operations -#}Total{#~ operations ~#}Processed:</strong>
                 <span style="color: var(--teapot-brown); font-size: 1.5rem; font-weight: bold;">{{ (brew_attempts + successful_teas) * 2 / 10 }}</span>
             </p>
             <p style="padding: 0.5rem 0;">

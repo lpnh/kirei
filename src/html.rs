@@ -279,6 +279,8 @@ fn parse_recursive(
             html_nodes.push(parse_self_closing_tag(node, source, embed_askm));
         }
         "erroneous_end_tag" => {
+            todo!();
+            #[allow(unreachable_code)]
             html_nodes.push(parse_erroneous_end_tag(node, source));
         }
         "comment" => {

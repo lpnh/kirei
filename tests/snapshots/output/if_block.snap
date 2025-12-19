@@ -2,9 +2,7 @@
 source: tests/snapshots/askama.rs
 description: "{% if x is defined %} x is defined! {% endif %} {% if y is not defined %} y is not defined {% else %} y is defined {% endif %}\n"
 ---
-{% if x is defined %}
-    x is defined!
-{% endif %}
+{% if x is defined %} x is defined! {% endif %}
 {% if y is not defined %}
     y is not defined
 {% else %}

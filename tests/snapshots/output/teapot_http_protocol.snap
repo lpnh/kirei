@@ -26,7 +26,7 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
                     {% if method.skip %}{% continue %}{% endif %}
                     <li style="padding: 0.75rem 0; border-bottom: 1px solid #e9ecef;">
                         {% if loop.first %}<strong style="color: var(--teapot-brown);">→{% elif loop.last %}<span style="font-size: 1.2rem;">🫖{% else %}<strong style="color: var(--teapot-brown);">→{% endif %}</strong>
-                        <span style="font-weight: bold; color: var(--code-bg);">{{ method.name ~ ":" }}</span>
+                    <span style="font-weight: bold; color: var(--code-bg);">{{ method.name ~ ":" }}</span>
                     {% if let Some(msg) = error_message %}
                         {% if method.name == "BREW" %}<span style="color: var(--error-red);"> (returns {{ status_code }}!) </span>{% endif %}
                     {% endif %}
@@ -41,10 +41,7 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
         Status Code Categories
     </h3>
     <p style="margin-bottom: 1rem;">
-        The
-        {% if is_teapot -%}
-            {{ protocol | lower | capitalize }}
-        {%- endif %}
+        The {% if is_teapot -%} {{ protocol | lower | capitalize }} {%- endif %}
         protocol uses three-digit status codes to indicate what happened with a
         request. They're organized into five categories:
     </p>
@@ -89,9 +86,7 @@ description: "<section id=\"semantics\" class=\"section\">\n    <h2>HTTP Protoco
             </p>
             <p style="padding: 0.5rem 0;">
                 <strong>Request Model:</strong>
-                {% if is_teapot ~%}
-                    Client/Server
-                {%~ endif %}
+                {% if is_teapot ~%} Client/Server {%~ endif %}
             </p>
         </div>
     </div>
