@@ -1,0 +1,7 @@
+---
+source: tests/snapshots/phrasing.rs
+description: "<p class=\"intro\"><span id=\"first_quote\"><q>'Oh, you can't help that,' said the Cat.</q></span>...<span id=\"second_quote\"><script>var cat_reply = \"We are all mad here.\";</script><q>—<em><script>document.write(cat_reply);</script></em></q></span></p>\n"
+---
+<p class="intro">
+    <span id="first_quote"><q>'Oh, you can't help that,' said the Cat.</q></span>...<span id="second_quote"><script>var cat_reply = "We are all mad here.";</script><q>—<em><script>document.write(cat_reply);</script></em></q></span>
+</p>

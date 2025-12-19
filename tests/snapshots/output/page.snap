@@ -20,8 +20,7 @@ description: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"U
         </ul>
         <!-- form -->
         <form action="/submit" method="post">
-            <label for="name">Name:</label>
-            <input type="text" id="name" />
+            <label for="name">Name:</label> <input type="text" id="name" />
         </form>
         <!-- bold -->
         <div>

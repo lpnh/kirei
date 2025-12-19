@@ -2,10 +2,7 @@ use anyhow::Result;
 use std::ops;
 use tree_sitter::{Node, Range};
 
-use crate::{
-    askama::{AskamaNode, format_askama_node},
-    config::Config,
-};
+use crate::askama::{AskamaNode, format_askama_node};
 
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Content_categories#phrasing_content
 const PHRASING_CONTENT: &[&str] = &[
@@ -15,9 +12,16 @@ const PHRASING_CONTENT: &[&str] = &[
     "samp", "script", "select", "slot", "small", "span", "strong", "sub", "sup", "svg", "template",
     "textarea", "time", "u", "var", "video", "wbr",
     //
-    //  Conditionally phrasing
+    // === Conditionally phrasing ===
     //
-    "a", "area", "del", "ins", "link", "map", "meta",
+    // only if it contains only phrasing content:
+    "a", "del", "ins", "map",
+    //
+    // only if it is a descendant of a <map> element:
+    "area",
+    //
+    // only if the `itemprop` attribute is present (exclude them for now):
+    // "link", "meta",
 ];
 
 // https://developer.mozilla.org/en-US/docs/Glossary/Void_element
@@ -31,10 +35,10 @@ const WHITESPACE_SENSITIVE: &[&str] = &["title"];
 
 #[derive(Debug, Clone)]
 pub enum HtmlNode {
-    StartTag {
+    Start {
         name: String,
         attr: String,
-        end_tag_idx: Option<usize>,
+        end: Option<usize>,
         embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
     },
@@ -44,13 +48,13 @@ pub enum HtmlNode {
         embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
     },
-    SelfClosingTag {
+    SelfClosing {
         name: String,
         attr: String,
         embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
     },
-    EndTag {
+    End {
         name: String,
         start: usize,
     },
@@ -60,7 +64,7 @@ pub enum HtmlNode {
         embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
     },
-    RawText {
+    Raw {
         text: String,
         embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
@@ -80,7 +84,7 @@ pub enum HtmlNode {
         range: ops::Range<usize>,
     },
 
-    ErroneousEndTag {
+    ErroneousEnd {
         name: String,
         start: usize,
     },
@@ -94,14 +98,14 @@ impl HtmlNode {
 
     pub fn start(&self) -> usize {
         match self {
-            Self::StartTag { range, .. }
+            Self::Start { range, .. }
             | Self::Void { range, .. }
-            | Self::SelfClosingTag { range, .. }
+            | Self::SelfClosing { range, .. }
             | Self::Text { range, .. }
-            | Self::RawText { range, .. }
+            | Self::Raw { range, .. }
             | Self::Comment { range, .. } => range.start,
-            Self::EndTag { start, .. }
-            | Self::ErroneousEndTag { start, .. }
+            Self::End { start, .. }
+            | Self::ErroneousEnd { start, .. }
             | Self::Doctype { start, .. }
             | Self::Entity { start, .. } => *start,
         }
@@ -109,17 +113,17 @@ impl HtmlNode {
 
     pub fn format(&self) -> String {
         match self {
-            Self::StartTag { name, attr, .. } => format_opening_tag(name, attr),
-            Self::Void { name, attr, .. } | Self::SelfClosingTag { name, attr, .. } => {
+            Self::Start { name, attr, .. } => format_opening_tag(name, attr),
+            Self::Void { name, attr, .. } | Self::SelfClosing { name, attr, .. } => {
                 format_self_closing_or_void(name, attr)
             }
             Self::Text { text, .. }
-            | Self::RawText { text, .. }
+            | Self::Raw { text, .. }
             | Self::Entity { text, .. }
             | Self::Comment { text, .. }
             | Self::Doctype { text, .. } => text.clone(),
 
-            Self::EndTag { name, .. } | Self::ErroneousEndTag { name, .. } => {
+            Self::End { name, .. } | Self::ErroneousEnd { name, .. } => {
                 format!("</{}>", name)
             }
         }
@@ -127,22 +131,22 @@ impl HtmlNode {
 
     pub fn range(&self) -> Option<&ops::Range<usize>> {
         match self {
-            Self::StartTag { range, .. }
+            Self::Start { range, .. }
             | Self::Void { range, .. }
-            | Self::SelfClosingTag { range, .. }
+            | Self::SelfClosing { range, .. }
             | Self::Text { range, .. }
-            | Self::RawText { range, .. }
+            | Self::Raw { range, .. }
             | Self::Comment { range, .. } => Some(range),
             _ => None,
         }
     }
 
     pub fn is_phrasing(&self) -> bool {
-        let (Self::StartTag { name, .. }
+        let (Self::Start { name, .. }
         | Self::Void { name, .. }
-        | Self::SelfClosingTag { name, .. }
-        | Self::EndTag { name, .. }
-        | Self::ErroneousEndTag { name, .. }) = self
+        | Self::SelfClosing { name, .. }
+        | Self::End { name, .. }
+        | Self::ErroneousEnd { name, .. }) = self
         else {
             return false;
         };
@@ -151,9 +155,8 @@ impl HtmlNode {
     }
 
     pub fn is_ws_sensitive(&self) -> bool {
-        let (Self::StartTag { name, .. }
-        | Self::EndTag { name, .. }
-        | Self::ErroneousEndTag { name, .. }) = self
+        let (Self::Start { name, .. } | Self::End { name, .. } | Self::ErroneousEnd { name, .. }) =
+            self
         else {
             return false;
         };
@@ -161,21 +164,21 @@ impl HtmlNode {
         WHITESPACE_SENSITIVE.contains(&name.to_lowercase().as_str())
     }
 
-    pub fn end_tag_idx(&self) -> Option<usize> {
+    pub fn end(&self) -> Option<usize> {
         match self {
-            Self::StartTag { end_tag_idx, .. } => *end_tag_idx,
+            Self::Start { end, .. } => *end,
             _ => None,
         }
     }
 
     pub fn embed_askm(&self) -> Option<&[usize]> {
         match self {
-            Self::StartTag { embed_askm, .. }
+            Self::Start { embed_askm, .. }
             | Self::Void { embed_askm, .. }
-            | Self::SelfClosingTag { embed_askm, .. }
+            | Self::SelfClosing { embed_askm, .. }
             | Self::Comment { embed_askm, .. }
             | Self::Text { embed_askm, .. }
-            | Self::RawText { embed_askm, .. } => embed_askm.as_deref(),
+            | Self::Raw { embed_askm, .. } => embed_askm.as_deref(),
             _ => None,
         }
     }
@@ -276,6 +279,8 @@ fn parse_recursive(
             html_nodes.push(parse_self_closing_tag(node, source, embed_askm));
         }
         "erroneous_end_tag" => {
+            todo!();
+            #[allow(unreachable_code)]
             html_nodes.push(parse_erroneous_end_tag(node, source));
         }
         "comment" => {
@@ -319,19 +324,18 @@ fn parse_recursive(
             if has_end_tag {
                 let end_idx = html_nodes.len().saturating_sub(1);
 
-                if let Some(HtmlNode::StartTag { end_tag_idx, .. }) = html_nodes.get_mut(start_idx)
-                {
-                    *end_tag_idx = Some(end_idx);
+                if let Some(HtmlNode::Start { end, .. }) = html_nodes.get_mut(start_idx) {
+                    *end = Some(end_idx);
                 }
             }
         }
         "raw_text" => {
-            let text = node.utf8_text(source)?;
+            let text = node.utf8_text(source)?.to_string();
             if !text.trim().is_empty() {
                 let range = node.start_byte()..node.end_byte();
                 let embed_askm = find_askama_in_range(askama_nodes, &range);
-                html_nodes.push(HtmlNode::RawText {
-                    text: text.to_string(),
+                html_nodes.push(HtmlNode::Raw {
+                    text,
                     embed_askm,
                     range,
                 });
@@ -343,21 +347,21 @@ fn parse_recursive(
 }
 
 fn parse_start_tag(node: &Node, source: &[u8], embed_askm: Option<Vec<usize>>) -> HtmlNode {
-    let tag_name = extract_tag_name(node, source, "tag_name");
+    let name = extract_tag_name(node, source, "tag_name");
     let attr = extract_attr(node, source);
 
-    if HtmlNode::is_void(&tag_name) {
+    if HtmlNode::is_void(&name) {
         HtmlNode::Void {
-            name: tag_name,
+            name,
             attr,
             embed_askm,
             range: node.start_byte()..node.end_byte(),
         }
     } else {
-        HtmlNode::StartTag {
-            name: tag_name,
+        HtmlNode::Start {
+            name,
             attr,
-            end_tag_idx: None,
+            end: None,
             embed_askm,
             range: node.start_byte()..node.end_byte(),
         }
@@ -365,11 +369,11 @@ fn parse_start_tag(node: &Node, source: &[u8], embed_askm: Option<Vec<usize>>) -
 }
 
 fn parse_self_closing_tag(node: &Node, source: &[u8], embed_askm: Option<Vec<usize>>) -> HtmlNode {
-    let tag_name = extract_tag_name(node, source, "tag_name");
+    let name = extract_tag_name(node, source, "tag_name");
     let attr = extract_attr(node, source);
 
-    HtmlNode::SelfClosingTag {
-        name: tag_name,
+    HtmlNode::SelfClosing {
+        name,
         attr,
         embed_askm,
         range: node.start_byte()..node.end_byte(),
@@ -377,17 +381,17 @@ fn parse_self_closing_tag(node: &Node, source: &[u8], embed_askm: Option<Vec<usi
 }
 
 fn parse_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
-    let tag_name = extract_tag_name(node, source, "tag_name");
-    HtmlNode::EndTag {
-        name: tag_name,
+    let name = extract_tag_name(node, source, "tag_name");
+    HtmlNode::End {
+        name,
         start: node.start_byte(),
     }
 }
 
 fn parse_erroneous_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
-    let tag_name = extract_tag_name(node, source, "erroneous_end_tag_name");
-    HtmlNode::ErroneousEndTag {
-        name: tag_name,
+    let name = extract_tag_name(node, source, "erroneous_end_tag_name");
+    HtmlNode::ErroneousEnd {
+        name,
         start: node.start_byte(),
     }
 }
@@ -466,7 +470,6 @@ pub fn format_tag(
     source: &str,
     askama_nodes: &[AskamaNode],
     embed_askm: &[usize],
-    config: &Config,
 ) -> String {
     let mut result = String::new();
     let mut current_pos = range.start;
@@ -479,7 +482,7 @@ pub fn format_tag(
             result.push_str(&normalized);
         }
 
-        let formatted = format_askama_node(config, askama);
+        let formatted = format_askama_node(askama);
         result.push_str(&formatted);
 
         current_pos = askama.end();
@@ -494,12 +497,11 @@ pub fn format_tag(
     result
 }
 
-pub fn format_comment(
+pub fn format_opaque(
     range: &ops::Range<usize>,
     source: &str,
     askama_nodes: &[AskamaNode],
     embed_askm: &[usize],
-    config: &Config,
 ) -> String {
     let mut result = String::new();
     let mut current_pos = range.start;
@@ -510,7 +512,7 @@ pub fn format_comment(
             result.push_str(&source[current_pos..askama.start()]);
         }
 
-        let formatted = format_askama_node(config, askama);
+        let formatted = format_askama_node(askama);
         result.push_str(&formatted);
 
         current_pos = askama.end();

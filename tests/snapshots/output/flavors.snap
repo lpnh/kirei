@@ -10,18 +10,15 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}Flavors - Ice Crea
         <h3>📊 Statistics</h3>
         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; text-align: center;">
             <div>
-                <strong style="color: var(--brand);">{{ total }}</strong>
-                <br />
+                <strong style="color: var(--brand);">{{ total }}</strong><br />
                 <small>Total Flavors</small>
             </div>
             <div>
-                <strong style="color: green;">{{ available }}</strong>
-                <br />
+                <strong style="color: green;">{{ available }}</strong><br />
                 <small>Available Today</small>
             </div>
             <div>
-                <strong style="color: orange;">{{ seasonal }}</strong>
-                <br />
+                <strong style="color: orange;">{{ seasonal }}</strong><br />
                 <small>Seasonal Specials</small>
             </div>
         </div>
@@ -29,8 +26,7 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}Flavors - Ice Crea
 {% endmacro %}
 {% macro section_header(title, count, emoji = "🍦") %}
     <h3 style="color: var(--brand); margin: 16px 0 8px 0;">
-        {{ emoji }} {{ title }}
-        {% if count > 0 %}({{ count }}){% endif %}
+        {{ emoji }} {{ title }} {% if count > 0 %}({{ count }}){% endif %}
     </h3>
 {% endmacro %}
 {% block content %}
@@ -88,9 +84,9 @@ description: "{% extends \"base.html\" %}\n\n{% block title %}Flavors - Ice Crea
         {# Enhanced info using computed values #}
         {% if seasonal_count > 0 %}
             <p style="color: orange; font-style: italic;">
-                🌱 We currently have {{ seasonal_count }} seasonal special
-                {% if seasonal_count != 1 %}s{% endif %}
-                celebrating the current season!
+                🌱 We currently have {{ seasonal_count }} seasonal
+                special{% if seasonal_count != 1 %}s{% endif %} celebrating the
+                current season!
             </p>
         {% endif %}
     </section>

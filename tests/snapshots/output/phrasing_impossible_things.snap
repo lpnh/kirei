@@ -1,0 +1,10 @@
+---
+source: tests/snapshots/phrasing.rs
+description: "<form oninput=\"result.value = parseInt(a.value) + parseInt(b.value)\">impossible things before breakfast: <input type=\"range\" id=\"a\" value=\"3\" min=\"0\" max=\"6\" />+<input type=\"number\" id=\"b\" value=\"4\" min=\"0\" max=\"6\" />=<output id=\"res\" name=\"result\" for=\"a b\"></output> (<script>const res = document.getElementById(\"res\"); res.value = parseInt(a.value) + parseInt(b.value); document.write(res.value);</script>? not bad...)</form>\n"
+---
+<form oninput="result.value = parseInt(a.value) + parseInt(b.value)">
+    impossible things before breakfast:
+    <input type="range" id="a" value="3" min="0" max="6" />+<input type="number" id="b" value="4" min="0" max="6" />=<output id="res" name="result" for="a b"></output>
+    (<script>const res = document.getElementById("res"); res.value = parseInt(a.value) + parseInt(b.value); document.write(res.value);</script>?
+    not bad...)
+</form>

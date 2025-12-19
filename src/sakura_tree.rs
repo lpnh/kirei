@@ -56,8 +56,14 @@ enum Root {
 
     Text,
     Entity,
-    RawText,
-    Doctype,
+    Raw,
+}
+
+#[derive(Debug, Clone)]
+struct Leaflet<'a> {
+    content: &'a str,
+    ws_before: bool,
+    pair_end: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -76,37 +82,23 @@ enum Style {
 
 #[derive(Debug, Clone)]
 enum Ring {
-    Paired {
+    Block {
         start: usize,
         end: usize,
         inner: Vec<Ring>,
+        trailing: usize,
     },
     MatchArm {
         start: usize,
         end: usize,
     },
-    TextSequence {
-        start: usize,
-        end: usize,
-        inner: Vec<Ring>,
-    },
-    RawText {
+    Phrasing {
         start: usize,
         end: usize,
     },
+    Raw(usize),
+    Comment(usize),
     Single(usize),
-}
-
-impl Ring {
-    fn range(&self) -> (usize, usize) {
-        match self {
-            Ring::Paired { start, end, .. }
-            | Ring::MatchArm { start, end }
-            | Ring::TextSequence { start, end, .. }
-            | Ring::RawText { start, end } => (*start, *end),
-            Ring::Single(idx) => (*idx, *idx),
-        }
-    }
 }
 
 impl Leaf {
@@ -128,12 +120,12 @@ impl Leaf {
         }
     }
 
-    fn from_askama(cfg: &Config, askama_node: &AskamaNode) -> Self {
-        let content = askama::format_askama_node(cfg, askama_node);
+    fn from_askama(askama_node: &AskamaNode) -> Self {
+        let content = askama::format_askama_node(askama_node);
 
         let root = match askama_node {
-            AskamaNode::Control { ctrl_tag, .. } => Root::Control {
-                tag: *ctrl_tag,
+            AskamaNode::Control { tag, .. } => Root::Control {
+                tag: *tag,
                 end: None,
             },
             AskamaNode::Expression { .. } => Root::Expr,
@@ -148,19 +140,21 @@ impl Leaf {
         let start = html_node.start();
         let end = html_node.range().map_or(start, |r| r.end);
         let root = match html_node {
-            HtmlNode::StartTag { .. } => Root::Tag {
+            HtmlNode::Start { .. } => Root::Tag {
                 indent: 0,
                 is_phrasing: html_node.is_phrasing(),
                 is_ws_sensitive: html_node.is_ws_sensitive(),
                 end: None,
             },
-            HtmlNode::Void { .. } | HtmlNode::SelfClosingTag { .. } => Root::Tag {
-                indent: 0,
-                is_phrasing: html_node.is_phrasing(),
-                is_ws_sensitive: false,
-                end: None,
-            },
-            HtmlNode::EndTag { .. } | HtmlNode::ErroneousEndTag { .. } => Root::Tag {
+            HtmlNode::Void { .. } | HtmlNode::SelfClosing { .. } | HtmlNode::Doctype { .. } => {
+                Root::Tag {
+                    indent: 0,
+                    is_phrasing: html_node.is_phrasing(),
+                    is_ws_sensitive: false,
+                    end: None,
+                }
+            }
+            HtmlNode::End { .. } | HtmlNode::ErroneousEnd { .. } => Root::Tag {
                 indent: -1,
                 is_phrasing: html_node.is_phrasing(),
                 is_ws_sensitive: html_node.is_ws_sensitive(),
@@ -168,103 +162,79 @@ impl Leaf {
             },
             HtmlNode::Text { .. } => Root::Text,
             HtmlNode::Entity { .. } => Root::Entity,
-            HtmlNode::RawText { .. } => Root::RawText,
+            HtmlNode::Raw { .. } => Root::Raw,
             HtmlNode::Comment { .. } => Root::Comment,
-            HtmlNode::Doctype { .. } => Root::Doctype,
         };
 
         Self::grow(root, content, start, end)
-    }
-
-    fn chars_count(&self) -> usize {
-        self.content.chars().count()
     }
 
     fn is_ctrl(&self) -> bool {
         matches!(self.root, Root::Control { .. })
     }
 
-    fn preserves_ws(&self) -> bool {
-        self.is_phrasing()
-            || self.is_ctrl()
-            || matches!(
-                &self.root,
-                Root::RawText
-                    | Root::Tag {
-                        is_ws_sensitive: true,
-                        ..
-                    }
-            )
-    }
-
-    fn is_block_level(&self) -> bool {
-        match &self.root {
-            Root::Control { tag, .. } => tag.is_opening(),
-            Root::Tag { is_phrasing, .. } => !is_phrasing,
-            Root::Comment => self.content.contains('\n'),
-            _ => false,
-        }
-    }
-
-    fn is_phrasing(&self) -> bool {
+    fn is_block(&self) -> bool {
         matches!(
-            &self.root,
-                | Root::Tag {
-                    is_phrasing: true,
+            self.root,
+            Root::Tag {
+                is_phrasing: false,
+                ..
+            } | Root::Control { .. }
+        )
+    }
+
+    fn preserves_ws(&self) -> bool {
+        self.can_be_inline()
+            || matches!(
+                self.root,
+                Root::Tag {
+                    is_ws_sensitive: true,
                     ..
                 }
-        ) | self.is_text_sequence()
-    }
-
-    fn is_text_sequence(&self) -> bool {
-        matches!(&self.root, Root::Text | Root::Entity | Root::Expr)
-    }
-
-    fn from_text_or_raw(text: &str, is_raw: bool, start: usize, end: usize) -> Self {
-        let (content, root) = if is_raw {
-            (
-                text.trim_matches('\n')
-                    .lines()
-                    .map(str::trim)
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-                Root::RawText,
             )
-        } else {
-            (crate::normalize_ws(text), Root::Text)
-        };
-
-        Self::grow(root, content, start, end)
     }
 
-    fn split_text(
+    fn can_be_inline(&self) -> bool {
+        matches!(
+            self.root,
+            Root::Tag {
+                is_phrasing: true,
+                ..
+            } | Root::Control { .. }
+                | Root::Expr
+                | Root::Text
+                | Root::Entity
+        )
+    }
+
+    fn from_text(text: &str, start: usize, end: usize) -> Self {
+        Self::grow(Root::Text, crate::normalize_ws(text), start, end)
+    }
+
+    fn from_mixed_text(
         range: &Range<usize>,
         askama_nodes: &[AskamaNode],
-        embed_askm: &[usize],
+        embed_askama: &[usize],
         source: &str,
-        is_raw: bool,
     ) -> Vec<Self> {
         let mut segments = Vec::new();
-        let mut current_pos = range.start;
+        let mut curr_pos = range.start;
 
-        for &idx in embed_askm {
-            let askama = &askama_nodes[idx];
-            if askama.start() > current_pos {
-                segments.push((current_pos, askama.start()));
+        for &idx in embed_askama {
+            let node = &askama_nodes[idx];
+            if node.start() > curr_pos {
+                segments.push((curr_pos, node.start()));
             }
-            current_pos = askama.end();
+            curr_pos = node.end();
         }
 
-        if current_pos < range.end {
-            segments.push((current_pos, range.end));
+        if curr_pos < range.end {
+            segments.push((curr_pos, range.end));
         }
 
         segments
             .into_iter()
-            .map(|(start, end)| {
-                let text = &source[start..end];
-                Self::from_text_or_raw(text, is_raw, start, end)
-            })
+            .map(|(start, end)| Self::from_text(&source[start..end], start, end))
             .collect()
     }
 }
@@ -276,7 +246,7 @@ impl SakuraTree {
         source: &str,
         cfg: &Config,
     ) -> Self {
-        let leaves = Self::grow_leaves(askama_nodes, html_nodes, source, cfg);
+        let leaves = Self::grow_leaves(askama_nodes, html_nodes, source);
 
         let mut tree = Self {
             cfg: cfg.clone(),
@@ -287,7 +257,7 @@ impl SakuraTree {
 
         tree.generate_indent_map();
 
-        let rings = tree.grow_rings(0, tree.leaves.len());
+        let rings = tree.grow_rings(0, tree.leaves.len(), false);
 
         for ring in rings {
             tree.grow_branch_recursive(&ring);
@@ -296,44 +266,36 @@ impl SakuraTree {
         tree
     }
 
-    fn grow_leaves(
-        askama_nodes: &[AskamaNode],
-        html_nodes: &[HtmlNode],
-        source: &str,
-        cfg: &Config,
-    ) -> Vec<Leaf> {
-        let (mut leaves, pruned) = Self::leaves_from_html(html_nodes, askama_nodes, source, cfg);
-        leaves.extend(Self::leaves_from_askama(askama_nodes, &pruned, cfg));
+    fn grow_leaves(askama_nodes: &[AskamaNode], html_nodes: &[HtmlNode], src: &str) -> Vec<Leaf> {
+        let (mut leaves, pruned) = Self::leaves_from_html(html_nodes, askama_nodes, src);
+        leaves.extend(Self::leaves_from_askama(askama_nodes, &pruned));
 
         let mut leaves: Vec<Leaf> = leaves.into_iter().collect();
 
-        Self::preserve_ws(&mut leaves, source);
+        for leaf in &mut leaves {
+            leaf.ws_before = Self::source_has_ws(src, leaf.start.wrapping_sub(1));
+            leaf.ws_after = Self::source_has_ws(src, leaf.end);
+        }
 
         for node in askama_nodes {
-            if let AskamaNode::Control {
-                ctrl_tag,
-                close_tag: Some(end),
-                range,
-                ..
-            } = node
-                && ctrl_tag.is_opening()
+            if let AskamaNode::Control { end, range, .. } = node
                 && let Some(start) = leaves.iter().position(|l| l.start == range.start)
-                && let Some(end_idx) = leaves.iter().position(|l| l.start == *end)
+                && let end_idx = leaves.iter().position(|l| Some(l.start) == *end)
                 && let Root::Control { end, .. } = &mut leaves[start].root
             {
-                *end = Some(end_idx);
+                *end = end_idx;
             }
         }
 
         for html_node in html_nodes {
-            if let (Some(range), Some(end_tag)) = (html_node.range(), html_node.end_tag_idx())
-                && let Some(end_node) = html_nodes.get(end_tag)
+            if let (Some(range), Some(end)) = (html_node.range(), html_node.end())
                 && let Some(start) = leaves.iter().position(|l| l.start == range.start)
-                && let Some(end_idx) = leaves.iter().position(|l| l.start == end_node.start())
-                && askama::is_inside_same_ctrl(range.start, end_node.start(), askama_nodes)
+                && let Some(end_node) = html_nodes.get(end)
+                && askama::is_inside_same_ctrl(range.start, end_node.start(), askama_nodes) // TODO: remove this
+                && let end_idx = leaves.iter().position(|l| l.start == end_node.start())
                 && let Root::Tag { end, indent, .. } = &mut leaves[start].root
             {
-                *end = Some(end_idx);
+                *end = end_idx;
                 *indent = 1;
             }
         }
@@ -341,16 +303,12 @@ impl SakuraTree {
         leaves
     }
 
-    fn leaves_from_askama(
-        askama_nodes: &[AskamaNode],
-        pruned: &HashSet<usize>,
-        cfg: &Config,
-    ) -> BTreeSet<Leaf> {
+    fn leaves_from_askama(askama_nodes: &[AskamaNode], pruned: &HashSet<usize>) -> BTreeSet<Leaf> {
         askama_nodes
             .iter()
             .enumerate()
             .filter(|(idx, _)| !pruned.contains(idx))
-            .map(|(_, node)| Leaf::from_askama(cfg, node))
+            .map(|(_, node)| Leaf::from_askama(node))
             .collect()
     }
 
@@ -358,49 +316,49 @@ impl SakuraTree {
         html_nodes: &[HtmlNode],
         askama_nodes: &[AskamaNode],
         source: &str,
-        cfg: &Config,
     ) -> (BTreeSet<Leaf>, HashSet<usize>) {
         let mut leaves = BTreeSet::new();
         let mut pruned = HashSet::new();
 
         for node in html_nodes {
             match node {
-                HtmlNode::StartTag { .. }
-                | HtmlNode::Void { .. }
-                | HtmlNode::SelfClosingTag { .. } => {
+                HtmlNode::Start { .. } | HtmlNode::Void { .. } | HtmlNode::SelfClosing { .. } => {
                     let Some(range) = node.range() else { continue };
-
                     if let Some(embed) = node.embed_askm() {
                         pruned.extend(embed.iter().copied());
-                        let content = html::format_tag(range, source, askama_nodes, embed, cfg);
                         let root = Root::Tag {
                             indent: 0,
                             is_phrasing: node.is_phrasing(),
                             is_ws_sensitive: node.is_ws_sensitive(),
                             end: None,
                         };
+                        let content = html::format_tag(range, source, askama_nodes, embed);
                         leaves.insert(Leaf::grow(root, content, range.start, range.end));
                     } else {
                         leaves.insert(Leaf::from_html(node));
                     }
                 }
-                HtmlNode::Text { text, .. } | HtmlNode::RawText { text, .. } => {
-                    let is_raw = matches!(node, HtmlNode::RawText { .. });
+                HtmlNode::Text { text, .. } => {
                     let Some(range) = node.range() else { continue };
 
                     if let Some(embed) = node.embed_askm() {
-                        leaves.extend(Leaf::split_text(range, askama_nodes, embed, source, is_raw));
+                        leaves.extend(Leaf::from_mixed_text(range, askama_nodes, embed, source));
                     } else {
-                        leaves.insert(Leaf::from_text_or_raw(text, is_raw, range.start, range.end));
+                        leaves.insert(Leaf::from_text(text, range.start, range.end));
                     }
                 }
-                HtmlNode::Comment { .. } => {
+                HtmlNode::Raw { .. } | HtmlNode::Comment { .. } => {
                     let Some(range) = node.range() else { continue };
 
                     if let Some(embed) = node.embed_askm() {
                         pruned.extend(embed.iter().copied());
-                        let content = html::format_comment(range, source, askama_nodes, embed, cfg);
-                        leaves.insert(Leaf::grow(Root::Comment, content, range.start, range.end));
+                        let root = match node {
+                            HtmlNode::Raw { .. } => Root::Raw,
+                            HtmlNode::Comment { .. } => Root::Comment,
+                            _ => unreachable!(),
+                        };
+                        let content = html::format_opaque(range, source, askama_nodes, embed);
+                        leaves.insert(Leaf::grow(root, content, range.start, range.end));
                     } else {
                         leaves.insert(Leaf::from_html(node));
                     }
@@ -414,45 +372,8 @@ impl SakuraTree {
         (leaves, pruned)
     }
 
-    fn preserve_ws(leaves: &mut [Leaf], source: &str) {
-        for i in 0..leaves.len() {
-            let leaf = &leaves[i];
-
-            if !leaf.preserves_ws() {
-                continue;
-            }
-
-            // Check if the node itself has internal leading/trailing whitespace
-            let node_src = &source[leaf.start..leaf.end];
-            let ws_start = node_src.starts_with(char::is_whitespace);
-            let ws_end = node_src.ends_with(char::is_whitespace);
-
-            // Get adjacent nodes for context
-            let prev = i.checked_sub(1).map(|p| &leaves[p]);
-            let next = leaves.get(i + 1);
-
-            // Check if there is whitespace between nodes
-            let gap_before =
-                prev.is_some_and(|p| source[p.end..leaf.start].contains(char::is_whitespace));
-            let gap_after =
-                next.is_some_and(|n| source[leaf.end..n.start].contains(char::is_whitespace));
-
-            // Whitespace exists if it's internal to the node OR between nodes
-            let ws_before = ws_start || gap_before;
-            let ws_after = ws_end || gap_after;
-
-            let (before, after) = if leaf.is_ctrl() {
-                (ws_before, ws_after)
-            } else {
-                (
-                    ws_before && prev.is_some_and(Leaf::preserves_ws),
-                    ws_after && next.is_some_and(Leaf::preserves_ws),
-                )
-            };
-
-            leaves[i].ws_before = before;
-            leaves[i].ws_after = after;
-        }
+    fn source_has_ws(src: &str, pos: usize) -> bool {
+        src.as_bytes().get(pos).is_some_and(u8::is_ascii_whitespace)
     }
 
     fn generate_indent_map(&mut self) {
@@ -482,7 +403,7 @@ impl SakuraTree {
 
         let lines = match style {
             Style::Inline => vec![self.branch_content(start, end)],
-            Style::Wrapped => self.render_wrapped(start, end, indent),
+            Style::Wrapped => self.render_wrapped(start, end),
             Style::Comment => self.render_comment(start, end),
             Style::Raw => self.render_raw(start, end),
         };
@@ -490,71 +411,90 @@ impl SakuraTree {
         self.branches.push(Branch { indent, lines });
     }
 
-    // Grow concentric rings
-    fn grow_rings(&self, start_idx: usize, end_idx: usize) -> Vec<Ring> {
+    fn grow_rings(&self, start_idx: usize, end_idx: usize, phrasing_ctx: bool) -> Vec<Ring> {
         let mut rings = Vec::new();
         let mut start = start_idx;
 
         while start < end_idx {
             let leaf = &self.leaves[start];
-            let fallback_to_single_ring = || (Ring::Single(start), start);
 
-            let (ring, last) = match &leaf.root {
-                Root::Control { tag, .. } if tag.is_match_arm() => {
+            let (ring, last) = match leaf.root {
+                Root::Control {
+                    tag: ControlTag::When | ControlTag::MatchElse,
+                    ..
+                } => {
                     let mut curr = start + 1;
-
-                    while curr < end_idx {
-                        let Some(leaf) = self.leaves.get(curr) else {
-                            break;
-                        };
-                        if leaf.is_ctrl() {
-                            break;
-                        }
-                        curr = leaf.pair().map_or(curr + 1, |end| end + 1);
+                    while curr < end_idx && !self.leaves.get(curr).is_none_or(Leaf::is_ctrl) {
+                        curr = self.leaves[curr].pair().unwrap_or(curr) + 1;
                     }
-
-                    let end = if self.fits(start, curr - 1) {
-                        curr - 1
+                    let end = if self.fits(start, curr.saturating_sub(1)) {
+                        curr.saturating_sub(1)
                     } else {
                         start
                     };
                     (Ring::MatchArm { start, end }, end)
                 }
-                Root::Control { tag, .. } if tag.is_opening() => {
-                    if let Some(end) = leaf.pair() {
-                        let inner = self.grow_rings(start + 1, end);
-                        (Ring::Paired { start, end, inner }, end)
-                    } else {
-                        fallback_to_single_ring()
-                    }
-                }
-                Root::Tag { .. } => {
-                    if let Some(end) = leaf.pair() {
-                        if leaf.is_phrasing()
-                            && self.leaves.get(end + 1).is_some_and(Leaf::is_text_sequence)
-                            && let Some((ring, next)) = self.try_text_sequence(start, end_idx)
+                Root::Raw => (Ring::Raw(start), start),
+                Root::Comment => (Ring::Comment(start), start),
+                //  Inline
+                _ if !leaf.is_block() && (leaf.pair().is_none() || !leaf.ws_after) => {
+                    let (mut curr, mut end) = (start, start);
+                    while curr < end_idx {
+                        let curr_leaf = &self.leaves[curr];
+                        if !curr_leaf.can_be_inline()
+                            || curr > start
+                                && curr_leaf
+                                    .pair()
+                                    .is_some_and(|idx| !self.fits(curr, idx) && curr_leaf.ws_after)
+                            || curr_leaf.is_ctrl() && curr_leaf.pair().is_none()
                         {
-                            (ring, next)
-                        } else {
-                            let inner = self.grow_rings(start + 1, end);
-                            (Ring::Paired { start, end, inner }, end)
+                            break;
                         }
-                    } else {
-                        fallback_to_single_ring()
+                        end = curr_leaf.pair().unwrap_or(curr);
+                        curr = end + 1;
                     }
+                    (Ring::Phrasing { start, end }, end)
                 }
-                Root::RawText => {
-                    let count = self.leaves[start..end_idx]
-                        .iter()
-                        .take_while(|l| matches!(l.root, Root::RawText | Root::Expr))
-                        .count();
-                    let end = start + count - 1;
-                    (Ring::RawText { start, end }, end)
-                }
-                Root::Text | Root::Entity | Root::Expr => self
-                    .try_text_sequence(start, end_idx)
-                    .unwrap_or_else(fallback_to_single_ring),
-                _ => fallback_to_single_ring(),
+                // Paired
+                _ => match leaf.pair() {
+                    Some(end) => {
+                        let curr = start + 1;
+                        let all_inline = self.leaves[curr..end].iter().all(Leaf::can_be_inline);
+
+                        let inner = self.grow_rings(
+                            curr,
+                            end,
+                            phrasing_ctx || all_inline || !leaf.ws_before,
+                        );
+
+                        let trailing = if leaf.can_be_inline() {
+                            self.find_trailing(end, end_idx)
+                        } else {
+                            end
+                        };
+
+                        if phrasing_ctx && all_inline && leaf.can_be_inline() && !leaf.ws_after {
+                            (
+                                Ring::Phrasing {
+                                    start,
+                                    end: trailing,
+                                },
+                                trailing,
+                            )
+                        } else {
+                            (
+                                Ring::Block {
+                                    start,
+                                    end,
+                                    inner,
+                                    trailing,
+                                },
+                                trailing,
+                            )
+                        }
+                    }
+                    None => (Ring::Single(start), start),
+                },
             };
 
             rings.push(ring);
@@ -564,244 +504,68 @@ impl SakuraTree {
         rings
     }
 
-    fn grow_inner_rings(&self, start_idx: usize, end_idx: usize) -> Vec<Ring> {
-        self.grow_rings(start_idx + 1, end_idx)
-    }
-
-    fn try_text_sequence(&self, start_idx: usize, end_idx: usize) -> Option<(Ring, usize)> {
-        let mut last_idx = start_idx;
-        let mut start = start_idx;
-        let mut inner_rings = Vec::new();
-
-        // Collect following phrasing content
-        while start < end_idx {
-            let leaf = &self.leaves[start];
-
-            if leaf.is_phrasing() {
-                if let Some(end) = leaf.pair() {
-                    // Check if complete element fits inline
-                    if !self.fits(start, end) {
-                        if start == start_idx {
-                            return None;
-                        }
-                        break;
-                    }
-
-                    let inner = self.grow_inner_rings(start, end);
-                    if !inner.is_empty() {
-                        inner_rings.push(Ring::TextSequence { start, end, inner });
-                    }
-
-                    last_idx = end;
-                    start = end + 1;
-                    continue;
-                }
-
-                inner_rings.push(Ring::Single(start));
-                last_idx = start;
-                start += 1;
-            } else {
-                if start == start_idx {
-                    return None;
-                }
+    fn find_trailing(&self, start: usize, end: usize) -> usize {
+        let mut trailing = start;
+        while trailing + 1 < end {
+            if self.leaves[trailing].ws_after {
                 break;
             }
+            let next = &self.leaves[trailing + 1];
+            if next.ws_before {
+                break;
+            }
+            trailing = next.pair().unwrap_or(trailing + 1);
         }
-
-        (last_idx >= start_idx).then_some({
-            (
-                Ring::TextSequence {
-                    start: start_idx,
-                    end: last_idx,
-                    inner: inner_rings,
-                },
-                last_idx,
-            )
-        })
+        trailing
     }
 
     fn grow_branch_recursive(&mut self, ring: &Ring) {
-        let (start, end) = ring.range();
-
-        let fits = self.indent_width(start) + self.width(start, end) <= self.cfg.max_width;
-
         match ring {
-            Ring::Paired { start, end, inner } => {
-                let has_block = self.has_block_inner_rings(inner);
-
-                if fits && !has_block {
+            Ring::Block {
+                start,
+                end,
+                inner,
+                trailing,
+            } => {
+                if self.fits(*start, *trailing)
+                    && inner.iter().all(|r| matches!(r, Ring::Phrasing { .. }))
+                {
                     self.grow_branch(*start, *end, &Style::Inline);
                 } else {
                     self.grow_branch(*start, *start, &Style::Inline);
                     for ring in inner {
                         self.grow_branch_recursive(ring);
                     }
-                    self.grow_branch(*end, *end, &Style::Inline);
-                }
-            }
-            Ring::TextSequence { start, end, inner } => {
-                if fits {
-                    self.grow_branch(*start, *end, &Style::Inline);
-                } else {
-                    let all_text_seq = (*start..=*end)
-                        .filter_map(|i| self.leaves.get(i))
-                        .all(Leaf::is_text_sequence);
-
-                    if !all_text_seq {
-                        self.split_text_sequence(*start, inner);
+                    if self.leaves[*end].ws_after && trailing > end {
+                        self.grow_branch(*end, *end, &Style::Inline);
+                        self.grow_branch(*end + 1, *trailing, &Style::Wrapped);
                     } else {
-                        self.grow_branch(*start, *end, &Style::Wrapped);
+                        self.grow_branch(*end, *trailing, &Style::Inline);
                     }
                 }
             }
-            Ring::RawText { start, end } => {
-                self.grow_branch(*start, *end, &Style::Raw);
-            }
-            Ring::MatchArm { start, end } => {
-                self.grow_branch(*start, *end, &Style::Inline);
-            }
-            Ring::Single(idx) => match &self.leaves[*idx].root {
-                Root::Comment => {
-                    self.grow_branch(*idx, *idx, &Style::Comment);
-                }
-                _ => self.grow_branch(*idx, *idx, &Style::Inline),
-            },
+            Ring::Phrasing { start, end } => self.grow_branch(*start, *end, &Style::Wrapped),
+            Ring::MatchArm { start, end } => self.grow_branch(*start, *end, &Style::Inline),
+            Ring::Raw(idx) => self.grow_branch(*idx, *idx, &Style::Raw),
+            Ring::Comment(idx) => self.grow_branch(*idx, *idx, &Style::Comment),
+            Ring::Single(idx) => self.grow_branch(*idx, *idx, &Style::Inline),
         }
-    }
-
-    fn has_block_inner_rings(&self, inner: &[Ring]) -> bool {
-        inner.iter().any(|ring| self.is_ring_block_level(ring))
-    }
-
-    fn is_ring_block_level(&self, ring: &Ring) -> bool {
-        let first_leaf = &self.leaves[ring.range().0];
-
-        match ring {
-            Ring::Paired { .. } | Ring::Single { .. } => first_leaf.is_block_level(),
-            Ring::RawText { .. } => true,
-            Ring::TextSequence { .. } | Ring::MatchArm { .. } => false,
-        }
-    }
-
-    fn leaflets_from_leaf(
-        &self,
-        leaf: &Leaf,
-        current: &mut String,
-        leaflets: &mut Vec<(String, bool)>,
-    ) {
-        match &leaf.root {
-            Root::Text => {
-                let words: Vec<&str> = leaf.content.split_whitespace().collect();
-
-                for (word_idx, word) in words.iter().enumerate() {
-                    let is_first_word = word_idx == 0;
-                    let is_last_word = word_idx == words.len() - 1;
-
-                    if is_first_word && leaf.ws_before && !current.is_empty() {
-                        leaflets.push((current.clone(), true));
-                        current.clear();
-                    }
-
-                    if !is_first_word && !current.is_empty() {
-                        leaflets.push((current.clone(), true));
-                        current.clear();
-                    }
-
-                    current.push_str(word);
-
-                    if is_last_word && leaf.ws_after {
-                        leaflets.push((current.clone(), true));
-                        current.clear();
-                    }
-                }
-            }
-            Root::Expr | Root::Entity | Root::Tag { .. } => {
-                if leaf.ws_before && !current.is_empty() {
-                    leaflets.push((current.clone(), true));
-                    current.clear();
-                }
-
-                current.push_str(&leaf.content);
-
-                if leaf.ws_after {
-                    leaflets.push((current.clone(), true));
-                    current.clear();
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn leaflets_from_rings(&self, inner: &[Ring]) -> Vec<(String, bool)> {
-        let mut leaflets: Vec<(String, bool)> = Vec::new();
-        let mut current = String::new();
-
-        for ring in inner {
-            let (ring_start, ring_end) = ring.range();
-
-            match ring {
-                Ring::Single(idx) => {
-                    let leaf = &self.leaves[*idx];
-                    self.leaflets_from_leaf(leaf, &mut current, &mut leaflets);
-                }
-                Ring::Paired { .. } | Ring::TextSequence { .. } => {
-                    let first_leaf = &self.leaves[ring_start];
-                    let last_leaf = &self.leaves[ring_end];
-
-                    if first_leaf.ws_before && !current.is_empty() {
-                        leaflets.push((current, true));
-                        current = String::new();
-                    }
-
-                    current.push_str(&self.branch_content(ring_start, ring_end));
-
-                    let has_ws_after = last_leaf.ws_after;
-                    if !current.is_empty() {
-                        leaflets.push((current, has_ws_after));
-                        current = String::new();
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        if !current.is_empty() {
-            leaflets.push((current, false));
-        }
-
-        leaflets
-    }
-
-    fn split_text_sequence(&mut self, start: usize, inner: &[Ring]) {
-        let leaflets = self.leaflets_from_rings(inner);
-
-        if leaflets.is_empty() {
-            return;
-        }
-
-        let indent = self.indent_map[start];
-        let indent_width = indent * self.cfg.indent_size;
-        let available_width = self.cfg.max_width.saturating_sub(indent_width);
-
-        let lines = self.wrap_leaflets(leaflets, available_width);
-        self.branches.push(Branch { indent, lines });
     }
 
     fn fits(&self, start: usize, end: usize) -> bool {
-        self.width(start, end) <= self.cfg.max_width
+        self.indent_map[start] * self.cfg.indent_size + self.width(start, end) <= self.cfg.max_width
+    }
+
+    fn fits_2(&self, start: usize, line: &str, extra: usize) -> bool {
+        self.indent_map[start] * self.cfg.indent_size + line.chars().count() + extra
+            < self.cfg.max_width
     }
 
     fn width(&self, start: usize, end: usize) -> usize {
         (start..=end)
             .filter_map(|i| self.leaves.get(i))
-            .map(Leaf::chars_count)
+            .map(|l| l.content.chars().count())
             .sum()
-    }
-
-    fn has_ws(&self, prev_idx: usize, curr_idx: usize) -> bool {
-        let after_prev = self.leaves.get(prev_idx).is_some_and(|l| l.ws_after);
-        let before_curr = self.leaves.get(curr_idx).is_some_and(|l| l.ws_before);
-        after_prev || before_curr
     }
 
     pub fn print(&self) -> String {
@@ -835,10 +599,13 @@ impl SakuraTree {
 
         for leaf_idx in start..=end {
             if let Some(leaf) = self.leaves.get(leaf_idx) {
-                if let Some(prev) = prev_idx
-                    && self.has_ws(prev, leaf_idx)
-                {
-                    content.push(' ');
+                if let Some(prev) = prev_idx {
+                    let has_ws = self.leaves.get(prev).is_some_and(|l: &Leaf| {
+                        l.preserves_ws() && leaf.preserves_ws() && (l.ws_after || leaf.ws_before)
+                    });
+                    if has_ws {
+                        content.push(' ');
+                    }
                 }
                 content.push_str(&leaf.content);
                 prev_idx = Some(leaf_idx);
@@ -848,125 +615,134 @@ impl SakuraTree {
         content
     }
 
-    fn grow_leaflets(&self, start: usize, end: usize) -> Vec<(String, bool)> {
-        let mut leaflets: Vec<(String, bool)> = Vec::new();
-        let mut current = String::new();
+    fn grow_leaflets(&self, branch_start: usize, branch_end: usize) -> Vec<Leaflet<'_>> {
+        let leaves = &self.leaves[branch_start..=branch_end];
+        let mut leaflets = Vec::new();
+        let mut pairs = Vec::new();
 
-        for i in start..=end {
-            let leaf = &self.leaves[i];
+        for leaf in leaves {
+            pairs.push(leaflets.len());
 
-            if !leaf.is_text_sequence() {
-                continue;
+            if leaf.root == Root::Text {
+                for (i, content) in leaf.content.split_whitespace().enumerate() {
+                    leaflets.push(Leaflet {
+                        content,
+                        ws_before: i > 0 || leaf.ws_before,
+                        pair_end: None,
+                    });
+                }
+            } else {
+                leaflets.push(Leaflet {
+                    content: leaf.content.as_str(),
+                    ws_before: leaf.ws_before,
+                    pair_end: None,
+                });
             }
-
-            self.leaflets_from_leaf(leaf, &mut current, &mut leaflets);
         }
 
-        if !current.is_empty() {
-            leaflets.push((current, false));
+        for (i, leaf) in leaves.iter().enumerate() {
+            if let Some(leaf_pair) = leaf.pair().and_then(|p| p.checked_sub(branch_start))
+                && let (Some(start), Some(end)) = (pairs.get(i), pairs.get(leaf_pair))
+                && let Some(leaflet) = leaflets.get_mut(*start)
+            {
+                leaflet.pair_end = Some(*end);
+            }
+
+            if leaf.ws_after
+                && let Some(next) = pairs.get(i + 1)
+                && let Some(leaflet) = leaflets.get_mut(*next)
+            {
+                leaflet.ws_before = true;
+            }
         }
 
         leaflets
     }
 
-    fn wrap_leaflets(&self, leaflets: Vec<(String, bool)>, available_width: usize) -> Vec<String> {
-        let mut lines: Vec<String> = Vec::new();
-        let mut current_line = String::new();
-        let mut current_width: usize = 0;
-        let mut prev_has_space = false;
-
-        for (leaflet, has_space_after) in leaflets {
-            let leaflet_width = leaflet.chars().count();
-            let need_space = current_width > 0 && prev_has_space;
-            let projected_width = current_width + usize::from(need_space) + leaflet_width;
-
-            if projected_width > available_width && current_width > 0 {
-                lines.push(current_line);
-                current_line = String::new();
-                current_width = 0;
-            }
-
-            if current_width > 0 && prev_has_space {
-                current_line.push(' ');
-                current_width += 1;
-            }
-
-            current_line.push_str(&leaflet);
-            current_width += leaflet_width;
-            prev_has_space = has_space_after;
-        }
-
-        if !current_line.is_empty() {
-            lines.push(current_line);
-        }
-
-        lines
-    }
-
-    fn render_wrapped(&self, start: usize, end: usize, indent: usize) -> Vec<String> {
-        let indent_width = indent * self.cfg.indent_size;
-        let available_width = self.cfg.max_width.saturating_sub(indent_width);
+    fn render_wrapped(&self, start: usize, end: usize) -> Vec<String> {
         let leaflets = self.grow_leaflets(start, end);
-        self.wrap_leaflets(leaflets, available_width)
+        let mut lines = Vec::new();
+        let mut curr_line = String::new();
+        let mut pair = None;
+
+        for (i, leaflet) in leaflets.iter().enumerate() {
+            let mut end = leaflets[i].pair_end.unwrap_or(i);
+
+            while let Some(next) = leaflets.get(end + 1).filter(|n| !n.ws_before) {
+                end = next.pair_end.unwrap_or(end + 1);
+            }
+
+            let curr_width = leaflets[i..=end]
+                .iter()
+                .enumerate()
+                .map(|(i, ll)| ll.content.chars().count() + usize::from(i > 0 && ll.ws_before))
+                .sum();
+
+            if leaflet.ws_before
+                && pair.is_none_or(|p| i > p)
+                && !curr_line.is_empty()
+                && !self.fits_2(start, &curr_line, curr_width)
+            {
+                lines.push(std::mem::take(&mut curr_line));
+            }
+
+            if leaflet.ws_before && !curr_line.is_empty() {
+                curr_line.push(' ');
+            }
+
+            curr_line.push_str(leaflet.content);
+            pair = pair.max(leaflet.pair_end);
+        }
+
+        lines.push(curr_line);
+        lines
     }
 
     fn render_comment(&self, start: usize, end: usize) -> Vec<String> {
         let content = self.branch_content(start, end);
+        let lines: Vec<&str> = content.lines().collect();
+        let indent = self.indent_as_string(1);
 
-        if !content.contains('\n') {
-            return vec![content];
-        }
-
-        let source_lines: Vec<&str> = content.lines().collect();
-        let relative_indent = self.indent_as_string(1);
-        let mut formatted_lines = Vec::new();
-
-        for (i, line) in source_lines.iter().enumerate() {
-            let trimmed = line.trim_start();
-
-            if trimmed.is_empty() {
-                formatted_lines.push(String::new());
-            } else if i == 0 || i == source_lines.len() - 1 {
-                formatted_lines.push(trimmed.to_string());
-            } else {
-                formatted_lines.push(format!("{}{}", relative_indent, trimmed));
-            }
-        }
-
-        formatted_lines
+        lines
+            .iter()
+            .enumerate()
+            .map(|(i, line)| {
+                let line = line.trim_start();
+                if line.is_empty() || i == 0 || i == lines.len() - 1 {
+                    line.to_string()
+                } else {
+                    format!("{}{}", indent, line)
+                }
+            })
+            .collect()
     }
 
     fn render_raw(&self, start: usize, end: usize) -> Vec<String> {
         let content = self.branch_content(start, end);
-        let mut lines = Vec::new();
-        let mut curr_indent: usize = 0;
+        let lines: Vec<&str> = content.lines().collect();
 
-        for line in content.lines() {
-            if line.is_empty() {
-                lines.push(String::new());
-                continue;
-            }
-
-            let leading_close = usize::from(line.starts_with('}'));
-            curr_indent = curr_indent.saturating_sub(leading_close);
-
-            let indent_str = self.indent_as_string(curr_indent);
-            lines.push(format!("{}{}", indent_str, line));
-
-            let open_braces = line.matches('{').count() as isize;
-            let close_braces = line.matches('}').count() as isize;
-            let net_change = open_braces - close_braces + leading_close as isize;
-            curr_indent = curr_indent.saturating_add_signed(net_change);
-        }
+        let indent = lines
+            .iter()
+            .filter_map(|l| l.chars().position(|c| !c.is_whitespace()))
+            .min()
+            .unwrap_or(0);
 
         lines
+            .iter()
+            .enumerate()
+            .filter_map(|(i, line)| {
+                if !line.trim().is_empty() {
+                    Some(line.get(indent..).unwrap_or(line).to_string())
+                } else if i != 0 && i != lines.len() - 1 {
+                    Some(String::new())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     fn indent_as_string(&self, indent: usize) -> String {
         " ".repeat(indent * self.cfg.indent_size)
-    }
-
-    fn indent_width(&self, idx: usize) -> usize {
-        self.indent_map[idx] * self.cfg.indent_size
     }
 }

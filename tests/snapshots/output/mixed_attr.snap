@@ -2,5 +2,4 @@
 source: tests/snapshots/mixed.rs
 description: "<i class=\"wi-icon-xl {{ data.icon_class }} wi-primary {{ color }}\" aria-label=\"{{ data.description }}\"></i>\n"
 ---
-<i class="wi-icon-xl {{ data.icon_class }} wi-primary {{ color }}" aria-label="{{ data.description }}">
-</i>
+<i class="wi-icon-xl {{ data.icon_class }} wi-primary {{ color }}" aria-label="{{ data.description }}"></i>

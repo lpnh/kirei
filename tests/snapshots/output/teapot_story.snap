@@ -12,15 +12,11 @@ description: "<!-- History section -->\n{% if show_history %}\n    <section id=\
         <h2>The Story Behind the Teapot</h2>
         <p style="margin-bottom: 1rem;">
             In 1998, Larry Masinter wrote
-            <strong>
-                <a href="https://www.rfc-editor.org/rfc/rfc2324" target="_blank" style="color: var(--teapot-brown); text-decoration: underline;">
-                    RFC 2324
-                </a>
-            </strong>
-            —the Hyper Text Coffee Pot Control Protocol (HTCPCP)—as an April
-            Fools' Day joke. It described a protocol for controlling networked
-            coffee pots over the internet, complete with status codes for
-            different brewing situations.
+            <strong><a href="https://www.rfc-editor.org/rfc/rfc2324" target="_blank" style="color: var(--teapot-brown); text-decoration: underline;">RFC 2324</a></strong>—the
+            Hyper Text Coffee Pot Control Protocol (HTCPCP)—as an April Fools'
+            Day joke. It described a protocol for controlling networked coffee
+            pots over the internet, complete with status codes for different
+            brewing situations.
         </p>
         <div class="code-block">
             {% raw %}
@@ -49,10 +45,7 @@ description: "<!-- History section -->\n{% if show_history %}\n    <section id=\
                 practical use. A 15-year-old developer named Shane Brunswick
                 wasn't having it. He created <strong>save418.com</strong> and
                 the "Save 418 Movement," arguing that references to 418 serve as
-                <em>
-                    "a reminder that the underlying processes of computers are
-                    still made by humans."
-                </em>
+                <em>"a reminder that the underlying processes of computers are still made by humans."</em>
             </p>
             <p style="margin-top: 1rem;">
                 The campaign got traction on Reddit and Twitter with the

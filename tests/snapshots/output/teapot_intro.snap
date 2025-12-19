@@ -73,18 +73,14 @@ description: "{% if is_teapot %}\n    <div class=\"hero\">\n        <h1>🫖 I'm
                     <div class="teapot-emoji">{{ teapot.emoji }}</div>
                     <div class="teapot-name">{{ teapot.name }}</div>
                     <div class="teapot-origin">Origin: {{ teapot.origin }}</div>
-                    <span class="badge badge-incompatible">
-                        ✓ Coffee Incompatible
-                    </span>
+                    <span class="badge badge-incompatible">✓ Coffee Incompatible</span>
                 </div>
             {% else %}
                 <div class="teapot-card">
                     <div class="teapot-emoji">{{ teapot.emoji }}</div>
                     <div class="teapot-name">{{ teapot.name }}</div>
                     <div class="teapot-origin">Origin: {{ teapot.origin }}</div>
-                    <span class="badge badge-imposter">
-                        ⚠️ Not a Real Teapot
-                    </span>
+                    <span class="badge badge-imposter">⚠️ Not a Real Teapot</span>
                 </div>
             {% endif %}
         {% endfor %}

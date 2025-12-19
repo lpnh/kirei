@@ -7,11 +7,7 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
     <p style="margin-bottom: 1rem;">
         Status code 418 started in HTCPCP (RFC 2324), but it's now referenced in
         the HTTP semantics spec
-        <strong>
-            <a href="https://www.rfc-editor.org/rfc/rfc9110" target="_blank" style="color: var(--teapot-brown); text-decoration: underline;">
-                RFC 9110
-            </a>
-        </strong>
+        <strong><a href="https://www.rfc-editor.org/rfc/rfc9110" target="_blank" style="color: var(--teapot-brown); text-decoration: underline;">RFC 9110</a></strong>
         and officially reserved. Here are some technical details about how it's
         implemented.
     </p>
@@ -27,27 +23,15 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
                 </p>
                 <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
                     <strong>Tea Support:</strong>
-                    {% if feature_flags bitand 1 == 1 %}
-                        <span style="color: #28a745;">✓ Enabled</span>
-                    {% else %}
-                        <span style="color: #dc3545;">✗ Disabled</span>
-                    {% endif %}
+                    {% if feature_flags bitand 1 == 1 %}<span style="color: #28a745;">✓ Enabled</span>{% else %}<span style="color: #dc3545;">✗ Disabled</span>{% endif %}
                 </p>
                 <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
                     <strong>HTCPCP Compatible:</strong>
-                    {% if feature_flags bitand 4 == 4 %}
-                        <span style="color: #28a745;">✓ Yes</span>
-                    {% else %}
-                        <span style="color: #dc3545;">✗ No</span>
-                    {% endif %}
+                    {% if feature_flags bitand 4 == 4 %}<span style="color: #28a745;">✓ Yes</span>{% else %}<span style="color: #dc3545;">✗ No</span>{% endif %}
                 </p>
                 <p style="padding: 0.5rem 0;">
                     <strong>RFC 2324 Compliant:</strong>
-                    {% if feature_flags bitand 8 == 8 %}
-                        <span style="color: #28a745;">✓ Yes</span>
-                    {% else %}
-                        <span style="color: #dc3545;">✗ No</span>
-                    {% endif %}
+                    {% if feature_flags bitand 8 == 8 %}<span style="color: #28a745;">✓ Yes</span>{% else %}<span style="color: #dc3545;">✗ No</span>{% endif %}
                 </p>
             </div>
         </div>
@@ -60,18 +44,12 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
                 {% let resource_ref = &resource_type %}
                 <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
                     <strong>Resource Type:</strong>
-                    <span style="color: var(--teapot-brown);">
-                        {{ *resource_ref }}
-                    </span>
+                    <span style="color: var(--teapot-brown);">{{ *resource_ref }}</span>
                 </p>
                 <p style="padding: 0.5rem 0;">
                     <strong>URI Scheme:</strong>
-                    <code style="background: #f8f9fa; padding: 0.2rem 0.5rem; border-radius: 4px;">
-                        coffee://
-                    </code>
-                    <span style="color: var(--error-red);">
-                        (incompatible with {{ *resource_ref }}s)
-                    </span>
+                    <code style="background: #f8f9fa; padding: 0.2rem 0.5rem; border-radius: 4px;">coffee://</code>
+                    <span style="color: var(--error-red);">(incompatible with {{ *resource_ref }}s)</span>
                 </p>
             </div>
         </div>
@@ -82,15 +60,8 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
         </h3>
         <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow);">
             <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
-                <strong>
-                    {#- Performance statistics for HTTP operations -#}
-                    Total
-                    {#~ operations ~#}
-                    Processed:
-                </strong>
-                <span style="color: var(--teapot-brown); font-size: 1.5rem; font-weight: bold;">
-                    {{ (brew_attempts + successful_teas) * 2 / 10 }}
-                </span>
+                <strong>{#- Performance statistics for HTTP operations -#}Total{#~ operations ~#}Processed:</strong>
+                <span style="color: var(--teapot-brown); font-size: 1.5rem; font-weight: bold;">{{ (brew_attempts + successful_teas) * 2 / 10 }}</span>
             </p>
             <p style="padding: 0.5rem 0;">
                 <strong>Success Rate:</strong>
@@ -113,20 +84,14 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
                 {% when Some(reason) %}
                     <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
                         <strong>Canonical Reason Phrase:</strong>
-                        <span style="color: var(--teapot-brown); font-family: monospace; font-size: 1.1rem;">
-                            "{{ reason }}"
-                        </span>
+                        <span style="color: var(--teapot-brown); font-family: monospace; font-size: 1.1rem;">"{{ reason }}"</span>
                     </p>
                     <p style="padding: 0.5rem 0;">
                         <strong>Authenticity Check:</strong>
                         {% if *reason == "I'm a teapot" %}
-                            <span style="color: #28a745;">
-                                ✓ This is the genuine RFC 2324 response!
-                            </span>
+                            <span style="color: #28a745;">✓ This is the genuine RFC 2324 response!</span>
                         {% else %}
-                            <span style="color: #dc3545;">
-                                ✗ Unexpected reason phrase detected
-                            </span>
+                            <span style="color: #dc3545;">✗ Unexpected reason phrase detected</span>
                         {% endif %}
                     </p>
                 {% when None %}
@@ -153,20 +118,14 @@ description: "<section id=\"status-code-details\" class=\"section\">\n    <h2>Th
             </p>
             <p style="padding: 0.5rem 0; border-bottom: 1px solid #e9ecef;">
                 <strong>Status Category:</strong> {{ status_category }}xx class
-                {% if status_category == 4 %}
-                    <span style="color: var(--error-red);">
-                        (Client Error - you tried to make a teapot brew coffee!)
-                    </span>
-                {% endif %}
+                {% if status_category == 4 %}<span style="color: var(--error-red);">(Client Error - you tried to make a teapot brew coffee!)</span>{% endif %}
             </p>
             <p style="padding: 0.5rem 0;">
                 <strong>Teapot Verification:</strong>
                 {% if status_u16 == 418 %}
                     <span style="color: #28a745;">✓ Confirmed</span>
                 {% else %}
-                    <span style="color: #dc3545;">
-                        ✗ This is not the teapot you're looking for
-                    </span>
+                    <span style="color: #dc3545;">✗ This is not the teapot you're looking for</span>
                 {% endif %}
             </p>
         </div>

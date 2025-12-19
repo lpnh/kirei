@@ -59,8 +59,8 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
         <script type="application/json" id="ice-cream-data">
             {
                 "menu": [
-                {"name": "Vanilla Bean Dream", "price": 4.99, "cold": true},
-                {"name": "Spicy Chili Chocolate", "price": 6.99, "cold": false}
+                    {"name": "Vanilla Bean Dream", "price": 4.99, "cold": true},
+                    {"name": "Spicy Chili Chocolate", "price": 6.99, "cold": false}
                 ],
                 "specials": {
                     "monday": "Buy 2 Scoops Get 1 Free",
@@ -84,24 +84,16 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
         <nav>
             <ul style="list-style: none; display: flex; justify-content: center; gap: 20px;">
                 <li>
-                    <a href="#menu" onclick="return confirm('Ready for frozen deliciousness?')">
-                        Menu
-                    </a>
+                    <a href="#menu" onclick="return confirm('Ready for frozen deliciousness?')">Menu</a>
                 </li>
                 <li>
-                    <a href="mailto:scoops@dreams.com?subject=Ice%20Cream%20Inquiry">
-                        Email Us
-                    </a>
+                    <a href="mailto:scoops@dreams.com?subject=Ice%20Cream%20Inquiry">Email Us</a>
                 </li>
                 <li>
-                    <a href="tel:+1-555-SCOOPS" title="Call for instant frozen gratification!">
-                        📞 Call
-                    </a>
+                    <a href="tel:+1-555-SCOOPS" title="Call for instant frozen gratification!">📞 Call</a>
                 </li>
                 <li>
-                    <a href="https://example.com" target="_blank" rel="noopener">
-                        External Link
-                    </a>
+                    <a href="https://example.com" target="_blank" rel="noopener">External Link</a>
                 </li>
             </ul>
         </nav>
@@ -168,40 +160,20 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                         <!-- Radio buttons with inline elements -->
                         <p>
                             Size:
-                            <label>
-                                <input type="radio" name="size" value="single" checked />
-                                Single Scoop 🍦
-                            </label>
-                            <label>
-                                <input type="radio" name="size" value="double" />
-                                Double Scoop 🍦🍦
-                            </label>
+                            <label><input type="radio" name="size" value="single" checked /> Single Scoop 🍦</label>
+                            <label><input type="radio" name="size" value="double" /> Double Scoop 🍦🍦</label>
                         </p>
                         <!-- Checkboxes with various formatting -->
                         <p>Flavors:</p>
                         <div class="flavors-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
-                            <label class="flavor">
-                                <input type="checkbox" name="flavors" value="vanilla" />
-                                🤍 Vanilla Bean
-                            </label>
-                            <label class="flavor">
-                                <input type="checkbox" name="flavors" value="chocolate" />
-                                🤎 Chocolate Fudge
-                            </label>
-                            <label class="flavor">
-                                <input type="checkbox" name="flavors" value="strawberry" />
-                                🍓 Strawberry <em>(seasonal!)</em>
-                            </label>
-                            <label class="flavor">
-                                <input type="checkbox" name="flavors" value="mint" />
-                                🌿 Mint Chip <small>(refreshing)</small>
-                            </label>
+                            <label class="flavor"><input type="checkbox" name="flavors" value="vanilla" /> 🤍 Vanilla Bean</label>
+                            <label class="flavor"><input type="checkbox" name="flavors" value="chocolate" /> 🤎 Chocolate Fudge</label>
+                            <label class="flavor"><input type="checkbox" name="flavors" value="strawberry" /> 🍓 Strawberry <em>(seasonal!)</em></label>
+                            <label class="flavor"><input type="checkbox" name="flavors" value="mint" /> 🌿 Mint Chip <small>(refreshing)</small></label>
                         </div>
                         <!-- Range and number inputs -->
                         <p>
-                            <label for="sweetness-level">
-                                Sweetness Level (1-10):
-                            </label>
+                            <label for="sweetness-level">Sweetness Level (1-10):</label>
                             <input type="range" id="sweetness-level" name="sweetness" min="1" max="10" value="7" oninput="document.getElementById('sweetness-display').textContent=this.value" />
                             <output id="sweetness-display">7</output> 🍯
                         </p>
@@ -211,17 +183,11 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                         </p>
                         <!-- Textarea and select -->
                         <p>
-                            <label for="special-instructions">
-                                Special Instructions:
-                            </label>
-                            <br />
-                            <textarea id="special-instructions" name="instructions" rows="3" cols="50" placeholder="Extra sprinkles, waffle cone, birthday candle...">
-                            </textarea>
+                            <label for="special-instructions">Special Instructions:</label><br />
+                            <textarea id="special-instructions" name="instructions" rows="3" cols="50" placeholder="Extra sprinkles, waffle cone, birthday candle..."></textarea>
                         </p>
                         <p>
-                            <label for="pickup-time">
-                                Preferred Pickup Time:
-                            </label>
+                            <label for="pickup-time">Preferred Pickup Time:</label>
                             <select id="pickup-time" name="pickup-time">
                                 <option value="">Select a time</option>
                                 <optgroup label="Today">
@@ -249,9 +215,7 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                         <button type="submit" onclick="return orderIceCream('custom')" style="background: #87CEEB; color: white; padding: 15px 30px; border: none; border-radius: 25px; font-size: 1.2em; cursor: pointer;">
                             🍦 Order My Ice Cream! 🍦
                         </button>
-                        <button type="reset" style="margin-left: 10px; padding: 10px 20px;">
-                            Clear Order
-                        </button>
+                        <button type="reset" style="margin-left: 10px; padding: 10px 20px;">Clear Order</button>
                         <input type="button" value="Surprise Me!" onclick="alert('🎲 Random flavor incoming!')" style="margin-left: 10px; padding: 10px 20px;" />
                     </div>
                     <!-- Hidden inputs -->
@@ -352,9 +316,7 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
                 </p>
                 <hr style="margin: 20px 0; border: 2px dashed #87CEEB;" />
                 <p>Ice cream gallery:</p>
-                <img src="icecream1.jpg" alt="Ice Cream 1" />
-                <img src="icecream2.jpg" alt="Ice Cream 2" />
-                <img src="icecream3.jpg" alt="Ice Cream 3" />
+                <img src="icecream1.jpg" alt="Ice Cream 1" /><img src="icecream2.jpg" alt="Ice Cream 2" /><img src="icecream3.jpg" alt="Ice Cream 3" />
             </section>
             <!-- Details and summary -->
             <details open>
@@ -393,20 +355,13 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
         <!-- Footer with contact info -->
         <footer style="background: #333; color: white; padding: 20px; text-align: center; margin-top: 40px;">
             <address>
-                <strong>Scoops &#38; Dreams</strong>
-                <br />
-                456 Frozen Lane<br /> Sweet City, SC 67890<br />
-                <a href="tel:+1-555-SCOOPS" style="color: #87CEEB;">📞 1-555-SCOOPS</a>
-                <br />
-                <a href="mailto:info@scoopsanddreams.com" style="color: #87CEEB;">
-                    📧 info@scoopsanddreams.com
-                </a>
+                <strong>Scoops &#38; Dreams</strong><br /> 456 Frozen Lane<br />
+                Sweet City, SC 67890<br />
+                <a href="tel:+1-555-SCOOPS" style="color: #87CEEB;">📞 1-555-SCOOPS</a><br />
+                <a href="mailto:info@scoopsanddreams.com" style="color: #87CEEB;">📧 info@scoopsanddreams.com</a>
             </address>
             <p style="margin-top: 20px;">
-                <small>
-                    © 2024 Scoops &#38; Dreams. All rights reserved. No ice
-                    cream was melted in the making of this website.
-                </small>
+                <small>© 2024 Scoops &#38; Dreams. All rights reserved. No ice cream was melted in the making of this website.</small>
             </p>
         </footer>
         <!-- Script at the end -->
@@ -439,9 +394,9 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
 
             // Global ice cream wisdom
             window.iceCreamWisdom = [
-            "Life is like ice cream: enjoy it before it melts!",
-            "Ice cream is the answer. What was the question again?",
-            "We all scream for ice cream! 🍦"
+                "Life is like ice cream: enjoy it before it melts!",
+                "Ice cream is the answer. What was the question again?",
+                "We all scream for ice cream! 🍦"
             ];
         </script>
         <!-- Comments scattered throughout -->
