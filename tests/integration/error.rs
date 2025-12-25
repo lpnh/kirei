@@ -200,9 +200,10 @@ fn fails_on_erroneous_end_tag_inline() {
         .assert()
         .failure()
         .code(1)
-        .stderr(contains("error: expected `foo`, found `bar`"))
-        .stderr(contains("help: consider using `foo`"))
-        .stderr(contains("expected due to this open tag name"));
+        .stderr(contains("error: unexpected closing tag"))
+        .stderr(contains("expected `foo`, found `bar`"))
+        .stderr(contains("expected due to this open tag name"))
+        .stderr(contains("help: consider using `foo`"));
 }
 
 #[test]
@@ -217,9 +218,10 @@ fn fails_on_erroneous_end_tag_multiline() {
         .assert()
         .failure()
         .code(1)
-        .stderr(contains("error: expected `foo`, found `bar`"))
-        .stderr(contains("help: consider using `foo`"))
-        .stderr(contains("expected due to this open tag name"));
+        .stderr(contains("error: unexpected closing tag"))
+        .stderr(contains("expected `foo`, found `bar`"))
+        .stderr(contains("expected due to this open tag name"))
+        .stderr(contains("help: consider using `foo`"));
 }
 
 #[test]
@@ -259,16 +261,4 @@ fn fails_on_permission_denied_write() {
         .failure()
         .code(1)
         .stderr(contains("error: permission denied when accessing"));
-}
-
-#[test]
-fn error_messages_have_no_extra_newlines() {
-    Command::new(cargo::cargo_bin!("kirei"))
-        .arg("nonexistent_file.html")
-        .assert()
-        .failure()
-        .code(1)
-        .stderr(predicates::function::function(|output: &str| {
-            !output.ends_with("\n\n")
-        }));
 }

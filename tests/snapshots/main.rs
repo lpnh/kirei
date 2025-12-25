@@ -19,6 +19,7 @@ macro_rules! format_and_snapshot {
 
 mod askama;
 mod axum_app;
+mod diagnostics;
 mod html;
 mod ice_cream_club;
 mod malformed;

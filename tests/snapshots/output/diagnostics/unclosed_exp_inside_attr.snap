@@ -1,0 +1,9 @@
+---
+source: tests/snapshots/diagnostics.rs
+description: "<div class=\"{{ color }\">something</div>\n"
+---
+error: failed to parse Askama
+ --> unclosed_exp_inside_attr.html:1:13
+  |
+1 | <div class="{{ color }">something</div>
+  |             ^
