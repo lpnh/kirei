@@ -313,8 +313,8 @@ fn parse_recursive(
                 return Err(KireiError::ErroneousEndTag {
                     expected: expected_name.clone(),
                     found: extract_tag_name(node, source, "erroneous_end_tag_name"),
-                    open_name_range: *open_name_range,
-                    close_name_range: erroneous_end_tag_name.range(),
+                    open_name_range: Box::new(*open_name_range),
+                    close_name_range: Box::new(erroneous_end_tag_name.range()),
                 });
             }
         }

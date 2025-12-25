@@ -8,8 +8,8 @@ pub enum KireiError {
     ErroneousEndTag {
         expected: String,
         found: String,
-        open_name_range: Range,
-        close_name_range: Range,
+        open_name_range: Box<Range>,
+        close_name_range: Box<Range>,
     },
     AskamaSyntaxError {
         error_range: Range,
@@ -90,21 +90,18 @@ impl KireiError {
             } => {
                 vec![
                     (
-                        *close_name_range,
+                        **close_name_range,
                         format!("expected `{}`, found `{}`", expected, found),
                         Annotation::Primary,
                     ),
                     (
-                        *open_name_range,
+                        **open_name_range,
                         "expected due to this open tag name".to_string(),
                         Annotation::Secondary,
                     ),
                 ]
             }
-            Self::AskamaSyntaxError { error_range } => {
-                vec![(*error_range, String::new(), Annotation::Primary)]
-            }
-            Self::HtmlSyntaxError { error_range } => {
+            Self::AskamaSyntaxError { error_range } | Self::HtmlSyntaxError { error_range } => {
                 vec![(*error_range, String::new(), Annotation::Primary)]
             }
             Self::IoError { .. } | Self::Msg { .. } => vec![],
@@ -137,7 +134,7 @@ impl KireiError {
                         line.to_string(),
                         start_col,
                         end_col,
-                        expected.to_string(),
+                        expected.clone(),
                     )
                 })
             }
@@ -208,7 +205,7 @@ impl<T> OrDraw<T> for Result<T, std::io::Error> {
             Err(e) => {
                 let error = KireiError::IoError {
                     kind: e.kind(),
-                    path: file_path.map(|s| s.to_string()),
+                    path: file_path.map(str::to_string),
                 };
                 eprint!("{}", Draw::new(&error, source.unwrap_or(""), file_path));
                 std::process::exit(1);
