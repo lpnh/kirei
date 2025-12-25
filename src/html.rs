@@ -1,8 +1,10 @@
-use anyhow::Result;
 use std::ops;
 use tree_sitter::{Node, Range};
 
-use crate::askama::{AskamaNode, format_askama_node};
+use crate::{
+    askama::{AskamaNode, format_askama_node},
+    error::{KireiError, OrMsg},
+};
 
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Content_categories#phrasing_content
 const PHRASING_CONTENT: &[&str] = &[
@@ -83,11 +85,6 @@ pub enum HtmlNode {
         embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
     },
-
-    ErroneousEnd {
-        name: String,
-        start: usize,
-    },
 }
 
 impl HtmlNode {
@@ -104,10 +101,9 @@ impl HtmlNode {
             | Self::Text { range, .. }
             | Self::Raw { range, .. }
             | Self::Comment { range, .. } => range.start,
-            Self::End { start, .. }
-            | Self::ErroneousEnd { start, .. }
-            | Self::Doctype { start, .. }
-            | Self::Entity { start, .. } => *start,
+            Self::End { start, .. } | Self::Doctype { start, .. } | Self::Entity { start, .. } => {
+                *start
+            }
         }
     }
 
@@ -123,9 +119,7 @@ impl HtmlNode {
             | Self::Comment { text, .. }
             | Self::Doctype { text, .. } => text.clone(),
 
-            Self::End { name, .. } | Self::ErroneousEnd { name, .. } => {
-                format!("</{}>", name)
-            }
+            Self::End { name, .. } => format!("</{}>", name),
         }
     }
 
@@ -145,8 +139,7 @@ impl HtmlNode {
         let (Self::Start { name, .. }
         | Self::Void { name, .. }
         | Self::SelfClosing { name, .. }
-        | Self::End { name, .. }
-        | Self::ErroneousEnd { name, .. }) = self
+        | Self::End { name, .. }) = self
         else {
             return false;
         };
@@ -155,9 +148,7 @@ impl HtmlNode {
     }
 
     pub fn is_ws_sensitive(&self) -> bool {
-        let (Self::Start { name, .. } | Self::End { name, .. } | Self::ErroneousEnd { name, .. }) =
-            self
-        else {
+        let (Self::Start { name, .. } | Self::End { name, .. }) = self else {
             return false;
         };
 
@@ -189,9 +180,18 @@ pub fn extract_html_nodes(
     source: &[u8],
     ranges: &[Range],
     askama_nodes: &[AskamaNode],
-) -> Result<Vec<HtmlNode>> {
+) -> Result<Vec<HtmlNode>, KireiError> {
     let mut html_nodes = Vec::new();
-    parse_recursive(root_node, source, ranges, askama_nodes, &mut html_nodes, 0)?;
+    let mut tag_stack: Vec<(String, Range)> = Vec::new();
+    parse_recursive(
+        root_node,
+        source,
+        ranges,
+        askama_nodes,
+        &mut html_nodes,
+        &mut tag_stack,
+        0,
+    )?;
     Ok(html_nodes)
 }
 
@@ -219,7 +219,7 @@ fn extract_text_from_ranges(
     node: &Node,
     source: &[u8],
     content_ranges: &[Range],
-) -> Result<String> {
+) -> Result<String, KireiError> {
     let node_start = node.start_byte();
     let node_end = node.end_byte();
 
@@ -231,7 +231,7 @@ fn extract_text_from_ranges(
         if range_start < node_end && range_end > node_start {
             let start = range_start.max(node_start);
             let end = range_end.min(node_end);
-            let text_slice = std::str::from_utf8(&source[start..end])?;
+            let text_slice = std::str::from_utf8(&source[start..end]).or_msg("UTF8 error")?;
             text_parts.push(text_slice);
         }
     }
@@ -245,17 +245,25 @@ fn parse_recursive(
     ranges: &[Range],
     askama_nodes: &[AskamaNode],
     html_nodes: &mut Vec<HtmlNode>,
+    tag_stack: &mut Vec<(String, Range)>,
     depth: usize,
-) -> Result<()> {
-    // Prevent stack overflow on deeply nested HTML
+) -> Result<(), KireiError> {
     if depth > 200 {
-        anyhow::bail!("nesting too deep");
+        return Err(KireiError::msg("nesting too deep"));
     }
 
     match node.kind() {
         "document" => {
             for child in node.children(&mut node.walk()) {
-                parse_recursive(&child, source, ranges, askama_nodes, html_nodes, depth + 1)?;
+                parse_recursive(
+                    &child,
+                    source,
+                    ranges,
+                    askama_nodes,
+                    html_nodes,
+                    tag_stack,
+                    depth + 1,
+                )?;
             }
         }
         "doctype" => {
@@ -268,10 +276,28 @@ fn parse_recursive(
         "start_tag" => {
             let range = node.start_byte()..node.end_byte();
             let embed_askm = find_askama_in_range(askama_nodes, &range);
-            html_nodes.push(parse_start_tag(node, source, embed_askm));
+            let html_node = parse_start_tag(node, source, embed_askm);
+            if let HtmlNode::Start { name, .. } = &html_node {
+                let tag_name_node = node
+                    .children(&mut node.walk())
+                    .find(|c| c.kind() == "tag_name")
+                    .expect("start_tag must have tag_name");
+
+                tag_stack.push((name.clone(), tag_name_node.range()));
+            }
+
+            html_nodes.push(html_node);
         }
         "end_tag" => {
-            html_nodes.push(parse_end_tag(node, source));
+            let end_tag_node = parse_end_tag(node, source);
+            if let HtmlNode::End { name, .. } = &end_tag_node
+                && let Some((stack_name, _)) = tag_stack.last()
+                && stack_name == name
+            {
+                tag_stack.pop();
+            }
+
+            html_nodes.push(end_tag_node);
         }
         "self_closing_tag" => {
             let range = node.start_byte()..node.end_byte();
@@ -279,9 +305,18 @@ fn parse_recursive(
             html_nodes.push(parse_self_closing_tag(node, source, embed_askm));
         }
         "erroneous_end_tag" => {
-            todo!();
-            #[allow(unreachable_code)]
-            html_nodes.push(parse_erroneous_end_tag(node, source));
+            if let Some(erroneous_end_tag_name) = node
+                .children(&mut node.walk())
+                .find(|c| c.kind() == "erroneous_end_tag_name")
+                && let Some((expected_name, open_name_range)) = tag_stack.last()
+            {
+                return Err(KireiError::ErroneousEndTag {
+                    expected: expected_name.clone(),
+                    found: extract_tag_name(node, source, "erroneous_end_tag_name"),
+                    open_name_range: *open_name_range,
+                    close_name_range: erroneous_end_tag_name.range(),
+                });
+            }
         }
         "comment" => {
             let text = node.utf8_text(source)?.to_string();
@@ -312,15 +347,20 @@ fn parse_recursive(
         }
         "element" | "script_element" | "style_element" => {
             let start_idx = html_nodes.len();
-
             let has_end_tag = node
                 .child(node.child_count().saturating_sub(1))
                 .is_some_and(|n| n.kind() == "end_tag");
-
             for child in node.children(&mut node.walk()) {
-                parse_recursive(&child, source, ranges, askama_nodes, html_nodes, depth + 1)?;
+                parse_recursive(
+                    &child,
+                    source,
+                    ranges,
+                    askama_nodes,
+                    html_nodes,
+                    tag_stack,
+                    depth + 1,
+                )?;
             }
-
             if has_end_tag {
                 let end_idx = html_nodes.len().saturating_sub(1);
 
@@ -383,14 +423,6 @@ fn parse_self_closing_tag(node: &Node, source: &[u8], embed_askm: Option<Vec<usi
 fn parse_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
     let name = extract_tag_name(node, source, "tag_name");
     HtmlNode::End {
-        name,
-        start: node.start_byte(),
-    }
-}
-
-fn parse_erroneous_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
-    let name = extract_tag_name(node, source, "erroneous_end_tag_name");
-    HtmlNode::ErroneousEnd {
         name,
         start: node.start_byte(),
     }

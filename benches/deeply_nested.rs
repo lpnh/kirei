@@ -1,7 +1,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
-use kirei::AskamaFormatter;
+use kirei::Kirei;
 
 fn generate_deeply_nested_html() -> String {
     let mut template = String::new();
@@ -76,20 +76,20 @@ fn format_benchmark(c: &mut Criterion) {
 
     group.bench_function("html", |b| {
         let template = generate_deeply_nested_html();
-        let mut formatter = AskamaFormatter::new().unwrap();
-        b.iter(|| formatter.format(black_box(&template)).unwrap());
+        let mut formatter = Kirei::default();
+        b.iter(|| formatter.write(black_box(&template)).unwrap());
     });
 
     group.bench_function("askama", |b| {
         let template = generate_deeply_nested_tmpl();
-        let mut formatter = AskamaFormatter::new().unwrap();
-        b.iter(|| formatter.format(black_box(&template)).unwrap());
+        let mut formatter = Kirei::default();
+        b.iter(|| formatter.write(black_box(&template)).unwrap());
     });
 
     group.bench_function("mixed", |b| {
         let template = generate_deeply_nested_mixed();
-        let mut formatter = AskamaFormatter::new().unwrap();
-        b.iter(|| formatter.format(black_box(&template)).unwrap());
+        let mut formatter = Kirei::default();
+        b.iter(|| formatter.write(black_box(&template)).unwrap());
     });
 
     group.finish();

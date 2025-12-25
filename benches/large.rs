@@ -1,7 +1,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
-use kirei::AskamaFormatter;
+use kirei::Kirei;
 
 const AXUM_APP_INDEX: &str = include_str!("../tests/fixtures/axum-app/index.html");
 const AXUM_APP_GREET: &str = include_str!("../tests/fixtures/axum-app/greet.html");
@@ -33,19 +33,15 @@ fn format_benchmark(c: &mut Criterion) {
     // 100KB
     let file_100kb = generate_file(&base, 16);
     group.bench_function("100kb", |b| {
-        let mut formatter = AskamaFormatter::new().unwrap();
-        b.iter(|| {
-            formatter.format(black_box(&file_100kb)).unwrap()
-        });
+        let mut formatter = Kirei::default();
+        b.iter(|| formatter.write(black_box(&file_100kb)).unwrap());
     });
 
     // 500KB
     let file_500kb = generate_file(&base, 80);
     group.bench_function("500kb", |b| {
-        let mut formatter = AskamaFormatter::new().unwrap();
-        b.iter(|| {
-            formatter.format(black_box(&file_500kb)).unwrap()
-        });
+        let mut formatter = Kirei::default();
+        b.iter(|| formatter.write(black_box(&file_500kb)).unwrap());
     });
 
     group.finish();

@@ -1,6 +1,7 @@
-use anyhow::Result;
 use std::ops;
 use tree_sitter::{Node, Range};
+
+use crate::error::{KireiError, OrMsg};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Boundary {
@@ -218,7 +219,10 @@ impl AskamaNode {
     }
 }
 
-pub fn extract_askama_nodes(root: &Node, source: &str) -> Result<(Vec<AskamaNode>, Vec<Range>)> {
+pub fn extract_askama_nodes(
+    root: &Node,
+    source: &str,
+) -> Result<(Vec<AskamaNode>, Vec<Range>), KireiError> {
     let mut nodes = Vec::new();
     let mut content_node_ranges = Vec::new();
     let mut stack: Vec<(usize, ControlTag)> = Vec::new();
@@ -263,7 +267,7 @@ pub fn extract_askama_nodes(root: &Node, source: &str) -> Result<(Vec<AskamaNode
     Ok((nodes, content_node_ranges))
 }
 
-fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode> {
+fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode, KireiError> {
     let (dlmts, inner) = extract_delimiters(node, source)?;
     let range = node.start_byte()..node.end_byte();
 
@@ -327,13 +331,11 @@ fn is_match_arm(node: Node) -> bool {
         .is_some_and(|child| child.kind() == "when_statement")
 }
 
-fn extract_delimiters(node: Node, source: &str) -> Result<(Delimiters, String)> {
-    let first = node
-        .child(0)
-        .ok_or_else(|| anyhow::anyhow!("Node has no first child"))?;
+fn extract_delimiters(node: Node, source: &str) -> Result<(Delimiters, String), KireiError> {
+    let first = node.child(0).or_msg("node has no first child")?;
     let last = node
         .child(node.child_count() - 1)
-        .ok_or_else(|| anyhow::anyhow!("Node has no last child"))?;
+        .or_msg("node has no last child")?;
 
     let open = first.utf8_text(source.as_bytes())?.trim().to_string();
     let close = last.utf8_text(source.as_bytes())?.trim().to_string();

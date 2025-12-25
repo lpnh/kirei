@@ -154,7 +154,7 @@ impl Leaf {
                     end: None,
                 }
             }
-            HtmlNode::End { .. } | HtmlNode::ErroneousEnd { .. } => Root::Tag {
+            HtmlNode::End { .. } => Root::Tag {
                 indent: -1,
                 is_phrasing: html_node.is_phrasing(),
                 is_ws_sensitive: html_node.is_ws_sensitive(),

@@ -2,11 +2,17 @@
 
 pub mod askama;
 mod config;
-pub mod formatter;
+pub mod draw;
+pub mod error;
 mod html;
 mod sakura_tree;
+pub mod write;
 
-pub use crate::formatter::AskamaFormatter;
+pub use crate::{
+    draw::Draw,
+    error::{OrDraw, OrMsg},
+    write::Kirei,
+};
 
 #[must_use]
 pub fn normalize_ws(text: &str) -> String {

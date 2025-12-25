@@ -63,11 +63,6 @@ fn void_two() {
     format_and_snapshot!("html/void_two.html");
 }
 
-// #[test]
-// fn erroneous_end_tag() {
-//     format_and_snapshot!("html/erroneous_end_tag.html");
-// }
-
 #[test]
 fn no_text() {
     format_and_snapshot!("html/no_text.html");

@@ -3,8 +3,8 @@ use assert_fs::{TempDir, prelude::*};
 use predicates::str::contains;
 use std::fs::write;
 
-const ERR_PARSE_ASKAMA: &str = "Failed to parse Askama: syntax error";
-const ERR_PARSE_HTML: &str = "Failed to parse HTML: syntax error";
+const ERR_PARSE_ASKAMA: &str = "failed to parse Askama";
+const ERR_PARSE_HTML: &str = "failed to parse HTML";
 
 #[test]
 fn fails_when_unformatted() {
@@ -34,7 +34,7 @@ fn prints_error_to_stderr() {
         .assert()
         .failure()
         .code(1)
-        .stderr(contains("File needs formatting"));
+        .stderr(contains("file needs formatting"));
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn list_different_shows_unformatted() {
         .assert()
         .failure()
         .code(1)
-        .stdout(contains("test.html"));
+        .stderr(contains("test.html"));
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn list_different_with_stdin_shows_stdin() {
         .assert()
         .failure()
         .code(1)
-        .stdout(contains("<stdin>"));
+        .stderr(contains("missing file path"));
 }
 
 #[test]
@@ -87,7 +87,7 @@ fn stdin_filepath_with_list_different() {
         .assert()
         .failure()
         .code(1)
-        .stdout(contains("custom/path.html"));
+        .stderr(contains("custom/path.html"));
 }
 
 #[test]
@@ -95,7 +95,11 @@ fn fails_on_missing_file() {
     Command::new(cargo::cargo_bin!("kirei"))
         .arg("this_file_does_not_exist.html")
         .assert()
-        .failure();
+        .failure()
+        .code(1)
+        .stderr(contains(
+            "error: file `this_file_does_not_exist.html` does not exist",
+        ));
 }
 
 #[test]
@@ -108,7 +112,9 @@ fn fails_on_invalid_utf8() {
     Command::new(cargo::cargo_bin!("kirei"))
         .arg(file.path())
         .assert()
-        .failure();
+        .failure()
+        .code(1)
+        .stderr(contains("error: invalid data"));
 }
 
 #[test]
@@ -122,32 +128,6 @@ fn fails_on_null_character() {
         .assert()
         .failure()
         .stderr(contains(ERR_PARSE_ASKAMA));
-}
-
-#[test]
-fn fails_on_malformed_askama() {
-    let temp = TempDir::new().unwrap();
-    let file = temp.child("malformed_tmpl.html");
-    file.write_str("{% block foo %}{% endblock").unwrap();
-
-    Command::new(cargo::cargo_bin!("kirei"))
-        .arg(file.path())
-        .assert()
-        .failure()
-        .stderr(contains(ERR_PARSE_ASKAMA));
-}
-
-#[test]
-fn fails_on_malformed_html() {
-    let temp = TempDir::new().unwrap();
-    let file = temp.child("malformed_html.html");
-    file.write_str("<div").unwrap();
-
-    Command::new(cargo::cargo_bin!("kirei"))
-        .arg(file.path())
-        .assert()
-        .failure()
-        .stderr(contains(ERR_PARSE_HTML));
 }
 
 #[test]
@@ -210,14 +190,85 @@ fn fails_on_unclosed_attr_quote() {
 }
 
 #[test]
-fn fails_on_unclosed_paragraph() {
+fn fails_on_erroneous_end_tag_inline() {
     let temp = TempDir::new().unwrap();
-    let file = temp.child("unclosed_paragraph.html");
-    file.write_str("<p>Hello!").unwrap();
+    let file = temp.child("mismatched_tag.html");
+    file.write_str("<div><foo>Some text</bar></div>").unwrap();
 
     Command::new(cargo::cargo_bin!("kirei"))
         .arg(file.path())
         .assert()
         .failure()
-        .stderr(contains(ERR_PARSE_HTML));
+        .code(1)
+        .stderr(contains("error: expected `foo`, found `bar`"))
+        .stderr(contains("help: consider using `foo`"))
+        .stderr(contains("expected due to this open tag name"));
+}
+
+#[test]
+fn fails_on_erroneous_end_tag_multiline() {
+    let temp = TempDir::new().unwrap();
+    let file = temp.child("mismatched_tag.html");
+    file.write_str("<div>\n    <foo>\n        Some text\n    </bar>\n</div>")
+        .unwrap();
+
+    Command::new(cargo::cargo_bin!("kirei"))
+        .arg(file.path())
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(contains("error: expected `foo`, found `bar`"))
+        .stderr(contains("help: consider using `foo`"))
+        .stderr(contains("expected due to this open tag name"));
+}
+
+#[test]
+#[cfg(unix)]
+fn fails_on_permission_denied_read() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = TempDir::new().unwrap();
+    let file = temp.child("no_read.html");
+    file.write_str("<div>test</div>").unwrap();
+
+    std::fs::set_permissions(file.path(), std::fs::Permissions::from_mode(0o000)).unwrap();
+
+    Command::new(cargo::cargo_bin!("kirei"))
+        .arg(file.path())
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(contains("error: permission denied when accessing"));
+}
+
+#[test]
+#[cfg(unix)]
+fn fails_on_permission_denied_write() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = TempDir::new().unwrap();
+    let file = temp.child("no_write.html");
+    file.write_str("<div>test</div>").unwrap();
+
+    std::fs::set_permissions(file.path(), std::fs::Permissions::from_mode(0o444)).unwrap();
+
+    Command::new(cargo::cargo_bin!("kirei"))
+        .arg("--write")
+        .arg(file.path())
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(contains("error: permission denied when accessing"));
+}
+
+#[test]
+fn error_messages_have_no_extra_newlines() {
+    Command::new(cargo::cargo_bin!("kirei"))
+        .arg("nonexistent_file.html")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicates::function::function(|output: &str| {
+            !output.ends_with("\n\n")
+        }));
 }

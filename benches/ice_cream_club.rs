@@ -1,7 +1,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
-use kirei::AskamaFormatter;
+use kirei::Kirei;
 
 const ICE_CREAM_CLUB_CARD: &str =
     include_str!("../tests/fixtures/ice-cream-club/ice_cream_card.html");
@@ -15,38 +15,28 @@ fn format_benchmark(c: &mut Criterion) {
     group.sample_size(50);
 
     group.bench_function("card", |b| {
-        let mut formatter = AskamaFormatter::new().unwrap();
-        b.iter(|| {
-            formatter.format(black_box(ICE_CREAM_CLUB_CARD)).unwrap()
-        });
+        let mut formatter = Kirei::default();
+        b.iter(|| formatter.write(black_box(ICE_CREAM_CLUB_CARD)).unwrap());
     });
 
     group.bench_function("home", |b| {
-        let mut formatter = AskamaFormatter::new().unwrap();
-        b.iter(|| {
-            formatter.format(black_box(ICE_CREAM_CLUB_HOME)).unwrap()
-        });
+        let mut formatter = Kirei::default();
+        b.iter(|| formatter.write(black_box(ICE_CREAM_CLUB_HOME)).unwrap());
     });
 
     group.bench_function("flavors", |b| {
-        let mut formatter = AskamaFormatter::new().unwrap();
-        b.iter(|| {
-            formatter.format(black_box(ICE_CREAM_CLUB_FLAVORS)).unwrap()
-        });
+        let mut formatter = Kirei::default();
+        b.iter(|| formatter.write(black_box(ICE_CREAM_CLUB_FLAVORS)).unwrap());
     });
 
     group.bench_function("club", |b| {
-        let mut formatter = AskamaFormatter::new().unwrap();
-        b.iter(|| {
-            formatter.format(black_box(ICE_CREAM_CLUB_CLUB)).unwrap()
-        });
+        let mut formatter = Kirei::default();
+        b.iter(|| formatter.write(black_box(ICE_CREAM_CLUB_CLUB)).unwrap());
     });
 
     group.bench_function("base", |b| {
-        let mut formatter = AskamaFormatter::new().unwrap();
-        b.iter(|| {
-            formatter.format(black_box(ICE_CREAM_CLUB_BASE)).unwrap()
-        });
+        let mut formatter = Kirei::default();
+        b.iter(|| formatter.write(black_box(ICE_CREAM_CLUB_BASE)).unwrap());
     });
 
     group.finish();

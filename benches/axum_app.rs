@@ -1,7 +1,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
-use kirei::AskamaFormatter;
+use kirei::Kirei;
 
 const AXUM_APP_INDEX: &str = include_str!("../tests/fixtures/axum-app/index.html");
 const AXUM_APP_GREET: &str = include_str!("../tests/fixtures/axum-app/greet.html");
@@ -13,31 +13,23 @@ fn format_benchmark(c: &mut Criterion) {
     group.sample_size(50);
 
     group.bench_function("index", |b| {
-        let mut formatter = AskamaFormatter::new().unwrap();
-        b.iter(|| {
-            formatter.format(black_box(AXUM_APP_INDEX)).unwrap()
-        });
+        let mut formatter = Kirei::default();
+        b.iter(|| formatter.write(black_box(AXUM_APP_INDEX)).unwrap());
     });
 
     group.bench_function("greet", |b| {
-        let mut formatter = AskamaFormatter::new().unwrap();
-        b.iter(|| {
-            formatter.format(black_box(AXUM_APP_GREET)).unwrap()
-        });
+        let mut formatter = Kirei::default();
+        b.iter(|| formatter.write(black_box(AXUM_APP_GREET)).unwrap());
     });
 
     group.bench_function("error", |b| {
-        let mut formatter = AskamaFormatter::new().unwrap();
-        b.iter(|| {
-            formatter.format(black_box(AXUM_APP_ERROR)).unwrap()
-        });
+        let mut formatter = Kirei::default();
+        b.iter(|| formatter.write(black_box(AXUM_APP_ERROR)).unwrap());
     });
 
     group.bench_function("layout", |b| {
-        let mut formatter = AskamaFormatter::new().unwrap();
-        b.iter(|| {
-            formatter.format(black_box(AXUM_APP_LAYOUT)).unwrap()
-        });
+        let mut formatter = Kirei::default();
+        b.iter(|| formatter.write(black_box(AXUM_APP_LAYOUT)).unwrap());
     });
 
     group.finish();

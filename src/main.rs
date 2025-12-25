@@ -1,74 +1,43 @@
-use anyhow::{Context, Result};
 use clap::Parser;
 use std::io::{self, Read};
 
 mod cli;
 use cli::Args;
+use kirei::{Kirei, OrDraw, error::KireiError};
 
-use kirei::AskamaFormatter;
-
-fn main() -> Result<()> {
+fn main() {
     let args = Args::parse();
-    run(&args)
-}
 
-fn run(args: &Args) -> Result<()> {
-    let (input, maybe_filepath) = get_input_and_filepath(args)?;
-    let mut kirei = AskamaFormatter::default();
-    let raw_formatted = kirei.format(&input)?;
-
-    // Provide end of line by default
-    let formatted = if raw_formatted.ends_with('\n') {
-        raw_formatted
+    let (input, filepath) = if args.input == "-" {
+        let mut buffer = String::new();
+        io::stdin().read_to_string(&mut buffer).or_draw(None, None);
+        (buffer, args.stdin_filepath.as_deref())
     } else {
-        format!("{raw_formatted}\n")
+        let content = std::fs::read_to_string(&args.input).or_draw(None, Some(&*args.input));
+        (content, Some(&*args.input))
     };
 
-    // Handle --check and --list-different
-    if args.check || args.list_different {
-        if input == formatted {
-            std::process::exit(0);
-        } else {
-            if args.list_different {
-                println!(
-                    "{}",
-                    maybe_filepath.unwrap_or_else(|| "<stdin>".to_string())
-                );
-            } else {
-                eprintln!("File needs formatting");
-            }
-            std::process::exit(1);
+    let mut formatted = Kirei::default()
+        .write(&input)
+        .or_draw(Some(&input), filepath);
+
+    if !formatted.ends_with('\n') {
+        formatted.push('\n');
+    }
+
+    if args.check {
+        if input != formatted {
+            KireiError::draw_msg("file needs formatting");
         }
-    }
-
-    // Handle --write
-    if args.write {
-        if let Some(path) = maybe_filepath {
-            std::fs::write(path, formatted)?;
-        } else {
-            print!("{formatted}");
+    } else if args.list_different {
+        if input != formatted {
+            KireiError::draw_msg(filepath.unwrap_or("missing file path"));
         }
-        return Ok(());
+    } else if args.write
+        && let Some(path) = filepath
+    {
+        std::fs::write(path, &formatted).or_draw(None, Some(path));
+    } else {
+        print!("{formatted}");
     }
-
-    // Default: print to stdout
-    print!("{formatted}");
-    Ok(())
-}
-
-fn get_input_and_filepath(args: &Args) -> Result<(String, Option<String>)> {
-    if args.input != "-" {
-        let content = std::fs::read_to_string(&args.input)
-            .with_context(|| format!("Failed to read file '{}'", args.input))?;
-        return Ok((content, Some(args.input.clone())));
-    }
-
-    // Reading from stdin
-    let mut buffer = String::new();
-    io::stdin()
-        .read_to_string(&mut buffer)
-        .context("Failed to read from stdin")?;
-
-    let filepath = args.stdin_filepath.clone();
-    Ok((buffer, filepath))
 }
