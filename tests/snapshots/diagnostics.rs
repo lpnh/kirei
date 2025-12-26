@@ -17,9 +17,7 @@ macro_rules! diagnostic_snapshot {
         match result {
             Ok(_) => panic!("Expected error but formatting succeeded for {}", $fixture_path),
             Err(err) => {
-                use kirei::draw::Draw;
-                let draw = Draw::new(&err, &input, Some($fixture_path));
-                let diagnostic = format!("{}", draw);
+                let diagnostic = kirei::draw::draw(&err, &input, Some($fixture_path));
 
                 insta::with_settings!({
                     description => input,
@@ -31,8 +29,6 @@ macro_rules! diagnostic_snapshot {
                 });
             }
         }
-
-        control::unset_override();
     };
 }
 

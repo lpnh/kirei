@@ -1,54 +1,14 @@
 use colored::Colorize;
 use std::collections::BTreeSet;
-use std::fmt;
 use tree_sitter::Range;
 
 use crate::error::KireiError;
 
-pub struct Draw<'a> {
-    error: &'a KireiError,
-    source: &'a str,
-    file_path: Option<&'a str>,
-}
-
-impl<'a> Draw<'a> {
-    pub fn new(error: &'a KireiError, source: &'a str, file_path: Option<&'a str>) -> Self {
-        Self {
-            error,
-            source,
-            file_path,
-        }
-    }
-
-    fn build_diagnostic(&self) -> KireiDiagnostic {
-        let message = self.error.message();
-
-        let labels = self
-            .error
-            .labels()
-            .into_iter()
-            .map(|(range, text, annotation)| match annotation {
-                Annotation::Primary => Label::primary(range, text),
-                Annotation::Secondary => Label::secondary(range, text),
-            })
-            .collect();
-
-        let help = self.error.help();
-        let suggestion = self.error.suggestion(self.source);
-
-        KireiDiagnostic {
-            message,
-            labels,
-            help,
-            suggestion,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Annotation {
-    Primary,
-    Secondary,
+struct KireiDiagnostic {
+    message: String,
+    labels: Vec<Label>,
+    help: Option<String>,
+    suggestion: Option<(usize, String, usize, usize, String)>,
 }
 
 #[derive(Debug, Clone)]
@@ -75,7 +35,7 @@ impl Label {
         }
     }
 
-    fn line_index(&self) -> usize {
+    fn line_idx(&self) -> usize {
         self.range.start_point.row
     }
 
@@ -99,146 +59,157 @@ impl Label {
     }
 }
 
-struct KireiDiagnostic {
-    message: String,
-    labels: Vec<Label>,
-    help: Option<String>,
-    suggestion: Option<(usize, String, usize, usize, String)>,
+#[derive(Debug, Clone)]
+pub enum Annotation {
+    Primary,
+    Secondary,
 }
 
-impl fmt::Display for Draw<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let diag = self.build_diagnostic();
+pub fn draw(error: &KireiError, source: &str, file_path: Option<&str>) -> String {
+    let diag = diagnostic_from(error, source);
+    let mut output = String::new();
 
-        if diag.labels.is_empty() {
-            return write!(
-                f,
-                "{}{} {}",
-                "error".bold().red(),
-                ":".bold(),
-                diag.message.bold()
-            );
-        }
-
-        let max_line_index = diag.labels.iter().map(Label::line_index).max().unwrap_or(0);
-        let line_num_width = (max_line_index + 1).to_string().len();
-
-        // Header
-        writeln!(
-            f,
+    if diag.labels.is_empty() {
+        return format!(
             "{}{} {}",
             "error".bold().red(),
             ":".bold(),
             diag.message.bold()
-        )?;
+        );
+    }
 
-        // Span pointer (file:line:col)
-        if let Some(primary) = diag
-            .labels
-            .iter()
-            .find(|l| matches!(l.annotation, Annotation::Primary))
-        {
-            writeln!(
-                f,
-                "{}{} {}:{}:{}",
-                " ".repeat(line_num_width),
-                "-->".bold().bright_blue(),
-                self.file_path.unwrap_or("<stdin>"),
-                primary.line_index() + 1,
-                primary.col_display()
-            )?;
-        }
+    let max_line_idx = diag.labels.iter().map(Label::line_idx).max().unwrap_or(0);
+    let line_num_width = (max_line_idx + 1).to_string().len();
 
-        writeln!(
-            f,
-            "{} {}",
+    // Header
+    output += &format!(
+        "{}{} {}\n",
+        "error".bold().red(),
+        ":".bold(),
+        diag.message.bold()
+    );
+
+    // Span pointer (file:line:col)
+    if let Some(primary) = diag
+        .labels
+        .iter()
+        .find(|l| matches!(l.annotation, Annotation::Primary))
+    {
+        output += &format!(
+            "{}{} {}:{}:{}\n",
             " ".repeat(line_num_width),
-            "|".bold().bright_blue()
-        )?;
+            "-->".bold().bright_blue(),
+            file_path.unwrap_or("<stdin>"),
+            primary.line_idx() + 1,
+            primary.col_display()
+        );
+    }
 
-        let mut rendered_lines = BTreeSet::new();
-        for label in &diag.labels {
-            rendered_lines.insert(label.line_index());
+    output += &format!(
+        "{} {}\n",
+        " ".repeat(line_num_width),
+        "|".bold().bright_blue()
+    );
+
+    let mut diagnostic = BTreeSet::new();
+    for label in &diag.labels {
+        diagnostic.insert(label.line_idx());
+    }
+
+    let source_lines: Vec<&str> = source.lines().collect();
+
+    // Source snippets with labels
+    let mut last_line_idx = None;
+    for &line_idx in &diagnostic {
+        if let Some(prev) = last_line_idx
+            && line_idx > prev + 1
+        {
+            output += &format!("{}\n", "...".bold().bright_blue());
         }
 
-        let source_lines: Vec<&str> = self.source.lines().collect();
+        if let Some(content) = source_lines.get(line_idx) {
+            output += &format!(
+                "{} {} {}\n",
+                (line_idx + 1).to_string().bold().bright_blue(),
+                "|".bold().bright_blue(),
+                content
+            );
 
-        // Source snippets with labels
-        let mut last_line_index = None;
-        for &line_index in &rendered_lines {
-            if let Some(prev) = last_line_index
-                && line_index > prev + 1
-            {
-                writeln!(f, "{}", "...".bold().bright_blue())?;
-            }
+            let line_labels: Vec<_> = diag
+                .labels
+                .iter()
+                .filter(|l| l.line_idx() == line_idx)
+                .collect();
 
-            if let Some(content) = source_lines.get(line_index) {
-                write!(
-                    f,
+            if !line_labels.is_empty() {
+                output += &format!(
                     "{} {} ",
-                    (line_index + 1).to_string().bold().bright_blue(),
-                    "|".bold().bright_blue()
-                )?;
-                writeln!(f, "{}", content)?;
-
-                let line_labels: Vec<_> = diag
-                    .labels
-                    .iter()
-                    .filter(|l| l.line_index() == line_index)
-                    .collect();
-
-                if !line_labels.is_empty() {
-                    write!(
-                        f,
-                        "{} {} ",
-                        " ".repeat(line_num_width),
-                        "|".bold().bright_blue()
-                    )?;
-                    render_underlines(f, &line_labels)?;
-                    writeln!(f)?;
-                }
-            }
-
-            last_line_index = Some(line_index);
-        }
-
-        // Help
-        if let Some(help_msg) = &diag.help {
-            writeln!(
-                f,
-                "{} {}",
-                " ".repeat(line_num_width),
-                "|".bold().bright_blue()
-            )?;
-            writeln!(f, "{}{} {}", "help".bold().cyan(), ":".bold(), help_msg)?;
-
-            // Suggestion
-            if let Some((line_idx, original_line, start_col, end_col, replacement_text)) =
-                &diag.suggestion
-            {
-                writeln!(
-                    f,
-                    "{} {}",
                     " ".repeat(line_num_width),
                     "|".bold().bright_blue()
-                )?;
-                write!(
-                    f,
-                    "{} {} ",
-                    (line_idx + 1).to_string().bold().bright_blue(),
-                    "~".green()
-                )?;
-                write!(f, "{}", &original_line[..*start_col])?;
-                write!(f, "{}", replacement_text.green())?;
-                writeln!(f, "{}", &original_line[*end_col..])?;
+                );
+                output += &underlines(&line_labels);
+                output += "\n";
             }
         }
 
-        Ok(())
+        last_line_idx = Some(line_idx);
+    }
+
+    // Help
+    if let Some(help_msg) = &diag.help {
+        output += &format!(
+            "{} {}\n",
+            " ".repeat(line_num_width),
+            "|".bold().bright_blue()
+        );
+        output += &format!("{}{} {}\n", "help".bold().cyan(), ":".bold(), help_msg);
+
+        // Suggestion
+        if let Some((line_idx, original_line, start_col, end_col, replacement_text)) =
+            &diag.suggestion
+        {
+            output += &format!(
+                "{} {}\n",
+                " ".repeat(line_num_width),
+                "|".bold().bright_blue()
+            );
+            output += &format!(
+                "{} {} ",
+                (line_idx + 1).to_string().bold().bright_blue(),
+                "~".green()
+            );
+            output += &original_line[..*start_col];
+            output += &replacement_text.green().to_string();
+            output += &format!("{}\n", &original_line[*end_col..]);
+        }
+    }
+
+    output
+}
+
+fn diagnostic_from(error: &KireiError, source: &str) -> KireiDiagnostic {
+    let message = error.message();
+    let labels = error
+        .labels()
+        .into_iter()
+        .map(|(range, text, annotation)| match annotation {
+            Annotation::Primary => Label::primary(range, text),
+            Annotation::Secondary => Label::secondary(range, text),
+        })
+        .collect();
+    let help = error.help();
+    let suggestion = error.suggestion(source);
+
+    KireiDiagnostic {
+        message,
+        labels,
+        help,
+        suggestion,
     }
 }
 
-fn render_underlines(f: &mut fmt::Formatter, labels: &[&Label]) -> fmt::Result {
+fn underlines(labels: &[&Label]) -> String {
+    let mut output = String::new();
     let mut sorted_labels = labels.to_vec();
     sorted_labels.sort_by_key(|l| {
         (
@@ -252,14 +223,14 @@ fn render_underlines(f: &mut fmt::Formatter, labels: &[&Label]) -> fmt::Result {
 
     for label in &sorted_labels {
         let spaces = label.range.start_point.column.saturating_sub(cursor);
-        write!(f, "{}", " ".repeat(spaces))?;
+        output += &" ".repeat(spaces);
 
         let highlight = label.underline_char().repeat(label.span_len());
         let colored_hl = match label.annotation {
             Annotation::Primary => highlight.red(),
             Annotation::Secondary => highlight.bold().bright_blue(),
         };
-        write!(f, "{}", colored_hl)?;
+        output += &colored_hl.to_string();
 
         cursor = label.range.start_point.column + label.span_len();
     }
@@ -270,30 +241,27 @@ fn render_underlines(f: &mut fmt::Formatter, labels: &[&Label]) -> fmt::Result {
             .find(|l| matches!(l.annotation, Annotation::Primary))
             && !primary.message.is_empty()
         {
-            write!(f, " {}", primary.message.bold().red())?;
+            output += &format!(" {}", primary.message.bold().red());
         }
 
         if let Some(label) = sorted_labels
             .iter()
             .find(|l| matches!(l.annotation, Annotation::Secondary) && !l.message.is_empty())
         {
-            writeln!(f)?;
-            write!(
-                f,
-                "{} {} ",
-                " ".repeat((label.line_index() + 1).to_string().len()),
+            output += &format!(
+                "\n{} {} ",
+                " ".repeat((label.line_idx() + 1).to_string().len()),
                 "|".bold().bright_blue()
-            )?;
-            write!(f, "{}", " ".repeat(label.range.start_point.column))?;
-            writeln!(f, "{}", "|".bold().bright_blue())?;
-            write!(
-                f,
+            );
+            output += &" ".repeat(label.range.start_point.column);
+            output += &format!("{}\n", "|".bold().bright_blue());
+            output += &format!(
                 "{} {} ",
-                " ".repeat((label.line_index() + 1).to_string().len()),
+                " ".repeat((label.line_idx() + 1).to_string().len()),
                 "|".bold().bright_blue()
-            )?;
-            write!(f, "{}", " ".repeat(label.range.start_point.column))?;
-            write!(f, "{}", label.message.bold().bright_blue())?;
+            );
+            output += &" ".repeat(label.range.start_point.column);
+            output += &label.message.bold().bright_blue().to_string();
         }
     } else if let Some(label) = sorted_labels.first()
         && !label.message.is_empty()
@@ -302,8 +270,8 @@ fn render_underlines(f: &mut fmt::Formatter, labels: &[&Label]) -> fmt::Result {
             Annotation::Primary => label.message.bold().red().to_string(),
             Annotation::Secondary => label.message.bold().bright_blue().to_string(),
         };
-        write!(f, " {}", colored_msg)?;
+        output += &format!(" {}", colored_msg);
     }
 
-    Ok(())
+    output
 }

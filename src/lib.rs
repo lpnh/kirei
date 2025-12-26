@@ -9,7 +9,6 @@ mod sakura_tree;
 pub mod write;
 
 pub use crate::{
-    draw::Draw,
     error::{OrDraw, OrMsg},
     write::Kirei,
 };

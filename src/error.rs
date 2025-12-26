@@ -1,7 +1,7 @@
 use std::fmt;
 use tree_sitter::Range;
 
-use crate::draw::{Annotation, Draw};
+use crate::draw::{Annotation, draw};
 
 #[derive(Debug)]
 pub enum KireiError {
@@ -28,18 +28,14 @@ pub enum KireiError {
 
 impl KireiError {
     pub fn draw_msg(message: impl Into<String>) {
-        Self::msg(message).draw(None, None);
+        eprint!("{}", draw(&Self::msg(message), "", None));
+        std::process::exit(1);
     }
 
     pub fn msg(message: impl Into<String>) -> Self {
         Self::Msg {
             message: message.into(),
         }
-    }
-
-    fn draw(self, source: Option<&str>, file_path: Option<&str>) {
-        eprint!("{}", Draw::new(&self, source.unwrap_or(""), file_path));
-        std::process::exit(1);
     }
 
     pub fn message(&self) -> String {
@@ -191,7 +187,7 @@ impl<T> OrDraw<T> for Result<T, KireiError> {
         match self {
             Ok(value) => value,
             Err(error) => {
-                eprint!("{}", Draw::new(&error, source.unwrap_or(""), file_path));
+                eprint!("{}", draw(&error, source.unwrap_or(""), file_path));
                 std::process::exit(1);
             }
         }
@@ -207,7 +203,7 @@ impl<T> OrDraw<T> for Result<T, std::io::Error> {
                     kind: e.kind(),
                     path: file_path.map(str::to_string),
                 };
-                eprint!("{}", Draw::new(&error, source.unwrap_or(""), file_path));
+                eprint!("{}", draw(&error, source.unwrap_or(""), file_path));
                 std::process::exit(1);
             }
         }
