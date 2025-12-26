@@ -1,14 +1,13 @@
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
+use kirei::Kirei;
 use std::hint::black_box;
 
-use kirei::Kirei;
-
-fn generate_deeply_nested_html() -> String {
+fn generate_nested_html() -> String {
     let mut template = String::new();
     let depth = 50;
 
     for _ in 0..depth {
-        template.push_str(r#"<div id="i">\n"#);
+        template.push_str("<div id=\"i\">\n");
         template.push_str("Some text\n");
     }
     template.push_str("<p>Deep content</p>\n");
@@ -21,7 +20,7 @@ fn generate_deeply_nested_html() -> String {
     template
 }
 
-fn generate_deeply_nested_tmpl() -> String {
+fn generate_nested_askama() -> String {
     let mut template = String::new();
     let depth = 50;
 
@@ -42,7 +41,7 @@ fn generate_deeply_nested_tmpl() -> String {
     template
 }
 
-fn generate_deeply_nested_mixed() -> String {
+fn generate_nested_mixed() -> String {
     let mut template = String::new();
     let depth = 50;
 
@@ -50,7 +49,7 @@ fn generate_deeply_nested_mixed() -> String {
         template.push_str("{% block i %}\n");
         template.push_str("Some text\n");
         template.push_str("{% if i != depth %}\n");
-        template.push_str(r#"<div id="i">\n"#);
+        template.push_str("<div id=\"i\">\n");
         template.push_str("<p>Oh, hi {{ username }} !</p>\n");
         template.push_str("Ah... I said that already?\n");
     }
@@ -71,25 +70,25 @@ fn generate_deeply_nested_mixed() -> String {
 }
 
 fn format_benchmark(c: &mut Criterion) {
+    // save_bench_files();
+
+    let html = generate_nested_html();
+    let askama = generate_nested_askama();
+    let mixed = generate_nested_mixed();
+
+    let templates = vec![html, askama, mixed];
+    let total_bytes: usize = templates.iter().map(|t| t.len()).sum();
+
     let mut group = c.benchmark_group("deeply_nested");
-    group.sample_size(50);
+    group.throughput(Throughput::Bytes(total_bytes as u64));
 
-    group.bench_function("html", |b| {
-        let template = generate_deeply_nested_html();
+    group.bench_function("all_files", |b| {
         let mut formatter = Kirei::default();
-        b.iter(|| formatter.write(black_box(&template)).unwrap());
-    });
-
-    group.bench_function("askama", |b| {
-        let template = generate_deeply_nested_tmpl();
-        let mut formatter = Kirei::default();
-        b.iter(|| formatter.write(black_box(&template)).unwrap());
-    });
-
-    group.bench_function("mixed", |b| {
-        let template = generate_deeply_nested_mixed();
-        let mut formatter = Kirei::default();
-        b.iter(|| formatter.write(black_box(&template)).unwrap());
+        b.iter(|| {
+            for template in &templates {
+                black_box(formatter.write(black_box(template)).unwrap());
+            }
+        });
     });
 
     group.finish();
@@ -97,3 +96,23 @@ fn format_benchmark(c: &mut Criterion) {
 
 criterion_group!(deeply_nested_benches, format_benchmark);
 criterion_main!(deeply_nested_benches);
+
+fn save_bench_files() {
+    use std::fs;
+    use std::path::Path;
+
+    let output_dir = Path::new("target/bench_templates");
+    fs::create_dir_all(output_dir).unwrap();
+
+    let templates = [
+        ("nested_html.html", generate_nested_html()),
+        ("nested_askama.html", generate_nested_askama()),
+        ("nested_mixed.html", generate_nested_mixed()),
+    ];
+
+    for (filename, content) in &templates {
+        let path = output_dir.join(filename);
+        fs::write(&path, content).unwrap();
+        println!("Generated: {}", path.display());
+    }
+}

@@ -1,7 +1,6 @@
-use criterion::{Criterion, criterion_group, criterion_main};
-use std::hint::black_box;
-
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use kirei::Kirei;
+use std::hint::black_box;
 
 const ICE_CREAM_CLUB_CARD: &str =
     include_str!("../tests/fixtures/ice-cream-club/ice_cream_card.html");
@@ -10,33 +9,30 @@ const ICE_CREAM_CLUB_FLAVORS: &str = include_str!("../tests/fixtures/ice-cream-c
 const ICE_CREAM_CLUB_CLUB: &str = include_str!("../tests/fixtures/ice-cream-club/club.html");
 const ICE_CREAM_CLUB_BASE: &str = include_str!("../tests/fixtures/ice-cream-club/base.html");
 
+fn combined_templates() -> Vec<&'static str> {
+    vec![
+        ICE_CREAM_CLUB_CARD,
+        ICE_CREAM_CLUB_HOME,
+        ICE_CREAM_CLUB_FLAVORS,
+        ICE_CREAM_CLUB_CLUB,
+        ICE_CREAM_CLUB_BASE,
+    ]
+}
+
 fn format_benchmark(c: &mut Criterion) {
+    let templates = combined_templates();
+    let total_bytes: usize = templates.iter().map(|t| t.len()).sum();
+
     let mut group = c.benchmark_group("ice_cream_club");
-    group.sample_size(50);
+    group.throughput(Throughput::Bytes(total_bytes as u64));
 
-    group.bench_function("card", |b| {
+    group.bench_function("all_files", |b| {
         let mut formatter = Kirei::default();
-        b.iter(|| formatter.write(black_box(ICE_CREAM_CLUB_CARD)).unwrap());
-    });
-
-    group.bench_function("home", |b| {
-        let mut formatter = Kirei::default();
-        b.iter(|| formatter.write(black_box(ICE_CREAM_CLUB_HOME)).unwrap());
-    });
-
-    group.bench_function("flavors", |b| {
-        let mut formatter = Kirei::default();
-        b.iter(|| formatter.write(black_box(ICE_CREAM_CLUB_FLAVORS)).unwrap());
-    });
-
-    group.bench_function("club", |b| {
-        let mut formatter = Kirei::default();
-        b.iter(|| formatter.write(black_box(ICE_CREAM_CLUB_CLUB)).unwrap());
-    });
-
-    group.bench_function("base", |b| {
-        let mut formatter = Kirei::default();
-        b.iter(|| formatter.write(black_box(ICE_CREAM_CLUB_BASE)).unwrap());
+        b.iter(|| {
+            for template in &templates {
+                black_box(formatter.write(black_box(template)).unwrap());
+            }
+        });
     });
 
     group.finish();
