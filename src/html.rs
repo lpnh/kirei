@@ -348,7 +348,7 @@ fn parse_recursive(
         "element" | "script_element" | "style_element" => {
             let start_idx = html_nodes.len();
             let has_end_tag = node
-                .child(node.child_count().saturating_sub(1))
+                .child(node.child_count().saturating_sub(1) as u32)
                 .is_some_and(|n| n.kind() == "end_tag");
             for child in node.children(&mut node.walk()) {
                 parse_recursive(

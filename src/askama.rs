@@ -334,7 +334,7 @@ fn is_match_arm(node: Node) -> bool {
 fn extract_delimiters(node: Node, source: &str) -> Result<(Delimiters, String), KireiError> {
     let first = node.child(0).or_msg("node has no first child")?;
     let last = node
-        .child(node.child_count() - 1)
+        .child(node.child_count().saturating_sub(1) as u32)
         .or_msg("node has no last child")?;
 
     let open = first.utf8_text(source.as_bytes())?.trim().to_string();
