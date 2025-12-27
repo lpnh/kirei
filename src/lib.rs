@@ -1,17 +1,14 @@
 #![allow(clippy::uninlined_format_args)]
+#![allow(clippy::must_use_candidate)]
 
 pub mod askama;
 mod config;
 pub mod draw;
-pub mod error;
 mod html;
 mod sakura_tree;
 pub mod write;
 
-pub use crate::{
-    error::{OrDraw, OrMsg},
-    write::Kirei,
-};
+pub use crate::{draw::Severity, write::Kirei};
 
 #[must_use]
 pub fn normalize_ws(text: &str) -> String {

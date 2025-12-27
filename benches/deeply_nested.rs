@@ -86,7 +86,7 @@ fn format_benchmark(c: &mut Criterion) {
         let mut formatter = Kirei::default();
         b.iter(|| {
             for template in &templates {
-                black_box(formatter.write(black_box(template)).unwrap());
+                black_box(formatter.write(black_box(template)).0);
             }
         });
     });

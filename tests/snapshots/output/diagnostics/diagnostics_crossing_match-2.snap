@@ -1,0 +1,12 @@
+---
+source: tests/snapshots/diagnostics.rs
+description: "<div>\n    {% match value %}\n        {% when Some(x) %}\n            <span>{{ x }}</span>\n        </div>\n        {% when None %}\n            <span>Nothing</span>\n    {% endmatch %}\n\n"
+---
+warning: unbalanced HTML across control blocks
+ --> diagnostics/crossing_match.html:1:2
+  |
+1 | <div>
+  |  ^^^ this opening tag is in a different scope...
+...
+5 |         </div>
+  |           ^^^ ...than its closing tag

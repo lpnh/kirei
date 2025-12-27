@@ -1,0 +1,9 @@
+<div>
+    {% match value %}
+        {% when Some(x) %}
+            <span>{{ x }}</span>
+        </div>
+        {% when None %}
+            <span>Nothing</span>
+    {% endmatch %}
+

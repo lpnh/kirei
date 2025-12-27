@@ -3,7 +3,7 @@ source: tests/snapshots/diagnostics.rs
 description: "{% blop %}<p>A cool paragraph</p>\n"
 ---
 error: failed to parse Askama
- --> invalid_ctrl_statement.html:1:1
+ --> diagnostics/invalid_ctrl_statement.html:1:1
   |
 1 | {% blop %}<p>A cool paragraph</p>
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

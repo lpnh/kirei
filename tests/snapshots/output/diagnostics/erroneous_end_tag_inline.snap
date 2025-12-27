@@ -3,7 +3,7 @@ source: tests/snapshots/diagnostics.rs
 description: "<div><foo>Some text</bar></div>\n"
 ---
 error: unexpected closing tag
- --> erroneous_end_tag_inline.html:1:22
+ --> diagnostics/erroneous_end_tag_inline.html:1:22
   |
 1 | <div><foo>Some text</bar></div>
   |       ---            ^^^ expected `foo`, found `bar`

@@ -154,8 +154,8 @@ impl Leaf {
                     end: None,
                 }
             }
-            HtmlNode::End { .. } => Root::Tag {
-                indent: -1,
+            HtmlNode::End { indent, .. } => Root::Tag {
+                indent: *indent,
                 is_phrasing: html_node.is_phrasing(),
                 is_ws_sensitive: html_node.is_ws_sensitive(),
                 end: None,
@@ -291,12 +291,12 @@ impl SakuraTree {
             if let (Some(range), Some(end)) = (html_node.range(), html_node.end())
                 && let Some(start) = leaves.iter().position(|l| l.start == range.start)
                 && let Some(end_node) = html_nodes.get(end)
-                && askama::is_inside_same_ctrl(range.start, end_node.start(), askama_nodes) // TODO: remove this
                 && let end_idx = leaves.iter().position(|l| l.start == end_node.start())
+                && let HtmlNode::Start { indent: i, .. } = html_node
                 && let Root::Tag { end, indent, .. } = &mut leaves[start].root
             {
                 *end = end_idx;
-                *indent = 1;
+                *indent = *i;
             }
         }
 
@@ -324,7 +324,8 @@ impl SakuraTree {
             match node {
                 HtmlNode::Start { .. } | HtmlNode::Void { .. } | HtmlNode::SelfClosing { .. } => {
                     let Some(range) = node.range() else { continue };
-                    if let Some(embed) = node.embed_askm() {
+                    let embed = find_embedded(range, askama_nodes);
+                    if !embed.is_empty() {
                         pruned.extend(embed.iter().copied());
                         let root = Root::Tag {
                             indent: 0,
@@ -332,7 +333,7 @@ impl SakuraTree {
                             is_ws_sensitive: node.is_ws_sensitive(),
                             end: None,
                         };
-                        let content = html::format_tag(range, source, askama_nodes, embed);
+                        let content = html::format_tag(range, source, askama_nodes, &embed);
                         leaves.insert(Leaf::grow(root, content, range.start, range.end));
                     } else {
                         leaves.insert(Leaf::from_html(node));
@@ -340,24 +341,24 @@ impl SakuraTree {
                 }
                 HtmlNode::Text { text, .. } => {
                     let Some(range) = node.range() else { continue };
-
-                    if let Some(embed) = node.embed_askm() {
-                        leaves.extend(Leaf::from_mixed_text(range, askama_nodes, embed, source));
+                    let embed = find_embedded(range, askama_nodes);
+                    if !embed.is_empty() {
+                        leaves.extend(Leaf::from_mixed_text(range, askama_nodes, &embed, source));
                     } else {
                         leaves.insert(Leaf::from_text(text, range.start, range.end));
                     }
                 }
                 HtmlNode::Raw { .. } | HtmlNode::Comment { .. } => {
                     let Some(range) = node.range() else { continue };
-
-                    if let Some(embed) = node.embed_askm() {
+                    let embed = find_embedded(range, askama_nodes);
+                    if !embed.is_empty() {
                         pruned.extend(embed.iter().copied());
                         let root = match node {
                             HtmlNode::Raw { .. } => Root::Raw,
                             HtmlNode::Comment { .. } => Root::Comment,
                             _ => unreachable!(),
                         };
-                        let content = html::format_opaque(range, source, askama_nodes, embed);
+                        let content = html::format_opaque(range, source, askama_nodes, &embed);
                         leaves.insert(Leaf::grow(root, content, range.start, range.end));
                     } else {
                         leaves.insert(Leaf::from_html(node));
@@ -745,4 +746,12 @@ impl SakuraTree {
     fn indent_as_string(&self, indent: usize) -> String {
         " ".repeat(indent * self.cfg.indent_size)
     }
+}
+
+fn find_embedded(range: &Range<usize>, askama_nodes: &[AskamaNode]) -> Vec<usize> {
+    askama_nodes
+        .iter()
+        .enumerate()
+        .filter_map(|(i, n)| (n.start() >= range.start && n.end() <= range.end).then_some(i))
+        .collect()
 }

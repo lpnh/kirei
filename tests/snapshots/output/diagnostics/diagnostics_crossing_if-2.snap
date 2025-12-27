@@ -1,0 +1,12 @@
+---
+source: tests/snapshots/diagnostics.rs
+description: "<div>\n    {% if condition %}\n        <span>Content</span>\n    {% else %}\n    </div>\n{% endif %}\n"
+---
+warning: unbalanced HTML across control blocks
+ --> diagnostics/crossing_if.html:1:2
+  |
+1 | <div>
+  |  ^^^ this opening tag is in a different scope...
+...
+5 |     </div>
+  |       ^^^ ...than its closing tag

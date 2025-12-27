@@ -1,0 +1,10 @@
+---
+source: tests/snapshots/diagnostics.rs
+description: "<div>\n    {% if condition %}\n        <span>Content</span>\n    {% else %}\n    </div>\n{% endif %}\n"
+---
+<div>
+{% if condition %}
+    <span>Content</span>
+{% else %}
+    </div>
+{% endif %}

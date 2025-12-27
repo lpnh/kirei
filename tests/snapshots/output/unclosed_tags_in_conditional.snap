@@ -9,5 +9,5 @@ description: "<div>\n    {% if first %}\n        <strong>\n    {% elif last %}\n
         <strong>{{ foo }}<span>
     {% else %}
     {% endif %}
-</strong>
+    </strong>
 </div>

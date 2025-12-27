@@ -1,0 +1,11 @@
+---
+source: tests/snapshots/diagnostics.rs
+description: "{% for item in items %}\n    <ul>\n        {% block name %}<li>{{ item }}</li>{% endblock %}\n{% endfor %}\n    </ul>\n"
+---
+{% for item in items %}
+    <ul>
+    {% block name %}
+        <li>{{ item }}</li>
+    {% endblock %}
+{% endfor %}
+</ul>

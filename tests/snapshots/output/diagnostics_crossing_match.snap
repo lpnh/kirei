@@ -1,0 +1,9 @@
+---
+source: tests/snapshots/diagnostics.rs
+description: "<div>\n    {% match value %}\n        {% when Some(x) %}\n            <span>{{ x }}</span>\n        </div>\n        {% when None %}\n            <span>Nothing</span>\n    {% endmatch %}\n\n"
+---
+<div>
+{% match value %}
+    {% when Some(x) %} <span>{{ x }}</span></div>
+    {% when None %} <span>Nothing</span>
+{% endmatch %}

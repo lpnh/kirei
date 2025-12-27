@@ -3,7 +3,7 @@ source: tests/snapshots/diagnostics.rs
 description: "<div>\n    <foo>\n        Some text\n    </bar>\n</div>\n"
 ---
 error: unexpected closing tag
- --> erroneous_end_tag_multiline.html:4:7
+ --> diagnostics/erroneous_end_tag_multiline.html:4:7
   |
 2 |     <foo>
   |      --- expected due to this open tag name

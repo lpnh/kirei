@@ -34,7 +34,7 @@ fn prints_error_to_stderr() {
         .assert()
         .failure()
         .code(1)
-        .stderr(contains("file needs formatting"));
+        .stderr(contains("file would be formatted"));
 }
 
 #[test]

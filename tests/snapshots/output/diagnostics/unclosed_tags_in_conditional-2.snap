@@ -1,0 +1,12 @@
+---
+source: tests/snapshots/malformed.rs
+description: "<div>\n    {% if first %}\n        <strong>\n    {% elif last %}\n        <strong>{{ foo }}<span>\n    {% else %}\n    {% endif %}\n        </strong>\n</div>\n"
+---
+warning: unbalanced HTML across control blocks
+ --> malformed/unclosed_tags_in_conditional.html:5:10
+  |
+5 |         <strong>{{ foo }}<span>
+  |          ^^^^^^ this opening tag is in a different scope...
+...
+8 |         </strong>
+  |           ^^^^^^ ...than its closing tag

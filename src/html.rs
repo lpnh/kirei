@@ -2,8 +2,8 @@ use std::ops;
 use tree_sitter::{Node, Range};
 
 use crate::{
-    askama::{AskamaNode, format_askama_node},
-    error::{KireiError, OrMsg},
+    askama::{self, AskamaNode},
+    draw::Diagnostic,
 };
 
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Content_categories#phrasing_content
@@ -41,34 +41,31 @@ pub enum HtmlNode {
         name: String,
         attr: String,
         end: Option<usize>,
-        embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
+        indent: isize,
     },
     Void {
         name: String,
         attr: String,
-        embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
     },
     SelfClosing {
         name: String,
         attr: String,
-        embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
     },
     End {
         name: String,
         start: usize,
+        indent: isize,
     },
 
     Text {
         text: String,
-        embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
     },
     Raw {
         text: String,
-        embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
     },
 
@@ -82,7 +79,6 @@ pub enum HtmlNode {
     },
     Comment {
         text: String,
-        embed_askm: Option<Vec<usize>>,
         range: ops::Range<usize>,
     },
 }
@@ -161,65 +157,29 @@ impl HtmlNode {
             _ => None,
         }
     }
-
-    pub fn embed_askm(&self) -> Option<&[usize]> {
-        match self {
-            Self::Start { embed_askm, .. }
-            | Self::Void { embed_askm, .. }
-            | Self::SelfClosing { embed_askm, .. }
-            | Self::Comment { embed_askm, .. }
-            | Self::Text { embed_askm, .. }
-            | Self::Raw { embed_askm, .. } => embed_askm.as_deref(),
-            _ => None,
-        }
-    }
 }
 
 pub fn extract_html_nodes(
     root_node: &Node,
     source: &[u8],
     ranges: &[Range],
-    askama_nodes: &[AskamaNode],
-) -> Result<Vec<HtmlNode>, KireiError> {
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Vec<HtmlNode> {
     let mut html_nodes = Vec::new();
-    let mut tag_stack: Vec<(String, Range)> = Vec::new();
+    let mut tag_stack: Vec<(String, Range, usize)> = Vec::new();
     parse_recursive(
         root_node,
         source,
         ranges,
-        askama_nodes,
         &mut html_nodes,
         &mut tag_stack,
+        diagnostics,
         0,
-    )?;
-    Ok(html_nodes)
+    );
+    html_nodes
 }
 
-fn find_askama_in_range(
-    askama_nodes: &[AskamaNode],
-    range: &ops::Range<usize>,
-) -> Option<Vec<usize>> {
-    let indices: Vec<_> = askama_nodes
-        .iter()
-        .enumerate()
-        .filter_map(|(idx, node)| {
-            (node.start() >= range.start && node.end() <= range.end).then_some(idx)
-        })
-        .collect();
-
-    if indices.is_empty() {
-        None
-    } else {
-        Some(indices)
-    }
-}
-
-// Extract text only from included content ranges, skipping Askama gaps
-fn extract_text_from_ranges(
-    node: &Node,
-    source: &[u8],
-    content_ranges: &[Range],
-) -> Result<String, KireiError> {
+fn extract_text_from_ranges(node: &Node, source: &[u8], content_ranges: &[Range]) -> String {
     let node_start = node.start_byte();
     let node_end = node.end_byte();
 
@@ -231,25 +191,26 @@ fn extract_text_from_ranges(
         if range_start < node_end && range_end > node_start {
             let start = range_start.max(node_start);
             let end = range_end.min(node_end);
-            let text_slice = std::str::from_utf8(&source[start..end]).or_msg("UTF8 error")?;
+            let text_slice = std::str::from_utf8(&source[start..end]).expect("valid UTF-8");
             text_parts.push(text_slice);
         }
     }
 
-    Ok(text_parts.join(""))
+    text_parts.join("")
 }
 
 fn parse_recursive(
     node: &Node,
     source: &[u8],
     ranges: &[Range],
-    askama_nodes: &[AskamaNode],
     html_nodes: &mut Vec<HtmlNode>,
-    tag_stack: &mut Vec<(String, Range)>,
+    tag_stack: &mut Vec<(String, Range, usize)>,
+    diagnostics: &mut Vec<Diagnostic>,
     depth: usize,
-) -> Result<(), KireiError> {
+) {
     if depth > 200 {
-        return Err(KireiError::msg("nesting too deep"));
+        diagnostics.push(Diagnostic::nesting_too_deep());
+        return;
     }
 
     match node.kind() {
@@ -259,31 +220,29 @@ fn parse_recursive(
                     &child,
                     source,
                     ranges,
-                    askama_nodes,
                     html_nodes,
                     tag_stack,
+                    diagnostics,
                     depth + 1,
-                )?;
+                );
             }
         }
         "doctype" => {
-            let text = node.utf8_text(source)?.to_string();
+            let text = node.utf8_text(source).expect("valid UTF-8").to_string();
             html_nodes.push(HtmlNode::Doctype {
                 text,
                 start: node.start_byte(),
             });
         }
         "start_tag" => {
-            let range = node.start_byte()..node.end_byte();
-            let embed_askm = find_askama_in_range(askama_nodes, &range);
-            let html_node = parse_start_tag(node, source, embed_askm);
+            let html_node = parse_start_tag(node, source);
             if let HtmlNode::Start { name, .. } = &html_node {
                 let tag_name_node = node
                     .children(&mut node.walk())
                     .find(|c| c.kind() == "tag_name")
                     .expect("start_tag must have tag_name");
 
-                tag_stack.push((name.clone(), tag_name_node.range()));
+                tag_stack.push((name.clone(), tag_name_node.range(), node.start_byte()));
             }
 
             html_nodes.push(html_node);
@@ -291,59 +250,56 @@ fn parse_recursive(
         "end_tag" => {
             let end_tag_node = parse_end_tag(node, source);
             if let HtmlNode::End { name, .. } = &end_tag_node
-                && let Some((stack_name, _)) = tag_stack.last()
-                && stack_name == name
+                && let Some(pos) = tag_stack
+                    .iter()
+                    .rposition(|(stack_name, _, _)| stack_name == name)
             {
-                tag_stack.pop();
+                tag_stack.truncate(pos);
             }
 
             html_nodes.push(end_tag_node);
         }
         "self_closing_tag" => {
-            let range = node.start_byte()..node.end_byte();
-            let embed_askm = find_askama_in_range(askama_nodes, &range);
-            html_nodes.push(parse_self_closing_tag(node, source, embed_askm));
+            html_nodes.push(parse_self_closing_tag(node, source));
         }
         "erroneous_end_tag" => {
             if let Some(erroneous_end_tag_name) = node
                 .children(&mut node.walk())
                 .find(|c| c.kind() == "erroneous_end_tag_name")
-                && let Some((expected_name, open_name_range)) = tag_stack.last()
+                && let Some((expected_name, open_name_range, _)) = tag_stack.last()
             {
-                return Err(KireiError::ErroneousEndTag {
-                    expected: expected_name.clone(),
-                    found: extract_tag_name(node, source, "erroneous_end_tag_name"),
-                    open_name_range: Box::new(*open_name_range),
-                    close_name_range: Box::new(erroneous_end_tag_name.range()),
-                });
+                let expected = expected_name.clone();
+                let found = extract_tag_name(node, source, "erroneous_end_tag_name");
+                let open_range = *open_name_range;
+                let close_range = erroneous_end_tag_name.range();
+
+                let source_str = std::str::from_utf8(source).expect("valid UTF-8");
+                let diagnostic = Diagnostic::erroneous_end_tag(
+                    expected,
+                    &found,
+                    open_range,
+                    close_range,
+                    source_str,
+                );
+                diagnostics.push(diagnostic);
             }
         }
         "comment" => {
-            let text = node.utf8_text(source)?.to_string();
+            let text = node.utf8_text(source).expect("valid UTF-8").to_string();
             let range = node.start_byte()..node.end_byte();
-            let embed_askm = find_askama_in_range(askama_nodes, &range);
-            html_nodes.push(HtmlNode::Comment {
-                text,
-                embed_askm,
-                range,
-            });
+            html_nodes.push(HtmlNode::Comment { text, range });
         }
         "entity" => {
-            let text = node.utf8_text(source)?.to_string();
+            let text = node.utf8_text(source).expect("valid UTF-8").to_string();
             html_nodes.push(HtmlNode::Entity {
                 text,
                 start: node.start_byte(),
             });
         }
         "text" => {
-            let text = extract_text_from_ranges(node, source, ranges)?;
+            let text = extract_text_from_ranges(node, source, ranges);
             let range = node.start_byte()..node.end_byte();
-            let embed_askm = find_askama_in_range(askama_nodes, &range);
-            html_nodes.push(HtmlNode::Text {
-                text,
-                embed_askm,
-                range,
-            });
+            html_nodes.push(HtmlNode::Text { text, range });
         }
         "element" | "script_element" | "style_element" => {
             let start_idx = html_nodes.len();
@@ -355,38 +311,31 @@ fn parse_recursive(
                     &child,
                     source,
                     ranges,
-                    askama_nodes,
                     html_nodes,
                     tag_stack,
+                    diagnostics,
                     depth + 1,
-                )?;
+                );
             }
             if has_end_tag {
                 let end_idx = html_nodes.len().saturating_sub(1);
-
                 if let Some(HtmlNode::Start { end, .. }) = html_nodes.get_mut(start_idx) {
                     *end = Some(end_idx);
                 }
             }
         }
         "raw_text" => {
-            let text = node.utf8_text(source)?.to_string();
+            let text = node.utf8_text(source).expect("valid UTF-8").to_string();
             if !text.trim().is_empty() {
                 let range = node.start_byte()..node.end_byte();
-                let embed_askm = find_askama_in_range(askama_nodes, &range);
-                html_nodes.push(HtmlNode::Raw {
-                    text,
-                    embed_askm,
-                    range,
-                });
+                html_nodes.push(HtmlNode::Raw { text, range });
             }
         }
         _ => unreachable!(),
     }
-    Ok(())
 }
 
-fn parse_start_tag(node: &Node, source: &[u8], embed_askm: Option<Vec<usize>>) -> HtmlNode {
+fn parse_start_tag(node: &Node, source: &[u8]) -> HtmlNode {
     let name = extract_tag_name(node, source, "tag_name");
     let attr = extract_attr(node, source);
 
@@ -394,7 +343,6 @@ fn parse_start_tag(node: &Node, source: &[u8], embed_askm: Option<Vec<usize>>) -
         HtmlNode::Void {
             name,
             attr,
-            embed_askm,
             range: node.start_byte()..node.end_byte(),
         }
     } else {
@@ -402,20 +350,19 @@ fn parse_start_tag(node: &Node, source: &[u8], embed_askm: Option<Vec<usize>>) -
             name,
             attr,
             end: None,
-            embed_askm,
             range: node.start_byte()..node.end_byte(),
+            indent: 1,
         }
     }
 }
 
-fn parse_self_closing_tag(node: &Node, source: &[u8], embed_askm: Option<Vec<usize>>) -> HtmlNode {
+fn parse_self_closing_tag(node: &Node, source: &[u8]) -> HtmlNode {
     let name = extract_tag_name(node, source, "tag_name");
     let attr = extract_attr(node, source);
 
     HtmlNode::SelfClosing {
         name,
         attr,
-        embed_askm,
         range: node.start_byte()..node.end_byte(),
     }
 }
@@ -425,6 +372,7 @@ fn parse_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
     HtmlNode::End {
         name,
         start: node.start_byte(),
+        indent: -1,
     }
 }
 
@@ -501,83 +449,63 @@ pub fn format_tag(
     range: &ops::Range<usize>,
     source: &str,
     askama_nodes: &[AskamaNode],
-    embed_askm: &[usize],
+    embed: &[usize],
 ) -> String {
-    let mut result = String::new();
-    let mut current_pos = range.start;
-
-    for &idx in embed_askm {
-        let askama = &askama_nodes[idx];
-        if askama.start() > current_pos {
-            let fragment = &source[current_pos..askama.start()];
-            let normalized = normalize_fragment(fragment);
-            result.push_str(&normalized);
-        }
-
-        let formatted = format_askama_node(askama);
-        result.push_str(&formatted);
-
-        current_pos = askama.end();
-    }
-
-    if current_pos < range.end {
-        let fragment = &source[current_pos..range.end];
-        let normalized = normalize_fragment(fragment);
-        result.push_str(&normalized);
-    }
-
-    result
+    format_with_embedded(range, source, askama_nodes, embed, normalize_fragment)
 }
 
 pub fn format_opaque(
     range: &ops::Range<usize>,
     source: &str,
     askama_nodes: &[AskamaNode],
-    embed_askm: &[usize],
+    embed: &[usize],
 ) -> String {
-    let mut result = String::new();
-    let mut current_pos = range.start;
-
-    for &idx in embed_askm {
-        let askama = &askama_nodes[idx];
-        if askama.start() > current_pos {
-            result.push_str(&source[current_pos..askama.start()]);
-        }
-
-        let formatted = format_askama_node(askama);
-        result.push_str(&formatted);
-
-        current_pos = askama.end();
-    }
-
-    if current_pos < range.end {
-        result.push_str(&source[current_pos..range.end]);
-    }
-
-    result
+    format_with_embedded(range, source, askama_nodes, embed, str::to_string)
 }
 
 fn normalize_fragment(fragment: &str) -> String {
     if let Some(rest) = fragment.strip_suffix('>') {
-        let normalized = normalize_preserving_ends(rest);
-        format!("{}>", normalized.trim_end())
-    } else if let Some(rest) = fragment.strip_suffix("/>") {
-        let normalized = normalize_preserving_ends(rest);
-        format!("{}/>", normalized.trim_end())
+        format!("{}>", normalize_preserving_ends(rest).trim_end())
     } else {
         normalize_preserving_ends(fragment)
     }
 }
 
 fn normalize_preserving_ends(text: &str) -> String {
-    let has_leading = text.starts_with(char::is_whitespace);
-    let has_trailing = text.ends_with(char::is_whitespace);
     let normalized = crate::normalize_ws(text);
-
-    match (has_leading, has_trailing) {
+    match (
+        text.starts_with(char::is_whitespace),
+        text.ends_with(char::is_whitespace),
+    ) {
         (true, true) => format!(" {} ", normalized),
         (true, false) => format!(" {}", normalized),
         (false, true) => format!("{} ", normalized),
         (false, false) => normalized,
     }
+}
+
+fn format_with_embedded(
+    range: &ops::Range<usize>,
+    source: &str,
+    askama_nodes: &[AskamaNode],
+    embed: &[usize],
+    transform: fn(&str) -> String,
+) -> String {
+    let mut result = String::new();
+    let mut pos = range.start;
+
+    for &idx in embed {
+        let node = &askama_nodes[idx];
+        if node.start() > pos {
+            result.push_str(&transform(&source[pos..node.start()]));
+        }
+        result.push_str(&askama::format_askama_node(node));
+        pos = node.end();
+    }
+
+    if pos < range.end {
+        result.push_str(&transform(&source[pos..range.end]));
+    }
+
+    result
 }

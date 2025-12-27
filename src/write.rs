@@ -1,26 +1,14 @@
-use tree_sitter::{Node, Parser};
+use tree_sitter::Parser;
 use tree_sitter_askama::LANGUAGE as ASKAMA_LANGUAGE;
 use tree_sitter_html::LANGUAGE as HTML_LANGUAGE;
 
 use crate::{
     askama,
     config::Config,
-    error::{KireiError, OrMsg},
+    draw::{Diagnostic, crossing_control_boundary},
     html,
     sakura_tree::SakuraTree,
 };
-
-fn find_error_node<'a>(node: &Node<'a>) -> Option<Node<'a>> {
-    if node.is_error() {
-        return Some(*node);
-    }
-    for child in node.children(&mut node.walk()) {
-        if let Some(err) = find_error_node(&child) {
-            return Some(err);
-        }
-    }
-    None
-}
 
 pub struct Kirei {
     askama_parser: Parser,
@@ -30,74 +18,79 @@ pub struct Kirei {
 
 impl Default for Kirei {
     fn default() -> Self {
-        Self::new().expect("failed to initialize kirei")
+        Self::new()
     }
 }
 
 impl Kirei {
-    pub fn new() -> Result<Self, KireiError> {
+    pub fn new() -> Self {
         let mut askama_parser = Parser::new();
         askama_parser
             .set_language(&ASKAMA_LANGUAGE.into())
-            .or_msg("failed to set Askama language")?;
+            .expect("failed to set Askama language");
 
         let mut html_parser = Parser::new();
         html_parser
             .set_language(&HTML_LANGUAGE.into())
-            .or_msg("failed to set HTML language")?;
+            .expect("failed to set HTML language");
 
-        Ok(Self {
+        Self {
             askama_parser,
             html_parser,
             config: Config::default(),
-        })
+        }
     }
 
-    pub fn write(&mut self, source: &str) -> Result<String, KireiError> {
+    pub fn write(&mut self, source: &str) -> (String, Vec<Diagnostic>) {
+        let mut diagnostics = Vec::new();
+
         let ast_tree = self
             .askama_parser
             .parse(source, None)
-            .or_msg("failed to parse Askama")?;
+            .expect("failed to parse Askama");
 
-        if ast_tree.root_node().has_error()
-            && let Some(error_node) = find_error_node(&ast_tree.root_node())
-        {
-            return Err(KireiError::AskamaSyntaxError {
-                error_range: error_node.range(),
-            });
+        if ast_tree.root_node().has_error() {
+            if let Some(diagnostic) = Diagnostic::syntax_error(&ast_tree.root_node(), "Askama") {
+                diagnostics.push(diagnostic);
+            }
+            return (String::new(), diagnostics);
         }
 
         let (askama_nodes, content_node_ranges) =
-            askama::extract_askama_nodes(&ast_tree.root_node(), source)
-                .or_msg("failed to extract Askama nodes")?;
+            askama::extract_askama_nodes(&ast_tree.root_node(), source);
 
         if !content_node_ranges.is_empty() {
             self.html_parser
                 .set_included_ranges(&content_node_ranges)
-                .or_msg("failed to set included ranges")?;
+                .expect("failed to set included ranges");
         }
         let html_tree = self
             .html_parser
             .parse(source, None)
-            .or_msg("failed to parse HTML")?;
+            .expect("failed to parse HTML");
 
-        if html_tree.root_node().has_error()
-            && let Some(error_node) = find_error_node(&html_tree.root_node())
-        {
-            return Err(KireiError::HtmlSyntaxError {
-                error_range: error_node.range(),
-            });
+        if html_tree.root_node().has_error() {
+            if let Some(diagnostic) = Diagnostic::syntax_error(&html_tree.root_node(), "HTML") {
+                diagnostics.push(diagnostic);
+            }
+            return (String::new(), diagnostics);
         }
 
-        let html_nodes = html::extract_html_nodes(
+        let mut html_nodes = html::extract_html_nodes(
             &html_tree.root_node(),
             source.as_bytes(),
             &content_node_ranges,
+            &mut diagnostics,
+        );
+
+        diagnostics.extend(crossing_control_boundary(
+            &mut html_nodes,
             &askama_nodes,
-        )?;
+            source,
+        ));
 
         let sakura_tree = SakuraTree::grow(&askama_nodes, &html_nodes, source, &self.config);
 
-        Ok(sakura_tree.print())
+        (sakura_tree.print(), diagnostics)
     }
 }

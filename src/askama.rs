@@ -1,8 +1,6 @@
 use std::ops;
 use tree_sitter::{Node, Range};
 
-use crate::error::{KireiError, OrMsg};
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Boundary {
     Open,       // if, for, block, etc.
@@ -126,7 +124,7 @@ impl ControlTag {
         }
     }
 
-    fn is_opening(self) -> bool {
+    pub fn is_opening(self) -> bool {
         matches!(self.boundary(), Boundary::Open)
     }
 
@@ -219,10 +217,7 @@ impl AskamaNode {
     }
 }
 
-pub fn extract_askama_nodes(
-    root: &Node,
-    source: &str,
-) -> Result<(Vec<AskamaNode>, Vec<Range>), KireiError> {
+pub fn extract_askama_nodes(root: &Node, source: &str) -> (Vec<AskamaNode>, Vec<Range>) {
     let mut nodes = Vec::new();
     let mut content_node_ranges = Vec::new();
     let mut stack: Vec<(usize, ControlTag)> = Vec::new();
@@ -235,7 +230,7 @@ pub fn extract_askama_nodes(
         match child.kind() {
             "control_tag" | "render_expression" | "comment" | "raw_statement"
             | "endraw_statement" => {
-                let mut node = parse_askama_node(child, source)?;
+                let mut node = parse_askama_node(child, source);
 
                 if let AskamaNode::Control { tag, range, .. } = &mut node {
                     if tag.is_opening() {
@@ -264,14 +259,14 @@ pub fn extract_askama_nodes(
         }
     }
 
-    Ok((nodes, content_node_ranges))
+    (nodes, content_node_ranges)
 }
 
-fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode, KireiError> {
-    let (dlmts, inner) = extract_delimiters(node, source)?;
+fn parse_askama_node(node: Node, source: &str) -> AskamaNode {
+    let (dlmts, inner) = extract_delimiters(node, source);
     let range = node.start_byte()..node.end_byte();
 
-    let askama_node = match node.kind() {
+    match node.kind() {
         "control_tag" => AskamaNode::Control {
             dlmts,
             inner,
@@ -304,9 +299,7 @@ fn parse_askama_node(node: Node, source: &str) -> Result<AskamaNode, KireiError>
             range,
         },
         _ => unreachable!(),
-    };
-
-    Ok(askama_node)
+    }
 }
 
 fn is_match_arm(node: Node) -> bool {
@@ -331,14 +324,22 @@ fn is_match_arm(node: Node) -> bool {
         .is_some_and(|child| child.kind() == "when_statement")
 }
 
-fn extract_delimiters(node: Node, source: &str) -> Result<(Delimiters, String), KireiError> {
-    let first = node.child(0).or_msg("node has no first child")?;
+fn extract_delimiters(node: Node, source: &str) -> (Delimiters, String) {
+    let first = node.child(0).expect("node should have first child");
     let last = node
         .child(node.child_count().saturating_sub(1) as u32)
-        .or_msg("node has no last child")?;
+        .expect("node should have last child");
 
-    let open = first.utf8_text(source.as_bytes())?.trim().to_string();
-    let close = last.utf8_text(source.as_bytes())?.trim().to_string();
+    let open = first
+        .utf8_text(source.as_bytes())
+        .expect("valid UTF-8")
+        .trim()
+        .to_string();
+    let close = last
+        .utf8_text(source.as_bytes())
+        .expect("valid UTF-8")
+        .trim()
+        .to_string();
 
     let start = first.end_byte();
     let end = last.start_byte();
@@ -349,34 +350,7 @@ fn extract_delimiters(node: Node, source: &str) -> Result<(Delimiters, String), 
         String::new()
     };
 
-    Ok((Delimiters { open, close }, inner))
-}
-
-// TODO: find better way to solve this
-pub fn is_inside_same_ctrl(start: usize, end: usize, nodes: &[AskamaNode]) -> bool {
-    innermost_ctrl_idx(start, nodes) == innermost_ctrl_idx(end, nodes)
-}
-
-fn innermost_ctrl_idx(pos: usize, nodes: &[AskamaNode]) -> Option<usize> {
-    nodes
-        .iter()
-        .enumerate()
-        .filter_map(|(idx, node)| {
-            if let AskamaNode::Control {
-                range,
-                end: Some(close_idx),
-                ..
-            } = node
-                && pos >= range.end
-                && pos < *close_idx
-            {
-                Some((idx, close_idx - range.end))
-            } else {
-                None
-            }
-        })
-        .min_by_key(|(_, size)| *size)
-        .map(|(idx, _)| idx)
+    (Delimiters { open, close }, inner)
 }
 
 #[must_use]

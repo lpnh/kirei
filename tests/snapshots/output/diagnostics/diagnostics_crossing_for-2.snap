@@ -1,0 +1,12 @@
+---
+source: tests/snapshots/diagnostics.rs
+description: "{% for item in items %}\n    <ul>\n        {% block name %}<li>{{ item }}</li>{% endblock %}\n{% endfor %}\n    </ul>\n"
+---
+warning: unbalanced HTML across control blocks
+ --> diagnostics/crossing_for.html:2:6
+  |
+2 |     <ul>
+  |      ^^ this opening tag is in a different scope...
+...
+5 |     </ul>
+  |       ^^ ...than its closing tag
