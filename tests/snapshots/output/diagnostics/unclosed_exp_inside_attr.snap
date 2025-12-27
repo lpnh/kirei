@@ -6,4 +6,4 @@ error: failed to parse Askama
  --> diagnostics/unclosed_exp_inside_attr.html:1:13
   |
 1 | <div class="{{ color }">something</div>
-  |             ^
+  |             ^^^^^^^^^^

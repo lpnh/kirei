@@ -32,3 +32,8 @@ fn diagnostics_crossing_if() {
 fn diagnostics_crossing_match() {
     snapshot_test!("diagnostics/crossing_match.html");
 }
+
+#[test]
+fn diagnostics_missing_block_name() {
+    snapshot_test!("diagnostics/missing_block_name.html");
+}

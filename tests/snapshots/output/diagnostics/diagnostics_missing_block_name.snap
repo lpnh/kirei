@@ -1,0 +1,9 @@
+---
+source: tests/snapshots/diagnostics.rs
+description: "{% block %}{% endblock %}\n"
+---
+error: missing block name
+ --> diagnostics/missing_block_name.html:1:9
+  |
+1 | {% block %}{% endblock %}
+  |         ^ block tag requires a name
