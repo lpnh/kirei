@@ -2,6 +2,7 @@
 #![allow(clippy::must_use_candidate)]
 
 pub mod askama;
+mod check;
 mod config;
 pub mod draw;
 mod html;

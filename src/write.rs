@@ -2,13 +2,7 @@ use tree_sitter::Parser;
 use tree_sitter_askama::LANGUAGE as ASKAMA_LANGUAGE;
 use tree_sitter_html::LANGUAGE as HTML_LANGUAGE;
 
-use crate::{
-    askama,
-    config::Config,
-    draw::{Diagnostic, crossing_control_boundary},
-    html,
-    sakura_tree::SakuraTree,
-};
+use crate::{askama, check, config::Config, draw::Diagnostic, html, sakura_tree::SakuraTree};
 
 pub struct Kirei {
     askama_parser: Parser,
@@ -83,7 +77,7 @@ impl Kirei {
             &mut diagnostics,
         );
 
-        diagnostics.extend(crossing_control_boundary(
+        diagnostics.extend(check::crossing_control_boundary(
             &mut html_nodes,
             &askama_nodes,
             source,
