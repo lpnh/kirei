@@ -7,10 +7,11 @@ mod config;
 pub mod diagnostics;
 pub mod draw;
 mod html;
+mod noted;
 mod sakura_tree;
 pub mod write;
 
-pub use crate::{draw::Severity, write::Kirei};
+pub use crate::{draw::Severity, noted::Noted, write::Kirei};
 
 #[must_use]
 pub fn normalize_ws(text: &str) -> String {

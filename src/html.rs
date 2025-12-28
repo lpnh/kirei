@@ -2,6 +2,7 @@ use std::ops;
 use tree_sitter::{Node, Range};
 
 use crate::{
+    Noted,
     askama::{self, AskamaNode},
     diagnostics,
     draw::Diagnostic,
@@ -164,20 +165,20 @@ pub fn extract_html_nodes(
     root_node: &Node,
     source: &[u8],
     ranges: &[Range],
-    diagnostics: &mut Vec<Diagnostic>,
-) -> Vec<HtmlNode> {
+) -> Noted<Vec<HtmlNode>> {
     let mut html_nodes = Vec::new();
     let mut tag_stack: Vec<(String, Range, usize)> = Vec::new();
+    let mut diagnostics = Vec::new();
     parse_recursive(
         root_node,
         source,
         ranges,
         &mut html_nodes,
         &mut tag_stack,
-        diagnostics,
+        &mut diagnostics,
         0,
     );
-    html_nodes
+    Noted::with_diagnostics(html_nodes, diagnostics)
 }
 
 fn extract_text_from_ranges(node: &Node, source: &[u8], content_ranges: &[Range]) -> String {

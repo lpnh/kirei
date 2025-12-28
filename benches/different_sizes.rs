@@ -973,7 +973,7 @@ fn format_benchmark(c: &mut Criterion) {
         group.throughput(Throughput::Bytes(template.len() as u64));
         group.bench_with_input(BenchmarkId::from_parameter(name), template, |b, tmpl| {
             let mut formatter = Kirei::default();
-            b.iter(|| formatter.write(black_box(tmpl)).0);
+            b.iter(|| formatter.write(black_box(tmpl)).value);
         });
     }
 

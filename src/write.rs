@@ -2,9 +2,7 @@ use tree_sitter::Parser;
 use tree_sitter_askama::LANGUAGE as ASKAMA_LANGUAGE;
 use tree_sitter_html::LANGUAGE as HTML_LANGUAGE;
 
-use crate::{
-    askama, check, config::Config, diagnostics, draw::Diagnostic, html, sakura_tree::SakuraTree,
-};
+use crate::{Noted, askama, check, config::Config, diagnostics, html, sakura_tree::SakuraTree};
 
 pub struct Kirei {
     askama_parser: Parser,
@@ -37,7 +35,7 @@ impl Kirei {
         }
     }
 
-    pub fn write(&mut self, source: &str) -> (String, Vec<Diagnostic>) {
+    pub fn write(&mut self, source: &str) -> Noted<String> {
         let mut diagnostics = Vec::new();
 
         let ast_tree = self
@@ -49,7 +47,7 @@ impl Kirei {
             if let Some(diagnostic) = diagnostics::syntax_error(&ast_tree.root_node(), "Askama") {
                 diagnostics.push(diagnostic);
             }
-            return (String::new(), diagnostics);
+            return Noted::with_diagnostics(String::new(), diagnostics);
         }
 
         let (askama_nodes, content_node_ranges) =
@@ -69,23 +67,23 @@ impl Kirei {
             if let Some(diagnostic) = diagnostics::syntax_error(&html_tree.root_node(), "HTML") {
                 diagnostics.push(diagnostic);
             }
-            return (String::new(), diagnostics);
+            return Noted::with_diagnostics(String::new(), diagnostics);
         }
 
-        let mut html_nodes = html::extract_html_nodes(
+        let noted_html = html::extract_html_nodes(
             &html_tree.root_node(),
             source.as_bytes(),
             &content_node_ranges,
-            &mut diagnostics,
         );
+        let mut html_nodes = noted_html.value;
+        diagnostics.extend(noted_html.diagnostics);
 
-        let (crossing_diagnostics, crossing_pair_idx) =
-            check::crossing_control_boundary(&html_nodes, &askama_nodes, source);
-        diagnostics.extend(crossing_diagnostics);
-        html::unpair_crossing_tags(&mut html_nodes, &crossing_pair_idx);
+        let noted_pair_indices = check::element_across_control(&html_nodes, &askama_nodes, source);
+        diagnostics.extend(noted_pair_indices.diagnostics);
+        html::unpair_crossing_tags(&mut html_nodes, &noted_pair_indices.value);
 
         let sakura_tree = SakuraTree::grow(&askama_nodes, &html_nodes, source, &self.config);
 
-        (sakura_tree.print(), diagnostics)
+        Noted::with_diagnostics(sakura_tree.print(), diagnostics)
     }
 }

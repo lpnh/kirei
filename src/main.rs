@@ -20,12 +20,14 @@ fn main() {
         (content, Some(&*args.input))
     };
 
-    let (mut formatted, diagnostics) = Kirei::default().write(&input);
+    let noted = Kirei::default().write(&input);
 
-    let has_errors = diagnostics.iter().any(|d| d.level == Severity::Error);
-    for diagnostic in &diagnostics {
+    let has_errors = noted.diagnostics.iter().any(|d| d.level == Severity::Error);
+    for diagnostic in &noted.diagnostics {
         eprint!("{}", diagnostic.draw(&input, filepath));
     }
+
+    let mut formatted = noted.value;
 
     if has_errors {
         std::process::exit(1);

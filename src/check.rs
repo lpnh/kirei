@@ -1,16 +1,17 @@
 use tree_sitter::{Point, Range};
 
 use crate::{
+    Noted,
     askama::{AskamaNode, ControlTag},
     draw::{Annotation, Diagnostic},
     html::HtmlNode,
 };
 
-pub fn crossing_control_boundary(
+pub fn element_across_control(
     html_nodes: &[HtmlNode],
     askama_nodes: &[AskamaNode],
     source: &str,
-) -> (Vec<Diagnostic>, Vec<(usize, usize)>) {
+) -> Noted<Vec<(usize, usize)>> {
     let mut diagnostics = Vec::new();
     let mut crossing_indices = Vec::new();
 
@@ -48,7 +49,7 @@ pub fn crossing_control_boundary(
         crossing_indices.push((i, end_idx));
     }
 
-    (diagnostics, crossing_indices)
+    Noted::with_diagnostics(crossing_indices, diagnostics)
 }
 
 fn has_crossing_boundary(start: usize, end: usize, askama_nodes: &[AskamaNode]) -> bool {
