@@ -2,7 +2,9 @@ use tree_sitter::Parser;
 use tree_sitter_askama::LANGUAGE as ASKAMA_LANGUAGE;
 use tree_sitter_html::LANGUAGE as HTML_LANGUAGE;
 
-use crate::{askama, check, config::Config, draw::Diagnostic, html, sakura_tree::SakuraTree};
+use crate::{
+    askama, check, config::Config, diagnostics, draw::Diagnostic, html, sakura_tree::SakuraTree,
+};
 
 pub struct Kirei {
     askama_parser: Parser,
@@ -44,7 +46,7 @@ impl Kirei {
             .expect("failed to parse Askama");
 
         if ast_tree.root_node().has_error() {
-            if let Some(diagnostic) = Diagnostic::syntax_error(&ast_tree.root_node(), "Askama") {
+            if let Some(diagnostic) = diagnostics::syntax_error(&ast_tree.root_node(), "Askama") {
                 diagnostics.push(diagnostic);
             }
             return (String::new(), diagnostics);
@@ -64,7 +66,7 @@ impl Kirei {
             .expect("failed to parse HTML");
 
         if html_tree.root_node().has_error() {
-            if let Some(diagnostic) = Diagnostic::syntax_error(&html_tree.root_node(), "HTML") {
+            if let Some(diagnostic) = diagnostics::syntax_error(&html_tree.root_node(), "HTML") {
                 diagnostics.push(diagnostic);
             }
             return (String::new(), diagnostics);

@@ -3,7 +3,7 @@ use std::io::{self, Read};
 
 mod cli;
 use cli::Args;
-use kirei::{Kirei, Severity, draw::Diagnostic};
+use kirei::{Kirei, Severity, diagnostics};
 
 fn main() {
     let args = Args::parse();
@@ -12,11 +12,11 @@ fn main() {
         let mut buffer = String::new();
         io::stdin()
             .read_to_string(&mut buffer)
-            .unwrap_or_else(|e| Diagnostic::io_error(&e, None));
+            .unwrap_or_else(|e| diagnostics::io_error(&e, None));
         (buffer, args.stdin_filepath.as_deref())
     } else {
         let content = std::fs::read_to_string(&args.input)
-            .unwrap_or_else(|e| Diagnostic::io_error(&e, Some(&args.input)));
+            .unwrap_or_else(|e| diagnostics::io_error(&e, Some(&args.input)));
         (content, Some(&*args.input))
     };
 
@@ -37,7 +37,7 @@ fn main() {
 
     if args.check {
         if input != formatted {
-            Diagnostic::file_would_be_updated(filepath)
+            diagnostics::file_would_be_updated(filepath)
         }
     } else if args.list_different {
         if input != formatted {
@@ -47,7 +47,7 @@ fn main() {
     } else if args.write
         && let Some(path) = filepath
     {
-        std::fs::write(path, &formatted).unwrap_or_else(|e| Diagnostic::io_error(&e, Some(path)));
+        std::fs::write(path, &formatted).unwrap_or_else(|e| diagnostics::io_error(&e, Some(path)));
     } else {
         print!("{formatted}");
     }

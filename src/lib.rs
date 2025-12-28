@@ -4,6 +4,7 @@
 pub mod askama;
 mod check;
 mod config;
+pub mod diagnostics;
 pub mod draw;
 mod html;
 mod sakura_tree;

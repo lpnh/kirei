@@ -3,6 +3,7 @@ use tree_sitter::{Node, Range};
 
 use crate::{
     askama::{self, AskamaNode},
+    diagnostics,
     draw::Diagnostic,
 };
 
@@ -209,7 +210,7 @@ fn parse_recursive(
     depth: usize,
 ) {
     if depth > 200 {
-        diagnostics.push(Diagnostic::nesting_too_deep());
+        diagnostics.push(diagnostics::nesting_too_deep());
         return;
     }
 
@@ -274,7 +275,7 @@ fn parse_recursive(
                 let close_range = erroneous_end_tag_name.range();
 
                 let source_str = std::str::from_utf8(source).expect("valid UTF-8");
-                let diagnostic = Diagnostic::erroneous_end_tag(
+                let diagnostic = diagnostics::erroneous_end_tag(
                     expected,
                     &found,
                     open_range,
