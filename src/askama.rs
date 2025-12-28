@@ -110,7 +110,6 @@ impl ControlTag {
         }
     }
 
-    #[must_use]
     pub fn indent(self) -> (isize, isize) {
         match self {
             Self::Match => (0, 2),
@@ -128,13 +127,7 @@ impl ControlTag {
         matches!(self.boundary(), Boundary::Open)
     }
 
-    #[must_use]
-    pub fn is_match_arm(self) -> bool {
-        matches!(self, Self::When | Self::MatchElse)
-    }
-
-    #[must_use]
-    pub fn matches_close(self, close: Self) -> bool {
+    fn matches_close(self, close: Self) -> bool {
         matches!(
             (self, close),
             (Self::Block, Self::Endblock)
@@ -178,7 +171,6 @@ pub enum AskamaNode {
 }
 
 impl AskamaNode {
-    #[must_use]
     pub fn start(&self) -> usize {
         match self {
             Self::Control { range, .. }
@@ -187,7 +179,6 @@ impl AskamaNode {
         }
     }
 
-    #[must_use]
     pub fn end(&self) -> usize {
         match self {
             Self::Control { range, .. }
@@ -353,7 +344,6 @@ fn extract_delimiters(node: Node, source: &str) -> (Delimiters, String) {
     (Delimiters { open, close }, inner)
 }
 
-#[must_use]
 pub fn format_askama_node(node: &AskamaNode) -> String {
     if let AskamaNode::Comment { dlmts, inner, .. } = node {
         return format!("{}{}{}", dlmts.open, inner, dlmts.close);

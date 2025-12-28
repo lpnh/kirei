@@ -1,4 +1,4 @@
-use crate::draw::Diagnostic;
+use crate::diagnostics::Diagnostic;
 
 pub struct Noted<T> {
     pub value: T,

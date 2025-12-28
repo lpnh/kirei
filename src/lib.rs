@@ -1,19 +1,19 @@
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::must_use_candidate)]
 
-pub mod askama;
+mod askama;
 mod check;
+mod cli;
 mod config;
-pub mod diagnostics;
-pub mod draw;
+mod diagnostics;
+mod draw;
 mod html;
 mod noted;
 mod sakura_tree;
-pub mod write;
+mod write;
 
-pub use crate::{draw::Severity, noted::Noted, write::Kirei};
+pub use crate::{cli::run, diagnostics::Severity, draw::draw, write::Kirei};
 
-#[must_use]
 pub fn normalize_ws(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }

@@ -1,111 +1,192 @@
 use tree_sitter::{Node, Range};
 
-use crate::draw::{Annotation, Diagnostic};
-
-pub fn io_error(error: &std::io::Error, filepath: Option<&str>) -> ! {
-    use std::io::ErrorKind as IoKind;
-
-    let message = match (error.kind(), filepath) {
-        (IoKind::NotFound, Some(path)) => format!("file `{}` does not exist", path),
-        (IoKind::NotFound, None) => "file does not exist".to_string(),
-        (IoKind::PermissionDenied, Some(path)) => {
-            format!("permission denied when accessing `{}`", path)
-        }
-        (IoKind::PermissionDenied, None) => "permission denied".to_string(),
-        (IoKind::AlreadyExists, Some(path)) => format!("file `{}` already exists", path),
-        (IoKind::AlreadyExists, None) => "file already exists".to_string(),
-        (IoKind::InvalidInput, _) => "invalid input".to_string(),
-        (IoKind::InvalidData, _) => "invalid data".to_string(),
-        (IoKind::TimedOut, _) => "operation timed out".to_string(),
-        (IoKind::Interrupted, _) => "operation interrupted".to_string(),
-        (IoKind::UnexpectedEof, Some(path)) => {
-            format!("unexpected end of file in `{}`", path)
-        }
-        (IoKind::UnexpectedEof, None) => "unexpected end of file".to_string(),
-        (IoKind::BrokenPipe, _) => "broken pipe".to_string(),
-        (kind, Some(path)) => format!("IO error when accessing `{}`: {:?}", path, kind),
-        (kind, None) => format!("IO error: {:?}", kind),
-    };
-
-    let diagnostic = Diagnostic::error(message);
-    eprintln!("{}", diagnostic.draw("", filepath));
-    std::process::exit(1);
+#[derive(Debug, Clone)]
+pub struct Diagnostic {
+    pub level: Severity,
+    pub message: String,
+    pub labels: Vec<Label>,
+    pub help: Option<String>,
+    pub suggestion: Option<Suggestion>,
 }
 
-pub fn file_would_be_updated(filepath: Option<&str>) -> ! {
-    let diagnostic = Diagnostic::error("file would be formatted");
-    eprintln!("{}", diagnostic.draw("", filepath));
-    std::process::exit(1);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Severity {
+    Error,
+    Warning,
 }
 
-pub fn erroneous_end_tag(
-    expected: String,
-    found: &str,
-    open_range: Range,
-    close_range: Range,
-    source: &str,
-) -> Diagnostic {
-    let line_index = close_range.start_point.row;
-    let start_col = close_range.start_point.column;
-    let end_col = close_range.end_point.column;
+#[derive(Debug, Clone)]
+pub struct Suggestion {
+    pub line_idx: usize,
+    pub original_line: String,
+    pub start_col: usize,
+    pub end_col: usize,
+    pub replacement: String,
+}
 
-    let mut diag = Diagnostic::error("unexpected closing tag")
-        .with_label(
-            close_range,
-            format!("expected `{}`, found `{}`", expected, found),
-            Annotation::Primary,
-        )
-        .with_label(
-            open_range,
-            "expected due to this open tag name",
-            Annotation::Secondary,
-        )
-        .with_help(format!("consider using `{}`", expected));
+#[derive(Debug, Clone)]
+pub struct Label {
+    pub range: Range,
+    pub message: String,
+    pub annotation: Annotation,
+}
 
-    if let Some(line) = source.lines().nth(line_index) {
-        diag = diag.with_suggestion(line_index, line, start_col, end_col, expected);
+impl Label {
+    pub fn line_idx(&self) -> usize {
+        self.range.start_point.row
     }
 
-    diag
+    pub fn end_line_idx(&self) -> usize {
+        self.range.end_point.row
+    }
+
+    pub fn col_display(&self) -> usize {
+        self.range.start_point.column + 1
+    }
+
+    pub fn span_len(&self) -> usize {
+        self.range
+            .end_point
+            .column
+            .saturating_sub(self.range.start_point.column)
+            .max(1)
+    }
+
+    pub fn underline_char(&self) -> &str {
+        match self.annotation {
+            Annotation::Primary => "^",
+            Annotation::Secondary => "-",
+        }
+    }
+
+    pub fn is_multiline(&self) -> bool {
+        self.range.start_point.row != self.range.end_point.row
+    }
 }
 
-pub fn nesting_too_deep() -> Diagnostic {
-    Diagnostic::error("nesting too deep")
+#[derive(Debug, Clone)]
+pub enum Annotation {
+    Primary,
+    Secondary,
 }
 
-pub fn missing_syntax(node: &Node, _kind: &str) -> Diagnostic {
-    let node_kind = node.kind();
-    let parent = node.parent();
+impl Diagnostic {
+    pub fn error(message: impl Into<String>) -> Self {
+        Self {
+            level: Severity::Error,
+            message: message.into(),
+            labels: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
 
-    let (message, label) =
-        if let ("identifier", Some("block_statement")) = (node_kind, parent.map(|p| p.kind())) {
-            (
-                "missing block name".to_string(),
-                "block tag requires a name".to_string(),
-            )
-        } else {
-            let parent_context = parent
-                .map(|p| format!(" in {}", p.kind()))
-                .unwrap_or_default();
-            (
-                format!("missing {}{}", node_kind, parent_context),
-                format!("expected {} here", node_kind),
-            )
-        };
-    Diagnostic::error(message).with_label(node.range(), &label, Annotation::Primary)
-}
+    pub fn warning(message: impl Into<String>) -> Self {
+        Self {
+            level: Severity::Warning,
+            message: message.into(),
+            labels: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
 
-pub fn syntax_error(root_node: &Node, kind: &str) -> Option<Diagnostic> {
-    Diagnostic::find_error_node(root_node).map(|error_node| {
-        if error_node.is_missing() {
-            return missing_syntax(&error_node, kind);
+    pub fn with_label(
+        mut self,
+        range: Range,
+        message: impl Into<String>,
+        annotation: Annotation,
+    ) -> Self {
+        self.labels.push(Label {
+            range,
+            message: message.into(),
+            annotation,
+        });
+        self
+    }
+
+    pub fn with_help(mut self, help: impl Into<String>) -> Self {
+        self.help = Some(help.into());
+        self
+    }
+
+    pub fn with_suggestion(
+        mut self,
+        line_index: usize,
+        line: impl Into<String>,
+        start_col: usize,
+        end_col: usize,
+        replacement: impl Into<String>,
+    ) -> Self {
+        self.suggestion = Some(Suggestion {
+            line_idx: line_index,
+            original_line: line.into(),
+            start_col,
+            end_col,
+            replacement: replacement.into(),
+        });
+        self
+    }
+
+    pub fn find_error_node<'a>(node: &Node<'a>) -> Option<Node<'a>> {
+        if node.is_error() || node.is_missing() {
+            return Some(*node);
+        }
+        for child in node.children(&mut node.walk()) {
+            if let Some(err) = Self::find_error_node(&child) {
+                return Some(err);
+            }
+        }
+        None
+    }
+
+    pub fn refine_error_range(error_node: &Node) -> Range {
+        let mut range = error_node.range();
+        let children: Vec<_> = error_node.children(&mut error_node.walk()).collect();
+        let non_error_children: Vec<_> = children.iter().filter(|c| !c.is_error()).collect();
+
+        if non_error_children.is_empty() {
+            if range.start_point.row != range.end_point.row {
+                range.end_point = range.start_point;
+                range.end_point.column = range.start_point.column + 1;
+                range.end_byte = range.start_byte + 1;
+            }
+            return range;
         }
 
-        let range = Diagnostic::refine_error_range(&error_node);
-        Diagnostic::error(format!("failed to parse {}", kind)).with_label(
-            range,
-            "",
-            Annotation::Primary,
-        )
-    })
+        let opening_pos = non_error_children
+            .iter()
+            .position(|c| matches!(c.kind(), "{{" | "{%" | "{#"));
+
+        if let Some(open_idx) = opening_pos {
+            let closing_kind = match non_error_children[open_idx].kind() {
+                "{{" => "}}",
+                "{%" => "%}",
+                "{#" => "#}",
+                _ => "",
+            };
+
+            if let Some(close_idx) = non_error_children[open_idx..]
+                .iter()
+                .position(|c| c.kind() == closing_kind)
+            {
+                let first = non_error_children[open_idx];
+                let last = non_error_children[open_idx + close_idx];
+                return Self::range_between(first, last);
+            }
+        }
+
+        let first = non_error_children.first().unwrap();
+        let last = non_error_children.last().unwrap();
+        Self::range_between(first, last)
+    }
+
+    fn range_between(first: &Node, last: &Node) -> Range {
+        Range {
+            start_byte: first.range().start_byte,
+            start_point: first.range().start_point,
+            end_byte: last.range().end_byte,
+            end_point: last.range().end_point,
+        }
+    }
 }

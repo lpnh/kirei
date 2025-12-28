@@ -1,10 +1,10 @@
 use tree_sitter::{Point, Range};
 
 use crate::{
-    Noted,
     askama::{AskamaNode, ControlTag},
-    draw::{Annotation, Diagnostic},
+    diagnostics::{Annotation, Diagnostic},
     html::HtmlNode,
+    noted::Noted,
 };
 
 pub fn element_across_control(

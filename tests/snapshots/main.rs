@@ -2,6 +2,7 @@
 macro_rules! snapshot_test {
     ($fixture_path:expr) => {
         use colored::control;
+        use kirei::Kirei;
 
         control::set_override(false);
 
@@ -9,7 +10,7 @@ macro_rules! snapshot_test {
         let input = std::fs::read_to_string(&path)
             .unwrap_or_else(|_| panic!("Could not read fixture: {}", path.display()));
 
-        let mut kirei = kirei::write::Kirei::default();
+        let mut kirei = Kirei::default();
         let noted = kirei.write(&input);
 
         if noted.diagnostics.iter().all(|d| d.level != kirei::Severity::Error) {
@@ -26,7 +27,7 @@ macro_rules! snapshot_test {
         if !noted.diagnostics.is_empty() {
             let mut diagnostic_output = String::new();
             for diagnostic in &noted.diagnostics {
-                diagnostic_output.push_str(&kirei::draw::Diagnostic::draw(diagnostic, &input, Some($fixture_path)));
+                diagnostic_output.push_str(&kirei::draw(diagnostic, &input, Some($fixture_path)));
                 diagnostic_output.push_str("\n");
             }
 

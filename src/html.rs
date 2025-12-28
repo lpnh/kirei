@@ -2,10 +2,9 @@ use std::ops;
 use tree_sitter::{Node, Range};
 
 use crate::{
-    Noted,
     askama::{self, AskamaNode},
-    diagnostics,
-    draw::Diagnostic,
+    diagnostics::{Annotation, Diagnostic},
+    noted::Noted,
 };
 
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Content_categories#phrasing_content
@@ -211,7 +210,7 @@ fn parse_recursive(
     depth: usize,
 ) {
     if depth > 200 {
-        diagnostics.push(diagnostics::nesting_too_deep());
+        diagnostics.push(nesting_too_deep());
         return;
     }
 
@@ -276,13 +275,8 @@ fn parse_recursive(
                 let close_range = erroneous_end_tag_name.range();
 
                 let source_str = std::str::from_utf8(source).expect("valid UTF-8");
-                let diagnostic = diagnostics::erroneous_end_tag(
-                    expected,
-                    &found,
-                    open_range,
-                    close_range,
-                    source_str,
-                );
+                let diagnostic =
+                    erroneous_end_tag(expected, &found, open_range, close_range, source_str);
                 diagnostics.push(diagnostic);
             }
         }
@@ -522,4 +516,40 @@ pub fn unpair_crossing_tags(html_nodes: &mut [HtmlNode], crossing_pair_idx: &[(u
             *indent = 0;
         }
     }
+}
+
+// Diagnostics
+fn erroneous_end_tag(
+    expected: String,
+    found: &str,
+    open_range: Range,
+    close_range: Range,
+    source: &str,
+) -> Diagnostic {
+    let line_index = close_range.start_point.row;
+    let start_col = close_range.start_point.column;
+    let end_col = close_range.end_point.column;
+
+    let mut diag = Diagnostic::error("unexpected closing tag")
+        .with_label(
+            close_range,
+            format!("expected `{}`, found `{}`", expected, found),
+            Annotation::Primary,
+        )
+        .with_label(
+            open_range,
+            "expected due to this open tag name",
+            Annotation::Secondary,
+        )
+        .with_help(format!("consider using `{}`", expected));
+
+    if let Some(line) = source.lines().nth(line_index) {
+        diag = diag.with_suggestion(line_index, line, start_col, end_col, expected);
+    }
+
+    diag
+}
+
+fn nesting_too_deep() -> Diagnostic {
+    Diagnostic::error("nesting too deep")
 }
