@@ -510,3 +510,15 @@ fn format_with_embedded(
 
     result
 }
+
+pub fn unpair_crossing_tags(html_nodes: &mut [HtmlNode], crossing_pair_idx: &[(usize, usize)]) {
+    for &(start_idx, end_idx) in crossing_pair_idx {
+        if let HtmlNode::Start { indent, end, .. } = &mut html_nodes[start_idx] {
+            *indent = 0;
+            *end = None;
+        }
+        if let HtmlNode::End { indent, .. } = &mut html_nodes[end_idx] {
+            *indent = 0;
+        }
+    }
+}

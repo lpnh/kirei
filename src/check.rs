@@ -7,11 +7,12 @@ use crate::{
 };
 
 pub fn crossing_control_boundary(
-    html_nodes: &mut [HtmlNode],
+    html_nodes: &[HtmlNode],
     askama_nodes: &[AskamaNode],
     source: &str,
-) -> Vec<Diagnostic> {
+) -> (Vec<Diagnostic>, Vec<(usize, usize)>) {
     let mut diagnostics = Vec::new();
+    let mut crossing_indices = Vec::new();
 
     for i in 0..html_nodes.len() {
         let Some((start_byte, end_byte, end_idx, name)) = (match &html_nodes[i] {
@@ -44,16 +45,10 @@ pub fn crossing_control_boundary(
             ),
         );
 
-        if let HtmlNode::Start { indent, end, .. } = &mut html_nodes[i] {
-            *indent = 0;
-            *end = None;
-        }
-        if let HtmlNode::End { indent, .. } = &mut html_nodes[end_idx] {
-            *indent = 0;
-        }
+        crossing_indices.push((i, end_idx));
     }
 
-    diagnostics
+    (diagnostics, crossing_indices)
 }
 
 fn has_crossing_boundary(start: usize, end: usize, askama_nodes: &[AskamaNode]) -> bool {

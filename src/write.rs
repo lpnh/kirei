@@ -79,11 +79,10 @@ impl Kirei {
             &mut diagnostics,
         );
 
-        diagnostics.extend(check::crossing_control_boundary(
-            &mut html_nodes,
-            &askama_nodes,
-            source,
-        ));
+        let (crossing_diagnostics, crossing_pair_idx) =
+            check::crossing_control_boundary(&html_nodes, &askama_nodes, source);
+        diagnostics.extend(crossing_diagnostics);
+        html::unpair_crossing_tags(&mut html_nodes, &crossing_pair_idx);
 
         let sakura_tree = SakuraTree::grow(&askama_nodes, &html_nodes, source, &self.config);
 
