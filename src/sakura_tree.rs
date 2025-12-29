@@ -708,7 +708,7 @@ impl SakuraTree {
             .iter()
             .enumerate()
             .map(|(i, line)| {
-                let line = line.trim_start();
+                let line = line.trim();
                 if line.is_empty() || i == 0 || i == lines.len() - 1 {
                     line.to_string()
                 } else {
