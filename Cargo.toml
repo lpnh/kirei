@@ -23,6 +23,8 @@ bench = false
 [dependencies]
 clap = { version = "4.5.53", features = ["derive"] }
 colored = "3.0.0"
+globset = "0.4.18"
+ignore = "0.4.25"
 tree-sitter = "0.26.3"
 tree-sitter-askama = "0.2.0"
 tree-sitter-html = "0.23.2"

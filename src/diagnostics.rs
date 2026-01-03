@@ -91,6 +91,42 @@ impl Diagnostic {
         }
     }
 
+    pub fn from_io(error: &std::io::Error, path: &str) -> Self {
+        use std::io::ErrorKind;
+        match error.kind() {
+            ErrorKind::PermissionDenied => Self::error(format!("permission denied: `{}`", path)),
+            ErrorKind::InvalidData => Self::error(format!("invalid UTF-8 in `{}`", path)),
+            ErrorKind::NotFound => Self::error(format!("file not found: `{}`", path)),
+            _ => Self::error(format!("failed to read `{}`", path)),
+        }
+    }
+
+    pub fn from_glob(error: globset::Error, pattern: &str) -> Self {
+        let err_str = error.to_string();
+        let msg = err_str.split(": ").last().unwrap_or(&err_str);
+        Self::error(format!("invalid glob pattern `{}`: {}", pattern, msg))
+    }
+
+    pub fn file_would_be_formatted() -> Self {
+        Self::error("file would be formatted")
+    }
+
+    pub fn no_html_files_in_directory(path: &str) -> Self {
+        Self::error(format!("no `.html` files in directory `{}`", path))
+    }
+
+    pub fn stdin_filepath_requires_stdin() -> Self {
+        Self::error("--stdin-filepath requires stdin input (use `-` as the path)")
+    }
+
+    pub fn not_a_regular_file(path: &str) -> Self {
+        Self::error(format!("`{}` is not a regular file", path))
+    }
+
+    pub fn path_does_not_exist(path: &str) -> Self {
+        Self::error(format!("path `{}` does not exist", path))
+    }
+
     pub fn with_label(
         mut self,
         range: Range,

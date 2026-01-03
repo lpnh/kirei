@@ -1,4 +1,4 @@
-use crate::diagnostics::Diagnostic;
+use crate::diagnostics::{Diagnostic, Severity};
 
 pub struct Noted<T> {
     pub value: T,
@@ -15,5 +15,9 @@ impl<T> Noted<T> {
 
     pub fn with_diagnostics(value: T, diagnostics: Vec<Diagnostic>) -> Self {
         Self { value, diagnostics }
+    }
+
+    pub fn has_errors(&self) -> bool {
+        self.diagnostics.iter().any(|d| d.level == Severity::Error)
     }
 }
