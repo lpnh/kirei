@@ -3,7 +3,7 @@ use globset::Glob;
 use ignore::{DirEntry, WalkBuilder};
 use std::{
     io::{self, Read},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use crate::{diagnostics::Diagnostic, draw::eprint_diagnostic, noted::Noted, write::Kirei};
@@ -60,7 +60,7 @@ fn walk_files(root: &PathBuf, no_ignore: bool, extension: Option<&str>) -> Vec<P
         .filter_map(Result::ok)
         .filter(|e| e.file_type().is_some_and(|ft| ft.is_file()))
         .filter(|e| {
-            extension.map_or(true, |ext| {
+            extension.is_none_or(|ext| {
                 e.path()
                     .extension()
                     .and_then(|e| e.to_str())
@@ -103,7 +103,7 @@ fn try_glob(pattern: &str, no_ignore: bool) -> Result<Vec<PathBuf>, String> {
     }
 }
 
-fn is_ignored(path: &PathBuf) -> bool {
+fn is_ignored(path: &Path) -> bool {
     let parent = path.parent().unwrap_or_else(|| std::path::Path::new("."));
     let Ok(canonical) = path.canonicalize() else {
         return false;
@@ -140,7 +140,7 @@ fn resolve_single_pattern(pattern: &str, no_ignore: bool) -> Result<Vec<PathBuf>
     }
 
     if pattern.contains('*') || pattern.contains('?') || pattern.contains('[') {
-        try_glob(pattern, no_ignore).map_err(|msg| Diagnostic::error(msg))
+        try_glob(pattern, no_ignore).map_err(Diagnostic::error)
     } else {
         Err(Diagnostic::path_does_not_exist(pattern))
     }

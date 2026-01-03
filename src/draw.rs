@@ -24,59 +24,58 @@ pub fn draw(diagnostic: &Diagnostic, source: &str, file_path: Option<&str>) -> S
             ":".bold(),
             diagnostic.message.bold()
         );
-    } else {
-        let max_line_idx = diagnostic
-            .labels
-            .iter()
-            .map(Label::line_idx)
-            .max()
-            .unwrap_or(0);
-        let line_num_width = (max_line_idx + 1).to_string().len();
+    }
+    let max_line_idx = diagnostic
+        .labels
+        .iter()
+        .map(Label::line_idx)
+        .max()
+        .unwrap_or(0);
+    let line_num_width = (max_line_idx + 1).to_string().len();
 
+    output += &format!(
+        "{}{} {}\n",
+        level_color(level_text),
+        ":".bold(),
+        diagnostic.message.bold()
+    );
+
+    if let Some(primary) = diagnostic
+        .labels
+        .iter()
+        .find(|l| matches!(l.annotation, Annotation::Primary))
+    {
         output += &format!(
-            "{}{} {}\n",
-            level_color(level_text),
-            ":".bold(),
-            diagnostic.message.bold()
+            "{}{} {}:{}:{}\n",
+            " ".repeat(line_num_width),
+            "-->".bold().bright_blue(),
+            file_path.unwrap_or("<stdin>"),
+            line_number(primary.line_idx()),
+            primary.col_display()
         );
+    }
 
-        if let Some(primary) = diagnostic
-            .labels
-            .iter()
-            .find(|l| matches!(l.annotation, Annotation::Primary))
-        {
-            output += &format!(
-                "{}{} {}:{}:{}\n",
-                " ".repeat(line_num_width),
-                "-->".bold().bright_blue(),
-                file_path.unwrap_or("<stdin>"),
-                line_number(primary.line_idx()),
-                primary.col_display()
-            );
-        }
+    output += &format!("{} {}\n", " ".repeat(line_num_width), pipe());
 
-        output += &format!("{} {}\n", " ".repeat(line_num_width), pipe());
+    let diagnostic_lines = collect_diagnostic_lines(&diagnostic.labels);
+    let source_lines: Vec<&str> = source.lines().collect();
+    let style = if diagnostic.labels.iter().any(Label::is_multiline) {
+        Underline::Block
+    } else {
+        Underline::Inline
+    };
 
-        let diagnostic_lines = collect_diagnostic_lines(&diagnostic.labels);
-        let source_lines: Vec<&str> = source.lines().collect();
-        let style = if diagnostic.labels.iter().any(Label::is_multiline) {
-            Underline::Block
-        } else {
-            Underline::Inline
-        };
+    output += &render_source_snippets(
+        diagnostic,
+        &diagnostic.labels,
+        &diagnostic_lines,
+        &source_lines,
+        style,
+        line_num_width,
+    );
 
-        output += &render_source_snippets(
-            diagnostic,
-            &diagnostic.labels,
-            &diagnostic_lines,
-            &source_lines,
-            style,
-            line_num_width,
-        );
-
-        if let Some(help_msg) = &diagnostic.help {
-            output += &render_help(diagnostic, help_msg, line_num_width);
-        }
+    if let Some(help_msg) = &diagnostic.help {
+        output += &render_help(diagnostic, help_msg, line_num_width);
     }
 
     output

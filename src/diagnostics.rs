@@ -101,7 +101,7 @@ impl Diagnostic {
         }
     }
 
-    pub fn from_glob(error: globset::Error, pattern: &str) -> Self {
+    pub fn from_glob(error: &globset::Error, pattern: &str) -> Self {
         let err_str = error.to_string();
         let msg = err_str.split(": ").last().unwrap_or(&err_str);
         Self::error(format!("invalid glob pattern `{}`: {}", pattern, msg))
