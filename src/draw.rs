@@ -3,6 +3,10 @@ use std::collections::BTreeSet;
 
 use crate::diagnostics::{Annotation, Diagnostic, Label, Severity};
 
+pub fn eprint_diagnostic(diagnostic: &Diagnostic, source: &str, filepath: Option<&str>) {
+    eprint!("{}", draw(diagnostic, source, filepath));
+}
+
 #[derive(Debug, Clone, Copy)]
 enum Underline {
     Inline,
@@ -15,13 +19,12 @@ pub fn draw(diagnostic: &Diagnostic, source: &str, file_path: Option<&str>) -> S
 
     if diagnostic.labels.is_empty() {
         return format!(
-            "{}{} {}",
+            "{}{} {}\n",
             level_color(level_text),
             ":".bold(),
             diagnostic.message.bold()
         );
     }
-
     let max_line_idx = diagnostic
         .labels
         .iter()

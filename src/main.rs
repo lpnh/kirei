@@ -1,3 +1,3 @@
 fn main() {
-    kirei::run();
+    std::process::exit(kirei::run());
 }
