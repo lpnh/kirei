@@ -98,7 +98,7 @@ fn fails_on_missing_file() {
         .failure()
         .code(1)
         .stderr(contains(
-            "error: file `this_file_does_not_exist.html` does not exist",
+            "error: path `this_file_does_not_exist.html` does not exist",
         ));
 }
 
@@ -114,7 +114,7 @@ fn fails_on_invalid_utf8() {
         .assert()
         .failure()
         .code(1)
-        .stderr(contains("error: invalid data"));
+        .stderr(contains("error: invalid UTF-8"));
 }
 
 #[test]
@@ -240,7 +240,7 @@ fn fails_on_permission_denied_read() {
         .assert()
         .failure()
         .code(1)
-        .stderr(contains("error: permission denied when accessing"));
+        .stderr(contains("error: permission denied:"));
 }
 
 #[test]
@@ -260,5 +260,5 @@ fn fails_on_permission_denied_write() {
         .assert()
         .failure()
         .code(1)
-        .stderr(contains("error: permission denied when accessing"));
+        .stderr(contains("error: permission denied:"));
 }

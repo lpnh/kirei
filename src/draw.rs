@@ -3,6 +3,10 @@ use std::collections::BTreeSet;
 
 use crate::diagnostics::{Annotation, Diagnostic, Label, Severity};
 
+pub fn eprint_diagnostic(diagnostic: &Diagnostic, source: &str, filepath: Option<&str>) {
+    eprint!("{}", draw(diagnostic, source, filepath));
+}
+
 #[derive(Debug, Clone, Copy)]
 enum Underline {
     Inline,
@@ -15,64 +19,64 @@ pub fn draw(diagnostic: &Diagnostic, source: &str, file_path: Option<&str>) -> S
 
     if diagnostic.labels.is_empty() {
         return format!(
-            "{}{} {}",
+            "{}{} {}\n",
             level_color(level_text),
             ":".bold(),
             diagnostic.message.bold()
         );
-    }
-
-    let max_line_idx = diagnostic
-        .labels
-        .iter()
-        .map(Label::line_idx)
-        .max()
-        .unwrap_or(0);
-    let line_num_width = (max_line_idx + 1).to_string().len();
-
-    output += &format!(
-        "{}{} {}\n",
-        level_color(level_text),
-        ":".bold(),
-        diagnostic.message.bold()
-    );
-
-    if let Some(primary) = diagnostic
-        .labels
-        .iter()
-        .find(|l| matches!(l.annotation, Annotation::Primary))
-    {
-        output += &format!(
-            "{}{} {}:{}:{}\n",
-            " ".repeat(line_num_width),
-            "-->".bold().bright_blue(),
-            file_path.unwrap_or("<stdin>"),
-            line_number(primary.line_idx()),
-            primary.col_display()
-        );
-    }
-
-    output += &format!("{} {}\n", " ".repeat(line_num_width), pipe());
-
-    let diagnostic_lines = collect_diagnostic_lines(&diagnostic.labels);
-    let source_lines: Vec<&str> = source.lines().collect();
-    let style = if diagnostic.labels.iter().any(Label::is_multiline) {
-        Underline::Block
     } else {
-        Underline::Inline
-    };
+        let max_line_idx = diagnostic
+            .labels
+            .iter()
+            .map(Label::line_idx)
+            .max()
+            .unwrap_or(0);
+        let line_num_width = (max_line_idx + 1).to_string().len();
 
-    output += &render_source_snippets(
-        diagnostic,
-        &diagnostic.labels,
-        &diagnostic_lines,
-        &source_lines,
-        style,
-        line_num_width,
-    );
+        output += &format!(
+            "{}{} {}\n",
+            level_color(level_text),
+            ":".bold(),
+            diagnostic.message.bold()
+        );
 
-    if let Some(help_msg) = &diagnostic.help {
-        output += &render_help(diagnostic, help_msg, line_num_width);
+        if let Some(primary) = diagnostic
+            .labels
+            .iter()
+            .find(|l| matches!(l.annotation, Annotation::Primary))
+        {
+            output += &format!(
+                "{}{} {}:{}:{}\n",
+                " ".repeat(line_num_width),
+                "-->".bold().bright_blue(),
+                file_path.unwrap_or("<stdin>"),
+                line_number(primary.line_idx()),
+                primary.col_display()
+            );
+        }
+
+        output += &format!("{} {}\n", " ".repeat(line_num_width), pipe());
+
+        let diagnostic_lines = collect_diagnostic_lines(&diagnostic.labels);
+        let source_lines: Vec<&str> = source.lines().collect();
+        let style = if diagnostic.labels.iter().any(Label::is_multiline) {
+            Underline::Block
+        } else {
+            Underline::Inline
+        };
+
+        output += &render_source_snippets(
+            diagnostic,
+            &diagnostic.labels,
+            &diagnostic_lines,
+            &source_lines,
+            style,
+            line_num_width,
+        );
+
+        if let Some(help_msg) = &diagnostic.help {
+            output += &render_help(diagnostic, help_msg, line_num_width);
+        }
     }
 
     output
