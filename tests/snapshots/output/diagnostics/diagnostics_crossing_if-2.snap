@@ -2,13 +2,14 @@
 source: tests/snapshots/diagnostics.rs
 description: "<div>\n    {% if condition %}\n        <span>Content</span>\n    {% else %}\n    </div>\n{% endif %}\n"
 ---
-warning: unbalanced HTML across control blocks
- --> diagnostics/crossing_if.html:1:1
-  |
-1 |   <div>
-  |  _^
-2 | |     {% if condition %}
-3 | |         <span>Content</span>
-4 | |     {% else %}
-5 | |     </div>
-  | |__________^
+kirei::unbalanced_html
+
+  ! unbalanced HTML across control blocks
+   ,-[diagnostics/crossing_if.html:1:1]
+ 1 | ,-> <div>
+ 2 | |       {% if condition %}
+ 3 | |           <span>Content</span>
+ 4 | |       {% else %}
+ 5 | `->     </div>
+ 6 |     {% endif %}
+   `----

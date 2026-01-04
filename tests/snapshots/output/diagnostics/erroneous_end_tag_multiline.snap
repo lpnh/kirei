@@ -2,15 +2,18 @@
 source: tests/snapshots/diagnostics.rs
 description: "<div>\n    <foo>\n        Some text\n    </bar>\n</div>\n"
 ---
-error: unexpected closing tag
- --> diagnostics/erroneous_end_tag_multiline.html:4:7
-  |
-2 |     <foo>
-  |      --- expected due to this open tag name
-...
-4 |     </bar>
-  |       ^^^ expected `foo`, found `bar`
-  |
-help: consider using `foo`
-  |
-4 ~     </foo>
+kirei::format::unexpected_closing_tag
+
+  x unexpected closing tag
+   ,-[diagnostics/erroneous_end_tag_multiline.html:2:6]
+ 1 | <div>
+ 2 |     <foo>
+   :      ^|^
+   :       `-- expected due to this open tag name
+ 3 |         Some text
+ 4 |     </bar>
+   :       ^|^
+   :        `-- expected `foo`, found `bar`
+ 5 | </div>
+   `----
+  help: consider using `foo`

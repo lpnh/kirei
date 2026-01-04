@@ -73,7 +73,7 @@ fn list_different_with_stdin_shows_stdin() {
         .assert()
         .failure()
         .code(1)
-        .stderr(contains("missing file path"));
+        .stderr(contains("<stdin>"));
 }
 
 #[test]
@@ -98,7 +98,7 @@ fn fails_on_missing_file() {
         .failure()
         .code(1)
         .stderr(contains(
-            "error: path `this_file_does_not_exist.html` does not exist",
+            "path `this_file_does_not_exist.html` does not exist",
         ));
 }
 
@@ -114,7 +114,7 @@ fn fails_on_invalid_utf8() {
         .assert()
         .failure()
         .code(1)
-        .stderr(contains("error: invalid UTF-8"));
+        .stderr(contains("stream did not contain valid UTF-8"));
 }
 
 #[test]
@@ -200,7 +200,7 @@ fn fails_on_erroneous_end_tag_inline() {
         .assert()
         .failure()
         .code(1)
-        .stderr(contains("error: unexpected closing tag"))
+        .stderr(contains("unexpected closing tag"))
         .stderr(contains("expected `foo`, found `bar`"))
         .stderr(contains("expected due to this open tag name"))
         .stderr(contains("help: consider using `foo`"));
@@ -218,7 +218,7 @@ fn fails_on_erroneous_end_tag_multiline() {
         .assert()
         .failure()
         .code(1)
-        .stderr(contains("error: unexpected closing tag"))
+        .stderr(contains("unexpected closing tag"))
         .stderr(contains("expected `foo`, found `bar`"))
         .stderr(contains("expected due to this open tag name"))
         .stderr(contains("help: consider using `foo`"));
@@ -240,7 +240,7 @@ fn fails_on_permission_denied_read() {
         .assert()
         .failure()
         .code(1)
-        .stderr(contains("error: permission denied:"));
+        .stderr(contains("Permission denied"));
 }
 
 #[test]
@@ -260,5 +260,5 @@ fn fails_on_permission_denied_write() {
         .assert()
         .failure()
         .code(1)
-        .stderr(contains("error: permission denied:"));
+        .stderr(contains("Permission denied"));
 }

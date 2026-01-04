@@ -1,52 +1,14 @@
-use tree_sitter::{Node, Parser};
+use tree_sitter::Parser;
 use tree_sitter_askama::LANGUAGE as ASKAMA_LANGUAGE;
 use tree_sitter_html::LANGUAGE as HTML_LANGUAGE;
 
 use crate::{
-    askama, check,
+    askama,
     config::Config,
-    diagnostics::{Annotation, Diagnostic},
+    diagnostics::{Noted, element_across_control, syntax_error},
     html,
-    noted::Noted,
     sakura_tree::SakuraTree,
 };
-
-fn syntax_error(root_node: &Node, kind: &str) -> Option<Diagnostic> {
-    Diagnostic::find_error_node(root_node).map(|error_node| {
-        if error_node.is_missing() {
-            return missing_syntax(&error_node);
-        }
-
-        let range = Diagnostic::refine_error_range(&error_node);
-        Diagnostic::error(format!("failed to parse {}", kind)).with_label(
-            range,
-            "",
-            Annotation::Primary,
-        )
-    })
-}
-
-fn missing_syntax(node: &Node) -> Diagnostic {
-    let node_kind = node.kind();
-    let parent = node.parent();
-
-    let (message, label) =
-        if let ("identifier", Some("block_statement")) = (node_kind, parent.map(|p| p.kind())) {
-            (
-                "missing block name".to_string(),
-                "block tag requires a name".to_string(),
-            )
-        } else {
-            let parent_context = parent
-                .map(|p| format!(" in {}", p.kind()))
-                .unwrap_or_default();
-            (
-                format!("missing {}{}", node_kind, parent_context),
-                format!("expected {} here", node_kind),
-            )
-        };
-    Diagnostic::error(message).with_label(node.range(), &label, Annotation::Primary)
-}
 
 pub struct Kirei {
     askama_parser: Parser,
@@ -79,8 +41,9 @@ impl Kirei {
         }
     }
 
-    pub fn write(&mut self, source: &str) -> Noted<String> {
-        let mut diagnostics = Vec::new();
+    pub fn write(&mut self, source: &str, filepath: &str) -> Noted<String> {
+        let mut errors = Vec::new();
+        let mut warnings = Vec::new();
 
         let ast_tree = self
             .askama_parser
@@ -88,10 +51,10 @@ impl Kirei {
             .expect("failed to parse Askama");
 
         if ast_tree.root_node().has_error() {
-            if let Some(diagnostic) = syntax_error(&ast_tree.root_node(), "Askama") {
-                diagnostics.push(diagnostic);
+            if let Some(error) = syntax_error(&ast_tree.root_node(), "Askama", source, filepath) {
+                errors.push(error);
             }
-            return Noted::with_diagnostics(String::new(), diagnostics);
+            return Noted::err(errors, warnings);
         }
 
         let (askama_nodes, content_node_ranges) =
@@ -107,27 +70,72 @@ impl Kirei {
             .parse(source, None)
             .expect("failed to parse HTML");
 
-        if html_tree.root_node().has_error() {
-            if let Some(diagnostic) = syntax_error(&html_tree.root_node(), "HTML") {
-                diagnostics.push(diagnostic);
-            }
-            return Noted::with_diagnostics(String::new(), diagnostics);
+        if html_tree.root_node().has_error()
+            && let Some(error) = syntax_error(&html_tree.root_node(), "HTML", source, filepath)
+        {
+            errors.push(error);
+        }
+
+        if !errors.is_empty() {
+            return Noted::err(errors, warnings);
         }
 
         let noted_html = html::extract_html_nodes(
             &html_tree.root_node(),
             source.as_bytes(),
             &content_node_ranges,
+            filepath,
         );
-        let mut html_nodes = noted_html.value;
-        diagnostics.extend(noted_html.diagnostics);
 
-        let noted_pair_indices = check::element_across_control(&html_nodes, &askama_nodes, source);
-        diagnostics.extend(noted_pair_indices.diagnostics);
-        html::unpair_crossing_tags(&mut html_nodes, &noted_pair_indices.value);
+        errors.extend(noted_html.errors);
+        warnings.extend(noted_html.warnings);
+
+        if !errors.is_empty() {
+            return Noted::err(errors, warnings);
+        }
+
+        let mut html_nodes = noted_html
+            .value
+            .expect("html nodes should be present without errors");
+
+        let (crossing_indices, crossing_warnings) =
+            element_across_control(&html_nodes, &askama_nodes, source, filepath);
+        warnings.extend(crossing_warnings);
+        html::unpair_crossing_tags(&mut html_nodes, &crossing_indices);
 
         let sakura_tree = SakuraTree::grow(&askama_nodes, &html_nodes, source, &self.config);
+        let output = sakura_tree.print();
 
-        Noted::with_diagnostics(sakura_tree.print(), diagnostics)
+        Noted::ok(output, warnings)
+    }
+
+    pub fn annotate(&mut self, source: String, filepath: &str) -> NotedFile {
+        let result = self.write(&source, filepath);
+
+        NotedFile { source, result }
+    }
+}
+
+pub struct NotedFile {
+    source: String,
+    pub result: Noted<String>,
+}
+
+impl NotedFile {
+    pub fn needs_formatting(&self) -> bool {
+        self.result
+            .value
+            .as_ref()
+            .is_some_and(|output| &self.source != output)
+    }
+
+    pub fn formatted_output(&self) -> Option<String> {
+        self.result.value.as_ref().map(|output| {
+            let mut out = output.clone();
+            if !out.is_empty() && !out.ends_with('\n') {
+                out.push('\n');
+            }
+            out
+        })
     }
 }

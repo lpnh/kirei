@@ -2,13 +2,14 @@
 source: tests/snapshots/diagnostics.rs
 description: "<div>\n    {% match value %}\n        {% when Some(x) %}\n            <span>{{ x }}</span>\n        </div>\n        {% when None %}\n            <span>Nothing</span>\n    {% endmatch %}\n\n"
 ---
-warning: unbalanced HTML across control blocks
- --> diagnostics/crossing_match.html:1:1
-  |
-1 |   <div>
-  |  _^
-2 | |     {% match value %}
-3 | |         {% when Some(x) %}
-4 | |             <span>{{ x }}</span>
-5 | |         </div>
-  | |______________^
+kirei::unbalanced_html
+
+  ! unbalanced HTML across control blocks
+   ,-[diagnostics/crossing_match.html:1:1]
+ 1 | ,-> <div>
+ 2 | |       {% match value %}
+ 3 | |           {% when Some(x) %}
+ 4 | |               <span>{{ x }}</span>
+ 5 | `->         </div>
+ 6 |             {% when None %}
+   `----
