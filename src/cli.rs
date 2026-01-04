@@ -38,7 +38,7 @@ struct Args {
     #[arg(long = "no-ignore")]
     no_ignore: bool,
 
-    /// Specify when to use colored output.
+    /// Specify when to use colored output
     #[arg(long = "color", value_name = "WHEN", default_value = "auto")]
     color: ColorWhen,
 
@@ -90,7 +90,6 @@ pub fn run() -> Result<ExitCode> {
     }
 
     let mut kirei = Kirei::default();
-    let mut exit_code = ExitCode::SUCCESS;
 
     if is_stdin {
         let mut buffer = String::new();
@@ -130,9 +129,9 @@ pub fn run() -> Result<ExitCode> {
     for path in paths {
         let filepath = path.to_str().expect("valid filepath");
         let source = fs::read_to_string(&path)
-            .map_err(|e| KireiError::ReadFailed {
+            .map_err(|source| KireiError::ReadFailed {
                 path: filepath.to_string(),
-                source: e,
+                source,
             })
             .into_diagnostic()?;
 
@@ -145,24 +144,24 @@ pub fn run() -> Result<ExitCode> {
         {
             if args.check && noted_file.needs_formatting() {
                 eprintln!("{}: file would be formatted", filepath);
-                exit_code = ExitCode::FAILURE;
+                return Ok(ExitCode::FAILURE);
             } else if args.list_different && noted_file.needs_formatting() {
                 eprintln!("{}", filepath);
-                exit_code = ExitCode::FAILURE;
+                return Ok(ExitCode::FAILURE);
             } else if args.write && noted_file.needs_formatting() {
-                fs::write(&path, formatted).map_err(|e| KireiError::WriteFailed {
+                fs::write(&path, formatted).map_err(|source| KireiError::WriteFailed {
                     path: filepath.to_string(),
-                    source: e,
+                    source,
                 })?;
             } else if !args.check && !args.list_different && !args.write {
                 print!("{}", formatted);
             }
         } else {
-            exit_code = ExitCode::FAILURE;
+            return Ok(ExitCode::FAILURE);
         }
     }
 
-    Ok(exit_code)
+    Ok(ExitCode::SUCCESS)
 }
 
 fn draw_diagnostics<T>(result: &Noted<T>, use_color: bool) {
