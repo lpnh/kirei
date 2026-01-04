@@ -1,12 +1,18 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use globset::Glob;
 use ignore::{DirEntry, WalkBuilder};
+use miette::{IntoDiagnostic, Result};
 use std::{
-    io::{self, Read},
+    fs,
+    io::{self, IsTerminal, Read},
     path::{Path, PathBuf},
+    process::ExitCode,
 };
 
-use crate::{diagnostics::Diagnostic, draw::eprint_diagnostic, noted::Noted, write::Kirei};
+use crate::{
+    diagnostics::{KireiError, Noted, diagnostics_from_noted},
+    write::Kirei,
+};
 
 #[derive(Parser)]
 #[command(name = "kirei", about, version)]
@@ -32,6 +38,10 @@ struct Args {
     #[arg(long = "no-ignore")]
     no_ignore: bool,
 
+    /// Specify when to use colored output.
+    #[arg(long = "color", value_name = "WHEN", default_value = "auto")]
+    color: ColorWhen,
+
     /// When reading from stdin, use this as the filepath
     #[arg(
         long = "stdin-filepath",
@@ -41,16 +51,122 @@ struct Args {
     stdin_filepath: Option<String>,
 }
 
-struct ProcessedFile {
-    path: PathBuf,
-    source: String,
-    formatted: String,
+#[derive(Default, Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+enum ColorWhen {
+    #[default]
+    Auto,
+    Never,
+    Always,
 }
 
-impl ProcessedFile {
-    fn needs_formatting(&self) -> bool {
-        self.source != self.formatted
+impl ColorWhen {
+    fn should_colorize(self) -> bool {
+        match self {
+            Self::Auto => io::stderr().is_terminal(),
+            Self::Never => false,
+            Self::Always => true,
+        }
     }
+}
+
+pub fn run() -> Result<ExitCode> {
+    let args = Args::parse();
+
+    let use_color = args.color.should_colorize();
+    miette::set_hook(Box::new(move |_| {
+        Box::new(
+            miette::MietteHandlerOpts::new()
+                .color(use_color)
+                .unicode(use_color)
+                .build(),
+        )
+    }))
+    .ok();
+
+    let is_stdin = args.input.len() == 1 && args.input[0] == "-";
+
+    if !is_stdin && args.stdin_filepath.is_some() {
+        return Err(KireiError::StdinFilepathWithoutStdin).into_diagnostic();
+    }
+
+    let mut kirei = Kirei::default();
+    let mut exit_code = ExitCode::SUCCESS;
+
+    if is_stdin {
+        let mut buffer = String::new();
+        io::stdin()
+            .read_to_string(&mut buffer)
+            .map_err(|e| KireiError::StdinFailed { source: e })
+            .into_diagnostic()?;
+
+        let filepath = args.stdin_filepath.as_deref().unwrap_or("<stdin>");
+        let result = kirei.write(&buffer, filepath);
+
+        draw_diagnostics(&result, args.color.should_colorize());
+
+        if !result.has_errors()
+            && let Some(formatted) = result.value
+        {
+            if buffer == formatted {
+                return Ok(ExitCode::SUCCESS);
+            }
+
+            if args.check {
+                eprintln!("file would be formatted");
+                return Ok(ExitCode::FAILURE);
+            } else if args.list_different {
+                eprintln!("{}", filepath);
+                return Ok(ExitCode::FAILURE);
+            }
+
+            print!("{}", formatted);
+            return Ok(ExitCode::SUCCESS);
+        }
+        return Ok(ExitCode::FAILURE);
+    }
+
+    let paths = resolve_paths(&args.input, args.no_ignore)?;
+
+    for path in paths {
+        let filepath = path.to_str().expect("valid filepath");
+        let source = fs::read_to_string(&path)
+            .map_err(|e| KireiError::ReadFailed {
+                path: filepath.to_string(),
+                source: e,
+            })
+            .into_diagnostic()?;
+
+        let noted_file = kirei.annotate(source, filepath);
+
+        draw_diagnostics(&noted_file.result, args.color.should_colorize());
+
+        if !noted_file.result.has_errors()
+            && let Some(formatted) = noted_file.formatted_output()
+        {
+            if args.check && noted_file.needs_formatting() {
+                eprintln!("{}: file would be formatted", filepath);
+                exit_code = ExitCode::FAILURE;
+            } else if args.list_different && noted_file.needs_formatting() {
+                eprintln!("{}", filepath);
+                exit_code = ExitCode::FAILURE;
+            } else if args.write && noted_file.needs_formatting() {
+                fs::write(&path, formatted).map_err(|e| KireiError::WriteFailed {
+                    path: filepath.to_string(),
+                    source: e,
+                })?;
+            } else if !args.check && !args.list_different && !args.write {
+                print!("{}", formatted);
+            }
+        } else {
+            exit_code = ExitCode::FAILURE;
+        }
+    }
+
+    Ok(exit_code)
+}
+
+fn draw_diagnostics<T>(result: &Noted<T>, use_color: bool) {
+    eprint!("{}", diagnostics_from_noted(result, use_color));
 }
 
 fn walk_files(root: &PathBuf, no_ignore: bool, extension: Option<&str>) -> Vec<PathBuf> {
@@ -71,8 +187,13 @@ fn walk_files(root: &PathBuf, no_ignore: bool, extension: Option<&str>) -> Vec<P
         .collect()
 }
 
-fn try_glob(pattern: &str, no_ignore: bool) -> Result<Vec<PathBuf>, String> {
-    let glob = Glob::new(pattern).map_err(|e| e.to_string())?;
+fn try_glob(pattern: &str, no_ignore: bool) -> Result<Vec<PathBuf>> {
+    let glob = Glob::new(pattern)
+        .map_err(|e| KireiError::InvalidGlobPattern {
+            pattern: pattern.to_string(),
+            source: e,
+        })
+        .into_diagnostic()?;
     let matcher = glob.compile_matcher();
     let max_depth = if pattern.contains("**") {
         None
@@ -97,14 +218,16 @@ fn try_glob(pattern: &str, no_ignore: bool) -> Result<Vec<PathBuf>, String> {
         .collect();
 
     if paths.is_empty() {
-        Err(format!("no matches for pattern `{}`", pattern))
-    } else {
-        Ok(paths)
+        return Err(KireiError::NoMatches {
+            pattern: pattern.to_string(),
+        })
+        .into_diagnostic();
     }
+    Ok(paths)
 }
 
 fn is_ignored(path: &Path) -> bool {
-    let parent = path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let Ok(canonical) = path.canonicalize() else {
         return false;
     };
@@ -117,7 +240,7 @@ fn is_ignored(path: &Path) -> bool {
         .any(|e| e.path().canonicalize().ok() == Some(canonical.clone()))
 }
 
-fn resolve_single_pattern(pattern: &str, no_ignore: bool) -> Result<Vec<PathBuf>, Diagnostic> {
+fn resolve_single_pattern(pattern: &str, no_ignore: bool) -> Result<Vec<PathBuf>> {
     let path = PathBuf::from(pattern);
 
     if path.exists() {
@@ -130,23 +253,32 @@ fn resolve_single_pattern(pattern: &str, no_ignore: bool) -> Result<Vec<PathBuf>
         } else if path.is_dir() {
             let paths = walk_files(&path, no_ignore, Some("html"));
             if paths.is_empty() {
-                Err(Diagnostic::no_html_files_in_directory(pattern))
+                Err(KireiError::NoHtmlFiles {
+                    path: pattern.to_string(),
+                })
+                .into_diagnostic()
             } else {
                 Ok(paths)
             }
         } else {
-            Err(Diagnostic::not_a_regular_file(pattern))
+            Err(KireiError::NotAFile {
+                path: pattern.to_string(),
+            })
+            .into_diagnostic()
         };
     }
 
     if pattern.contains('*') || pattern.contains('?') || pattern.contains('[') {
-        try_glob(pattern, no_ignore).map_err(Diagnostic::error)
+        try_glob(pattern, no_ignore)
     } else {
-        Err(Diagnostic::path_does_not_exist(pattern))
+        Err(KireiError::PathNotFound {
+            path: pattern.to_string(),
+        })
+        .into_diagnostic()
     }
 }
 
-fn resolve_paths(patterns: &[String], no_ignore: bool) -> Result<Vec<PathBuf>, Diagnostic> {
+fn resolve_paths(patterns: &[String], no_ignore: bool) -> Result<Vec<PathBuf>> {
     let mut all_paths = Vec::new();
 
     for pattern in patterns {
@@ -154,160 +286,4 @@ fn resolve_paths(patterns: &[String], no_ignore: bool) -> Result<Vec<PathBuf>, D
     }
 
     Ok(all_paths)
-}
-
-fn process_file(path: PathBuf, kirei: &mut Kirei) -> Noted<ProcessedFile> {
-    let source = match std::fs::read_to_string(&path) {
-        Ok(content) => content,
-        Err(e) => {
-            let diagnostic = Diagnostic::from_io(&e, &path.display().to_string());
-            return Noted::with_diagnostics(
-                ProcessedFile {
-                    path,
-                    source: String::new(),
-                    formatted: String::new(),
-                },
-                vec![diagnostic],
-            );
-        }
-    };
-
-    let noted = kirei.write(&source);
-    let mut formatted = noted.value;
-
-    if !formatted.is_empty() && !formatted.ends_with('\n') {
-        formatted.push('\n');
-    }
-
-    Noted::with_diagnostics(
-        ProcessedFile {
-            path,
-            source,
-            formatted,
-        },
-        noted.diagnostics,
-    )
-}
-
-fn handle_results<F>(results: &[Noted<ProcessedFile>], mut action: F) -> i32
-where
-    F: FnMut(&ProcessedFile) -> Option<i32>,
-{
-    let mut exit_code = 0;
-
-    for noted in results {
-        for diagnostic in &noted.diagnostics {
-            eprint_diagnostic(diagnostic, &noted.value.source, noted.value.path.to_str());
-        }
-
-        if noted.has_errors() {
-            exit_code = 1;
-        } else if let Some(code) = action(&noted.value) {
-            exit_code = code;
-        }
-    }
-
-    exit_code
-}
-
-fn run_stdin(args: &Args) -> i32 {
-    let mut buffer = String::new();
-    if let Err(e) = io::stdin().read_to_string(&mut buffer) {
-        eprint_diagnostic(&Diagnostic::from_io(&e, "stdin"), "", None);
-        return 1;
-    }
-
-    let filepath = args.stdin_filepath.as_deref();
-    let noted = Kirei::default().write(&buffer);
-
-    for diagnostic in &noted.diagnostics {
-        eprint_diagnostic(diagnostic, &buffer, filepath);
-    }
-
-    if noted.has_errors() {
-        return 1;
-    }
-
-    let mut formatted = noted.value;
-    if !formatted.ends_with('\n') {
-        formatted.push('\n');
-    }
-
-    if buffer == formatted {
-        return 0;
-    }
-
-    if args.check {
-        eprint_diagnostic(&Diagnostic::file_would_be_formatted(), "", filepath);
-        1
-    } else if args.list_different {
-        eprintln!("{}", filepath.unwrap_or("missing file path"));
-        1
-    } else {
-        print!("{}", formatted);
-        0
-    }
-}
-
-pub fn run() -> i32 {
-    let args = Args::parse();
-
-    if args.input.len() == 1 && args.input[0] == "-" {
-        return run_stdin(&args);
-    }
-
-    if args.stdin_filepath.is_some() {
-        eprint_diagnostic(&Diagnostic::stdin_filepath_requires_stdin(), "", None);
-        return 1;
-    }
-
-    let paths = match resolve_paths(&args.input, args.no_ignore) {
-        Ok(paths) => paths,
-        Err(diagnostic) => {
-            eprint_diagnostic(&diagnostic, "", None);
-            return 1;
-        }
-    };
-
-    let mut kirei = Kirei::default();
-    let results: Vec<_> = paths
-        .into_iter()
-        .map(|p| process_file(p, &mut kirei))
-        .collect();
-
-    if args.check {
-        handle_results(&results, |file| {
-            file.needs_formatting().then(|| {
-                eprint_diagnostic(
-                    &Diagnostic::file_would_be_formatted(),
-                    "",
-                    file.path.to_str(),
-                );
-                1
-            })
-        })
-    } else if args.list_different {
-        handle_results(&results, |file| {
-            file.needs_formatting().then(|| {
-                eprintln!("{}", file.path.display());
-                1
-            })
-        })
-    } else if args.write {
-        handle_results(&results, |file| {
-            std::fs::write(&file.path, &file.formatted).err().map(|e| {
-                eprint_diagnostic(
-                    &Diagnostic::from_io(&e, &file.path.display().to_string()),
-                    "",
-                    file.path.to_str(),
-                );
-                1
-            })
-        })
-    } else {
-        handle_results(&results, |file| {
-            print!("{}", file.formatted);
-            None
-        })
-    }
 }

@@ -2,12 +2,14 @@
 source: tests/snapshots/malformed.rs
 description: "<div>\n    {% if first %}\n        <strong>\n    {% elif last %}\n        <strong>{{ foo }}<span>\n    {% else %}\n    {% endif %}\n        </strong>\n</div>\n"
 ---
-warning: unbalanced HTML across control blocks
- --> malformed/unclosed_tags_in_conditional.html:5:9
-  |
-5 |           <strong>{{ foo }}<span>
-  |  _________^
-6 | |     {% else %}
-7 | |     {% endif %}
-8 | |         </strong>
-  | |_________________^
+kirei::unbalanced_html
+
+  ! unbalanced HTML across control blocks
+   ,-[malformed/unclosed_tags_in_conditional.html:5:9]
+ 4 |         {% elif last %}
+ 5 | ,->         <strong>{{ foo }}<span>
+ 6 | |       {% else %}
+ 7 | |       {% endif %}
+ 8 | `->         </strong>
+ 9 |     </div>
+   `----

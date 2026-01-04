@@ -3,8 +3,7 @@ use tree_sitter::{Node, Range};
 
 use crate::{
     askama::{self, AskamaNode},
-    diagnostics::{Annotation, Diagnostic},
-    noted::Noted,
+    diagnostics::{KireiError, Noted, erroneous_end_tag},
 };
 
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Content_categories#phrasing_content
@@ -164,20 +163,28 @@ pub fn extract_html_nodes(
     root_node: &Node,
     source: &[u8],
     ranges: &[Range],
+    filepath: &str,
 ) -> Noted<Vec<HtmlNode>> {
     let mut html_nodes = Vec::new();
     let mut tag_stack: Vec<(String, Range, usize)> = Vec::new();
     let mut diagnostics = Vec::new();
+    let source_str = str::from_utf8(source).expect("valid UTF-8");
     parse_recursive(
         root_node,
         source,
+        source_str,
+        filepath,
         ranges,
         &mut html_nodes,
         &mut tag_stack,
         &mut diagnostics,
         0,
     );
-    Noted::with_diagnostics(html_nodes, diagnostics)
+    if diagnostics.is_empty() {
+        Noted::ok(html_nodes, Vec::new())
+    } else {
+        Noted::err(diagnostics, Vec::new())
+    }
 }
 
 fn extract_text_from_ranges(node: &Node, source: &[u8], content_ranges: &[Range]) -> String {
@@ -192,7 +199,7 @@ fn extract_text_from_ranges(node: &Node, source: &[u8], content_ranges: &[Range]
         if range_start < node_end && range_end > node_start {
             let start = range_start.max(node_start);
             let end = range_end.min(node_end);
-            let text_slice = std::str::from_utf8(&source[start..end]).expect("valid UTF-8");
+            let text_slice = str::from_utf8(&source[start..end]).expect("valid UTF-8");
             text_parts.push(text_slice);
         }
     }
@@ -203,14 +210,16 @@ fn extract_text_from_ranges(node: &Node, source: &[u8], content_ranges: &[Range]
 fn parse_recursive(
     node: &Node,
     source: &[u8],
+    source_str: &str,
+    filepath: &str,
     ranges: &[Range],
     html_nodes: &mut Vec<HtmlNode>,
     tag_stack: &mut Vec<(String, Range, usize)>,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<KireiError>,
     depth: usize,
 ) {
     if depth > 200 {
-        diagnostics.push(nesting_too_deep());
+        diagnostics.push(KireiError::NestingTooDeep);
         return;
     }
 
@@ -220,6 +229,8 @@ fn parse_recursive(
                 parse_recursive(
                     &child,
                     source,
+                    source_str,
+                    filepath,
                     ranges,
                     html_nodes,
                     tag_stack,
@@ -274,9 +285,14 @@ fn parse_recursive(
                 let open_range = *open_name_range;
                 let close_range = erroneous_end_tag_name.range();
 
-                let source_str = std::str::from_utf8(source).expect("valid UTF-8");
-                let diagnostic =
-                    erroneous_end_tag(expected, &found, open_range, close_range, source_str);
+                let diagnostic = erroneous_end_tag(
+                    expected,
+                    &found,
+                    open_range,
+                    close_range,
+                    source_str,
+                    filepath,
+                );
                 diagnostics.push(diagnostic);
             }
         }
@@ -306,6 +322,8 @@ fn parse_recursive(
                 parse_recursive(
                     &child,
                     source,
+                    source_str,
+                    filepath,
                     ranges,
                     html_nodes,
                     tag_stack,
@@ -519,37 +537,3 @@ pub fn unpair_crossing_tags(html_nodes: &mut [HtmlNode], crossing_pair_idx: &[(u
 }
 
 // Diagnostics
-fn erroneous_end_tag(
-    expected: String,
-    found: &str,
-    open_range: Range,
-    close_range: Range,
-    source: &str,
-) -> Diagnostic {
-    let line_index = close_range.start_point.row;
-    let start_col = close_range.start_point.column;
-    let end_col = close_range.end_point.column;
-
-    let mut diag = Diagnostic::error("unexpected closing tag")
-        .with_label(
-            close_range,
-            format!("expected `{}`, found `{}`", expected, found),
-            Annotation::Primary,
-        )
-        .with_label(
-            open_range,
-            "expected due to this open tag name",
-            Annotation::Secondary,
-        )
-        .with_help(format!("consider using `{}`", expected));
-
-    if let Some(line) = source.lines().nth(line_index) {
-        diag = diag.with_suggestion(line_index, line, start_col, end_col, expected);
-    }
-
-    diag
-}
-
-fn nesting_too_deep() -> Diagnostic {
-    Diagnostic::error("nesting too deep")
-}

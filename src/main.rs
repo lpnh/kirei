@@ -1,3 +1,5 @@
-fn main() {
-    std::process::exit(kirei::run());
+use std::process::ExitCode;
+
+fn main() -> miette::Result<ExitCode> {
+    kirei::cli::run()
 }
