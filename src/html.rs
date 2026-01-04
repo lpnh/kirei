@@ -535,5 +535,3 @@ pub fn unpair_crossing_tags(html_nodes: &mut [HtmlNode], crossing_pair_idx: &[(u
         }
     }
 }
-
-// Diagnostics
