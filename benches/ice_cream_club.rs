@@ -1,5 +1,5 @@
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
-use kirei::Kirei;
+use kirei::Session;
 use std::hint::black_box;
 
 const ICE_CREAM_CLUB_CARD: &str =
@@ -27,10 +27,10 @@ fn format_benchmark(c: &mut Criterion) {
     group.throughput(Throughput::Bytes(total_bytes as u64));
 
     group.bench_function("all_files", |b| {
-        let mut formatter = Kirei::default();
+        let mut session = Session::default();
         b.iter(|| {
             for template in &templates {
-                black_box(formatter.write(black_box(template), "bench.html").value);
+                black_box(session.format(black_box(template), "bench.html").value);
             }
         });
     });

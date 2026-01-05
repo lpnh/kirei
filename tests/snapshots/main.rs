@@ -1,14 +1,14 @@
 #[macro_export]
 macro_rules! snapshot_test {
     ($fixture_path:expr) => {
-        use kirei::{diagnostics_from_noted, Kirei};
+        use kirei::Session;
 
         let path = std::path::Path::new("tests/fixtures").join($fixture_path);
         let input = std::fs::read_to_string(&path)
             .unwrap_or_else(|_| panic!("Could not read fixture: {}", path.display()));
 
-        let mut kirei = Kirei::default();
-        let result = kirei.write(&input, $fixture_path);
+        let mut session = Session::default();
+        let result = session.format(&input, $fixture_path);
 
         if let Some(output) = &result.value {
             insta::with_settings!({
@@ -22,7 +22,7 @@ macro_rules! snapshot_test {
         }
 
         if !result.errors.is_empty() || !result.warnings.is_empty() {
-            let diagnostic_output = diagnostics_from_noted(&result, false);
+            let diagnostic_output = Session::diagnostics_from_noted(&result, false);
 
             insta::with_settings!({
                 description => input,
