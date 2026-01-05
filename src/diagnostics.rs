@@ -134,30 +134,6 @@ impl<T> Noted<T> {
     }
 }
 
-pub fn diagnostics_from_noted<T>(result: &Noted<T>, use_color: bool) -> String {
-    let mut output = String::new();
-    for error in &result.errors {
-        output.push_str(&render_diagnostic(error, use_color));
-    }
-    for warning in &result.warnings {
-        output.push_str(&render_diagnostic(warning, use_color));
-    }
-    output
-}
-
-fn render_diagnostic(diagnostic: &dyn Diagnostic, use_color: bool) -> String {
-    let handler = if use_color {
-        GraphicalReportHandler::default()
-    } else {
-        GraphicalReportHandler::new_themed(GraphicalTheme::none())
-    };
-    let mut output = String::new();
-    handler
-        .render_report(&mut output, diagnostic)
-        .expect("failed to render diagnostic");
-    output
-}
-
 fn find_error_node<'a>(node: &Node<'a>) -> Option<Node<'a>> {
     if node.is_error() || node.is_missing() {
         return Some(*node);
