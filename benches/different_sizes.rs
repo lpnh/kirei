@@ -1,5 +1,5 @@
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use kirei::Session;
+use kirei::session::Session;
 use std::hint::black_box;
 
 struct TemplateBuilder {
@@ -973,7 +973,7 @@ fn format_benchmark(c: &mut Criterion) {
         group.throughput(Throughput::Bytes(template.len() as u64));
         group.bench_with_input(BenchmarkId::from_parameter(name), template, |b, tmpl| {
             let mut session = Session::default();
-            b.iter(|| session.format(black_box(tmpl), "bench.html").value);
+            b.iter(|| session.format(black_box(tmpl), "bench.html"));
         });
     }
 

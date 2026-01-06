@@ -6,6 +6,7 @@ use crate::{
     askama::{self, AskamaNode, ControlTag},
     config::Config,
     html::{self, HtmlNode},
+    parse::SakuraSeed,
 };
 
 #[derive(Debug, Clone)]
@@ -240,13 +241,8 @@ impl Leaf {
 }
 
 impl SakuraTree {
-    pub fn grow(
-        askama_nodes: &[AskamaNode],
-        html_nodes: &[HtmlNode],
-        source: &str,
-        cfg: &Config,
-    ) -> Self {
-        let leaves = Self::grow_leaves(askama_nodes, html_nodes, source);
+    pub fn grow(seed: &SakuraSeed, source: &str, cfg: &Config) -> Self {
+        let leaves = Self::grow_leaves(seed, source);
 
         let mut tree = Self {
             cfg: cfg.clone(),
@@ -266,7 +262,9 @@ impl SakuraTree {
         tree
     }
 
-    fn grow_leaves(askama_nodes: &[AskamaNode], html_nodes: &[HtmlNode], src: &str) -> Vec<Leaf> {
+    fn grow_leaves(seed: &SakuraSeed, src: &str) -> Vec<Leaf> {
+        let (askama_nodes, html_nodes) = (&seed.askama, &seed.html);
+
         let (mut leaves, pruned) = Self::leaves_from_html(html_nodes, askama_nodes, src);
         leaves.extend(Self::leaves_from_askama(askama_nodes, &pruned));
 

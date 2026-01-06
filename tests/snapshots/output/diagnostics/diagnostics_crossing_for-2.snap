@@ -2,8 +2,6 @@
 source: tests/snapshots/diagnostics.rs
 description: "{% for item in items %}\n    <ul>\n        {% block name %}<li>{{ item }}</li>{% endblock %}\n{% endfor %}\n    </ul>\n"
 ---
-kirei::unbalanced_html
-
   ! unbalanced HTML across control blocks
    ,-[diagnostics/crossing_for.html:2:5]
  1 |     {% for item in items %}

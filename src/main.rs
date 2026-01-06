@@ -2,13 +2,16 @@ use clap::Parser;
 use globset::Glob;
 use ignore::{DirEntry, WalkBuilder};
 use std::{
-    fs,
-    io::{self, Read},
+    io::Read,
     path::{Path, PathBuf},
     process::ExitCode,
 };
 
-use kirei::{KireiError, Session, SessionMode, cli::Args};
+use kirei::{
+    ErrorKind,
+    cli::Args,
+    session::{Session, SessionMode},
+};
 
 fn main() -> ExitCode {
     let args = Args::parse();
@@ -22,10 +25,10 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(args: &Args) -> Result<ExitCode, KireiError> {
+fn run(args: &Args) -> Result<ExitCode, ErrorKind> {
     let is_stdin_mode = args.input.len() == 1 && args.input[0] == "-";
     if !is_stdin_mode && args.stdin_filepath.is_some() {
-        return Err(KireiError::StdinFilepathWithoutStdin);
+        Err(ErrorKind::StdinFilepathWithoutStdin)?;
     }
 
     let mut session = Session::default();
@@ -38,57 +41,34 @@ fn run(args: &Args) -> Result<ExitCode, KireiError> {
         if matches!(mode, SessionMode::Write) {
             mode = SessionMode::Stdout;
         }
-        read_stdin(&mut session, &mode, filepath)?;
-    } else {
-        let paths = resolve_paths(&args.input, args.no_ignore)?;
 
+        let mut source = String::new();
+        std::io::stdin().read_to_string(&mut source)?;
+
+        session.format_and_print(&mode, PathBuf::from(filepath), &source);
+    } else {
+        let mut paths = Vec::new();
+        for pattern in &args.input {
+            paths.extend(resolve_pattern(pattern, args.no_ignore)?);
+        }
         for path in &paths {
-            if let Err(e) = read_file(&mut session, &mode, path) {
-                session.add_error(path.clone(), e);
-            }
+            let source = std::fs::read_to_string(path)?;
+            session.format_and_print(&mode, path.clone(), &source);
         }
     }
 
     session.print_diagnostics(use_color);
 
-    let code = if ((args.check || args.list_different) && session.requires_formatting())
-        || session.has_errors()
+    if ((args.check || args.list_different) && session.requires_formatting)
+        || !session.notes.errors.is_empty()
     {
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
-    };
-
-    Ok(code)
-}
-
-fn read_stdin(session: &mut Session, mode: &SessionMode, filepath: &str) -> Result<(), KireiError> {
-    let mut source = String::new();
-    io::stdin()
-        .read_to_string(&mut source)
-        .map_err(|source| KireiError::StdinFailed { source })?;
-
-    session.format_and_print(mode, PathBuf::from(filepath), source)
-}
-
-fn read_file(session: &mut Session, mode: &SessionMode, path: &Path) -> Result<(), KireiError> {
-    let source = fs::read_to_string(path).map_err(|source| KireiError::ReadFailed {
-        path: path.display().to_string(),
-        source,
-    })?;
-
-    session.format_and_print(mode, path.to_path_buf(), source)
-}
-
-fn resolve_paths(patterns: &[String], no_ignore: bool) -> Result<Vec<PathBuf>, KireiError> {
-    let mut all_paths = Vec::new();
-    for pattern in patterns {
-        all_paths.extend(resolve_pattern(pattern, no_ignore)?);
+        return Ok(ExitCode::FAILURE);
     }
-    Ok(all_paths)
+
+    Ok(ExitCode::SUCCESS)
 }
 
-fn resolve_pattern(pattern: &str, no_ignore: bool) -> Result<Vec<PathBuf>, KireiError> {
+fn resolve_pattern(pattern: &str, no_ignore: bool) -> Result<Vec<PathBuf>, ErrorKind> {
     let path = PathBuf::from(pattern);
 
     if pattern.contains(['*', '?', '[']) {
@@ -104,28 +84,25 @@ fn resolve_pattern(pattern: &str, no_ignore: bool) -> Result<Vec<PathBuf>, Kirei
         } else if path.is_dir() {
             let paths = walk_files(&path, no_ignore, Some("html"));
             if paths.is_empty() {
-                return Err(KireiError::NoHtmlFiles {
+                Err(ErrorKind::NoHtmlFiles {
                     path: pattern.to_string(),
-                });
+                })?;
             }
             return Ok(paths);
         }
 
-        return Err(KireiError::NotAFile {
+        Err(ErrorKind::NotAFile {
             path: pattern.to_string(),
-        });
+        })?;
     }
 
-    Err(KireiError::PathNotFound {
+    Err(ErrorKind::FileNotFound {
         path: pattern.to_string(),
     })
 }
 
-fn try_glob(pattern: &str, no_ignore: bool) -> Result<Vec<PathBuf>, KireiError> {
-    let glob = Glob::new(pattern).map_err(|source| KireiError::InvalidGlobPattern {
-        pattern: pattern.to_string(),
-        source,
-    })?;
+fn try_glob(pattern: &str, no_ignore: bool) -> Result<Vec<PathBuf>, ErrorKind> {
+    let glob = Glob::new(pattern)?;
 
     let matcher = glob.compile_matcher();
     let max_depth = if pattern.contains("**") {
@@ -148,9 +125,9 @@ fn try_glob(pattern: &str, no_ignore: bool) -> Result<Vec<PathBuf>, KireiError> 
         .collect();
 
     if paths.is_empty() {
-        return Err(KireiError::NoMatches {
+        Err(ErrorKind::NoMatches {
             pattern: pattern.to_string(),
-        });
+        })?;
     }
     Ok(paths)
 }

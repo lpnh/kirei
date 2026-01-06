@@ -3,8 +3,8 @@ use assert_fs::{TempDir, prelude::*};
 use predicates::str::contains;
 use std::fs::write;
 
-const ERR_PARSE_ASKAMA: &str = "failed to parse Askama";
-const ERR_PARSE_HTML: &str = "failed to parse HTML";
+const ERR_PARSE_ASKAMA: &str = "syntax error in Askama code";
+const ERR_PARSE_HTML: &str = "syntax error in HTML code";
 
 #[test]
 fn fails_when_unformatted() {

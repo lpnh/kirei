@@ -2,11 +2,9 @@
 source: tests/snapshots/diagnostics.rs
 description: "{% blop %}<p>A cool paragraph</p>\n"
 ---
-kirei::format::syntax_error
-
-  x failed to parse Askama
+  x syntax error in Askama code
    ,-[diagnostics/invalid_ctrl_statement.html:1:1]
  1 | {% blop %}<p>A cool paragraph</p>
    : ^^^^^|^^^^
-   :      `-- 
+   :      `-- due to this
    `----

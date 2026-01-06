@@ -1,9 +1,12 @@
+use miette::NamedSource;
 use std::ops;
 use tree_sitter::{Node, Range};
 
 use crate::{
+    ErrorKind,
     askama::{self, AskamaNode},
-    diagnostics::{KireiError, Noted, erroneous_end_tag},
+    range_to_span,
+    session::Notes,
 };
 
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Content_categories#phrasing_content
@@ -160,30 +163,21 @@ impl HtmlNode {
 }
 
 pub fn extract_html_nodes(
-    root_node: &Node,
-    source: &[u8],
+    notes: &mut Notes,
+    root: &Node,
+    source: &str,
     ranges: &[Range],
-    filepath: &str,
-) -> Noted<Vec<HtmlNode>> {
-    let mut html_nodes = Vec::new();
-    let mut tag_stack: Vec<(String, Range, usize)> = Vec::new();
-    let mut diagnostics = Vec::new();
-    let source_str = str::from_utf8(source).expect("valid UTF-8");
-    parse_recursive(
-        root_node,
-        source,
-        source_str,
-        filepath,
-        ranges,
-        &mut html_nodes,
-        &mut tag_stack,
-        &mut diagnostics,
-        0,
-    );
-    if diagnostics.is_empty() {
-        Noted::ok(html_nodes, Vec::new())
+    path: &str,
+) -> Option<Vec<HtmlNode>> {
+    let html_nodes = &mut Vec::new();
+    let stack: &mut Vec<(String, Range, usize)> = &mut Vec::new();
+    let source_str = str::from_utf8(source.as_bytes()).expect("valid UTF-8");
+    parse_recursive(notes, root, source, path, ranges, html_nodes, stack, 0);
+
+    if notes.errors.is_empty() {
+        Some(html_nodes.to_vec())
     } else {
-        Noted::err(diagnostics, Vec::new())
+        None
     }
 }
 
@@ -208,108 +202,101 @@ fn extract_text_from_ranges(node: &Node, source: &[u8], content_ranges: &[Range]
 }
 
 fn parse_recursive(
+    notes: &mut Notes,
     node: &Node,
-    source: &[u8],
-    source_str: &str,
-    filepath: &str,
+    source: &str,
+    path: &str,
     ranges: &[Range],
     html_nodes: &mut Vec<HtmlNode>,
-    tag_stack: &mut Vec<(String, Range, usize)>,
-    diagnostics: &mut Vec<KireiError>,
+    stack: &mut Vec<(String, Range, usize)>,
     depth: usize,
 ) {
     if depth > 200 {
-        diagnostics.push(KireiError::NestingTooDeep);
+        notes.errors.push(ErrorKind::NestingTooDeep);
         return;
     }
+
+    let src_bytes = source.as_bytes();
 
     match node.kind() {
         "document" => {
             for child in node.children(&mut node.walk()) {
                 parse_recursive(
+                    notes,
                     &child,
                     source,
-                    source_str,
-                    filepath,
+                    path,
                     ranges,
                     html_nodes,
-                    tag_stack,
-                    diagnostics,
+                    stack,
                     depth + 1,
                 );
             }
         }
         "doctype" => {
-            let text = node.utf8_text(source).expect("valid UTF-8").to_string();
+            let text = node.utf8_text(src_bytes).expect("valid UTF-8").to_string();
             html_nodes.push(HtmlNode::Doctype {
                 text,
                 start: node.start_byte(),
             });
         }
         "start_tag" => {
-            let html_node = parse_start_tag(node, source);
+            let html_node = parse_start_tag(node, src_bytes);
             if let HtmlNode::Start { name, .. } = &html_node {
                 let tag_name_node = node
                     .children(&mut node.walk())
                     .find(|c| c.kind() == "tag_name")
                     .expect("start_tag must have tag_name");
 
-                tag_stack.push((name.clone(), tag_name_node.range(), node.start_byte()));
+                stack.push((name.clone(), tag_name_node.range(), node.start_byte()));
             }
 
             html_nodes.push(html_node);
         }
         "end_tag" => {
-            let end_tag_node = parse_end_tag(node, source);
+            let end_tag_node = parse_end_tag(node, src_bytes);
             if let HtmlNode::End { name, .. } = &end_tag_node
-                && let Some(pos) = tag_stack
+                && let Some(pos) = stack
                     .iter()
                     .rposition(|(stack_name, _, _)| stack_name == name)
             {
-                tag_stack.truncate(pos);
+                stack.truncate(pos);
             }
 
             html_nodes.push(end_tag_node);
         }
         "self_closing_tag" => {
-            html_nodes.push(parse_self_closing_tag(node, source));
+            html_nodes.push(parse_self_closing_tag(node, src_bytes));
         }
         "erroneous_end_tag" => {
             if let Some(erroneous_end_tag_name) = node
                 .children(&mut node.walk())
                 .find(|c| c.kind() == "erroneous_end_tag_name")
-                && let Some((expected_name, open_name_range, _)) = tag_stack.last()
+                && let Some((expected_name, open_name_range, _)) = stack.last()
             {
                 let expected = expected_name.clone();
-                let found = extract_tag_name(node, source, "erroneous_end_tag_name");
+                let found = extract_tag_name(node, src_bytes, "erroneous_end_tag_name");
                 let open_range = *open_name_range;
                 let close_range = erroneous_end_tag_name.range();
-
-                let diagnostic = erroneous_end_tag(
-                    expected,
-                    &found,
-                    open_range,
-                    close_range,
-                    source_str,
-                    filepath,
-                );
-                diagnostics.push(diagnostic);
+                let err =
+                    erroneous_end_tag(expected, &found, open_range, close_range, source, path);
+                notes.errors.push(err);
             }
         }
         "comment" => {
-            let text = node.utf8_text(source).expect("valid UTF-8").to_string();
+            let text = node.utf8_text(src_bytes).expect("valid UTF-8").to_string();
             let range = node.start_byte()..node.end_byte();
             html_nodes.push(HtmlNode::Comment { text, range });
         }
         "entity" => {
-            let text = node.utf8_text(source).expect("valid UTF-8").to_string();
+            let text = node.utf8_text(src_bytes).expect("valid UTF-8").to_string();
             html_nodes.push(HtmlNode::Entity {
                 text,
                 start: node.start_byte(),
             });
         }
         "text" => {
-            let text = extract_text_from_ranges(node, source, ranges);
+            let text = extract_text_from_ranges(node, src_bytes, ranges);
             let range = node.start_byte()..node.end_byte();
             html_nodes.push(HtmlNode::Text { text, range });
         }
@@ -320,14 +307,13 @@ fn parse_recursive(
                 .is_some_and(|n| n.kind() == "end_tag");
             for child in node.children(&mut node.walk()) {
                 parse_recursive(
+                    notes,
                     &child,
                     source,
-                    source_str,
-                    filepath,
+                    path,
                     ranges,
                     html_nodes,
-                    tag_stack,
-                    diagnostics,
+                    stack,
                     depth + 1,
                 );
             }
@@ -339,7 +325,7 @@ fn parse_recursive(
             }
         }
         "raw_text" => {
-            let text = node.utf8_text(source).expect("valid UTF-8").to_string();
+            let text = node.utf8_text(src_bytes).expect("valid UTF-8").to_string();
             if !text.trim().is_empty() {
                 let range = node.start_byte()..node.end_byte();
                 html_nodes.push(HtmlNode::Raw { text, range });
@@ -533,5 +519,29 @@ pub fn unpair_crossing_tags(html_nodes: &mut [HtmlNode], crossing_pair_idx: &[(u
         if let HtmlNode::End { indent, .. } = &mut html_nodes[end_idx] {
             *indent = 0;
         }
+    }
+}
+
+pub fn erroneous_end_tag(
+    expected: String,
+    found: &str,
+    open_range: Range,
+    close_range: Range,
+    source: &str,
+    filepath: &str,
+) -> ErrorKind {
+    let suggestion = if !expected.is_empty() {
+        Some(format!("consider using `{}`", expected))
+    } else {
+        None
+    };
+
+    ErrorKind::UnexpectedClosingTag {
+        expected,
+        found: found.to_string(),
+        src: NamedSource::new(filepath, source.to_string()),
+        close_span: range_to_span(&close_range),
+        open_span: range_to_span(&open_range),
+        suggestion,
     }
 }

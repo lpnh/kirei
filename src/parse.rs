@@ -1,137 +1,138 @@
-#![allow(unused)]
-
-use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme, NamedSource, SourceSpan};
-use std::{io, ops};
-use thiserror::Error;
-use tree_sitter::{Node, Point, Range};
+use miette::NamedSource;
+use tree_sitter::{Node, Parser, Point, Range};
+use tree_sitter_askama::LANGUAGE as ASKAMA_LANGUAGE;
+use tree_sitter_html::LANGUAGE as HTML_LANGUAGE;
 
 use crate::{
+    ErrorKind, KireiWarning, askama,
     askama::{AskamaNode, ControlTag},
-    html::HtmlNode,
+    html::{self, HtmlNode},
+    range_to_span,
+    session::{Notes, Session},
 };
 
-#[derive(Error, Diagnostic, Debug)]
-pub enum KireiError {
-    #[error("failed to read `{path}`")]
-    #[diagnostic(code(kirei::io::read_failed))]
-    ReadFailed {
-        path: String,
-        #[source]
-        source: io::Error,
-    },
-
-    #[error("failed to write `{path}`")]
-    #[diagnostic(code(kirei::io::write_failed))]
-    WriteFailed {
-        path: String,
-        #[source]
-        source: io::Error,
-    },
-
-    #[error("failed to read from stdin")]
-    #[diagnostic(code(kirei::io::stdin_failed))]
-    StdinFailed {
-        #[source]
-        source: io::Error,
-    },
-
-    #[error("path `{path}` does not exist")]
-    #[diagnostic(code(kirei::path::not_found))]
-    PathNotFound { path: String },
-
-    #[error("`{path}` is not a regular file")]
-    #[diagnostic(code(kirei::path::not_a_file))]
-    NotAFile { path: String },
-
-    #[error("no `.html` files in directory `{path}`")]
-    #[diagnostic(code(kirei::path::no_html_files))]
-    NoHtmlFiles { path: String },
-
-    #[error("invalid glob pattern `{pattern}`")]
-    #[diagnostic(code(kirei::glob::invalid_pattern))]
-    InvalidGlobPattern {
-        pattern: String,
-        #[source]
-        source: globset::Error,
-    },
-
-    #[error("no matches for pattern `{pattern}`")]
-    #[diagnostic(code(kirei::glob::no_matches))]
-    NoMatches { pattern: String },
-
-    #[error("--stdin-filepath requires stdin input (use `-` as the path)")]
-    #[diagnostic(code(kirei::cli::stdin_filepath_without_stdin))]
-    StdinFilepathWithoutStdin,
-
-    #[error("failed to parse {kind}")]
-    #[diagnostic(code(kirei::format::syntax_error))]
-    SyntaxError {
-        kind: String,
-        #[source_code]
-        src: NamedSource<String>,
-        #[label("{message}")]
-        span: SourceSpan,
-        message: String,
-    },
-
-    #[error("unexpected closing tag")]
-    #[diagnostic(code(kirei::format::unexpected_closing_tag))]
-    UnexpectedClosingTag {
-        expected: String,
-        found: String,
-        #[source_code]
-        src: NamedSource<String>,
-        #[label("expected `{expected}`, found `{found}`")]
-        close_span: SourceSpan,
-        #[label("expected due to this open tag name")]
-        open_span: SourceSpan,
-        #[help]
-        suggestion: Option<String>,
-    },
-
-    #[error("nesting too deep")]
-    #[diagnostic(code(kirei::format::nesting_too_deep))]
-    NestingTooDeep,
+pub struct SakuraSeed {
+    pub askama: Vec<AskamaNode>,
+    pub html: Vec<HtmlNode>,
 }
 
-#[derive(Error, Diagnostic, Debug, Clone)]
-pub enum KireiWarning {
-    #[error("unbalanced HTML across control blocks")]
-    #[diagnostic(code(kirei::unbalanced_html), severity(Warning))]
-    UnbalancedHtml {
-        #[source_code]
-        src: NamedSource<String>,
-        #[label]
-        span: SourceSpan,
-    },
+pub struct SakuraParser {
+    askama: Parser,
+    html: Parser,
 }
 
-pub struct Noted<T> {
-    pub value: Option<T>,
-    pub errors: Vec<KireiError>,
-    pub warnings: Vec<KireiWarning>,
+impl Default for SakuraParser {
+    fn default() -> Self {
+        let mut askama = Parser::new();
+        askama
+            .set_language(&ASKAMA_LANGUAGE.into())
+            .expect("failed to set Askama language");
+
+        let mut html = Parser::new();
+        html.set_language(&HTML_LANGUAGE.into())
+            .expect("failed to set HTML language");
+
+        Self { askama, html }
+    }
 }
 
-impl<T> Noted<T> {
-    pub fn ok(value: T, warnings: Vec<KireiWarning>) -> Self {
-        Self {
-            value: Some(value),
-            errors: Vec::new(),
-            warnings,
+impl SakuraParser {
+    pub fn parse(&mut self, notes: &mut Notes, source: &str, filepath: &str) -> Option<SakuraSeed> {
+        let ast_tree = self.askama.parse(source, None).or_else(|| {
+            notes.errors.push(ErrorKind::ParserFailed {
+                lang: "Askama".to_string(),
+            });
+            None
+        })?;
+
+        if ast_tree.root_node().has_error() {
+            if let Some(err) = syntax_error(
+                &ast_tree.root_node(),
+                "Askama".to_string(),
+                source,
+                filepath,
+            ) {
+                notes.errors.push(err)
+            }
+            return None;
         }
-    }
 
-    pub fn err(errors: Vec<KireiError>, warnings: Vec<KireiWarning>) -> Self {
-        Self {
-            value: None,
-            errors,
-            warnings,
+        let (askama, content_node_ranges) =
+            askama::extract_askama_nodes(&ast_tree.root_node(), source);
+
+        if !content_node_ranges.is_empty()
+            && self.html.set_included_ranges(&content_node_ranges).is_err()
+        {
+            notes.errors.push(ErrorKind::ParserFailed {
+                lang: "HTML".to_string(),
+            });
+            return None;
         }
-    }
 
-    pub fn has_errors(&self) -> bool {
-        !self.errors.is_empty()
+        let html_tree = self.html.parse(source, None).or_else(|| {
+            notes.errors.push(ErrorKind::ParserFailed {
+                lang: "HTML".to_string(),
+            });
+            None
+        })?;
+
+        if html_tree.root_node().has_error() {
+            if let Some(err) =
+                syntax_error(&html_tree.root_node(), "HTML".to_string(), source, filepath)
+            {
+                notes.errors.push(err)
+            }
+            return None;
+        }
+
+        html::extract_html_nodes(
+            notes,
+            &html_tree.root_node(),
+            source,
+            &content_node_ranges,
+            filepath,
+        )
+        .map(|mut html| {
+            let crossing_indices = element_across_control(notes, &html, &askama, source, filepath);
+            html::unpair_crossing_tags(&mut html, &crossing_indices);
+
+            SakuraSeed { askama, html }
+        })
     }
+}
+
+fn syntax_error(root_node: &Node, kind: String, source: &str, filepath: &str) -> Option<ErrorKind> {
+    find_error_node(root_node).map(|node| {
+        if node.is_missing() {
+            let node_kind = node.kind();
+            let parent = node.parent();
+
+            let message = if let ("identifier", Some("block_statement")) =
+                (node_kind, parent.map(|p| p.kind()))
+            {
+                "block tag requires a name".to_string()
+            } else {
+                format!("expected {} here", node_kind)
+            };
+
+            return ErrorKind::SyntaxError {
+                lang: kind,
+                src: NamedSource::new(filepath, source.to_string()),
+                span: range_to_span(&node.range()),
+                message,
+            };
+        }
+
+        let range = refine_error_range(&node);
+        let span = range_to_span(&range);
+
+        ErrorKind::SyntaxError {
+            lang: kind,
+            src: NamedSource::new(filepath, source.to_string()),
+            span,
+            message: "due to this".to_string(),
+        }
+    })
 }
 
 fn find_error_node<'a>(node: &Node<'a>) -> Option<Node<'a>> {
@@ -197,12 +198,12 @@ fn range_between(first: &Node, last: &Node) -> Range {
 }
 
 pub fn element_across_control(
+    notes: &mut Notes,
     html_nodes: &[HtmlNode],
     askama_nodes: &[AskamaNode],
     source: &str,
     filepath: &str,
-) -> (Vec<(usize, usize)>, Vec<KireiWarning>) {
-    let mut warnings = Vec::new();
+) -> Vec<(usize, usize)> {
     let mut crossing_indices = Vec::new();
 
     for i in 0..html_nodes.len() {
@@ -228,7 +229,7 @@ pub fn element_across_control(
         let close_tag_end = end_byte + 2 + name.len() + 1;
         let span_range = range_from_bytes(source, start_byte, close_tag_end);
 
-        warnings.push(KireiWarning::UnbalancedHtml {
+        notes.warnings.push(KireiWarning::UnbalancedHtml {
             src: NamedSource::new(filepath, source.to_string()),
             span: range_to_span(&span_range),
         });
@@ -236,7 +237,7 @@ pub fn element_across_control(
         crossing_indices.push((i, end_idx));
     }
 
-    (crossing_indices, warnings)
+    crossing_indices
 }
 
 fn has_crossing_boundary(start: usize, end: usize, askama_nodes: &[AskamaNode]) -> bool {
@@ -284,7 +285,7 @@ fn has_crossing_boundary(start: usize, end: usize, askama_nodes: &[AskamaNode]) 
 }
 
 fn find_closest_parent(
-    range: &ops::Range<usize>,
+    range: &std::ops::Range<usize>,
     askama_nodes: &[AskamaNode],
 ) -> Option<(usize, usize)> {
     let mut closest_parent = None;
@@ -335,80 +336,4 @@ fn byte_to_point(source: &str, byte_pos: usize) -> Point {
         }
     }
     Point { row, column: col }
-}
-
-pub fn erroneous_end_tag(
-    expected: String,
-    found: &str,
-    open_range: Range,
-    close_range: Range,
-    source: &str,
-    filepath: &str,
-) -> KireiError {
-    let suggestion = if !expected.is_empty() {
-        Some(format!("consider using `{}`", expected))
-    } else {
-        None
-    };
-
-    KireiError::UnexpectedClosingTag {
-        expected,
-        found: found.to_string(),
-        src: NamedSource::new(filepath, source.to_string()),
-        close_span: range_to_span(&close_range),
-        open_span: range_to_span(&open_range),
-        suggestion,
-    }
-}
-
-pub fn syntax_error(
-    root_node: &Node,
-    kind: &str,
-    source: &str,
-    filepath: &str,
-) -> Option<KireiError> {
-    find_error_node(root_node).map(|node| {
-        if node.is_missing() {
-            let node_kind = node.kind();
-            let parent = node.parent();
-
-            let (kind, message) = if let ("identifier", Some("block_statement")) =
-                (node_kind, parent.map(|p| p.kind()))
-            {
-                (
-                    "missing block name".to_string(),
-                    "block tag requires a name".to_string(),
-                )
-            } else {
-                let parent_context = parent
-                    .map(|p| format!(" in {}", p.kind()))
-                    .unwrap_or_default();
-                (
-                    format!("missing {}{}", node_kind, parent_context),
-                    format!("expected {} here", node_kind),
-                )
-            };
-
-            return KireiError::SyntaxError {
-                kind,
-                src: NamedSource::new(filepath, source.to_string()),
-                span: range_to_span(&node.range()),
-                message,
-            };
-        }
-
-        let range = refine_error_range(&node);
-        let span = range_to_span(&range);
-
-        KireiError::SyntaxError {
-            kind: kind.to_string(),
-            src: NamedSource::new(filepath, source.to_string()),
-            span,
-            message: String::new(),
-        }
-    })
-}
-
-fn range_to_span(range: &Range) -> SourceSpan {
-    SourceSpan::new(range.start_byte.into(), range.end_byte - range.start_byte)
 }

@@ -2,8 +2,6 @@
 source: tests/snapshots/diagnostics.rs
 description: "<div>\n    {% if condition %}\n        <span>Content</span>\n    {% else %}\n    </div>\n{% endif %}\n"
 ---
-kirei::unbalanced_html
-
   ! unbalanced HTML across control blocks
    ,-[diagnostics/crossing_if.html:1:1]
  1 | ,-> <div>

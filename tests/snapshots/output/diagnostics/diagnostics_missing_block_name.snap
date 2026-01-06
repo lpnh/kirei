@@ -2,9 +2,7 @@
 source: tests/snapshots/diagnostics.rs
 description: "{% block %}{% endblock %}\n"
 ---
-kirei::format::syntax_error
-
-  x failed to parse missing block name
+  x syntax error in Askama code
    ,-[diagnostics/missing_block_name.html:1:9]
  1 | {% block %}{% endblock %}
    :         ^

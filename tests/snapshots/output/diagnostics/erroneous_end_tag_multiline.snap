@@ -2,8 +2,6 @@
 source: tests/snapshots/diagnostics.rs
 description: "<div>\n    <foo>\n        Some text\n    </bar>\n</div>\n"
 ---
-kirei::format::unexpected_closing_tag
-
   x unexpected closing tag
    ,-[diagnostics/erroneous_end_tag_multiline.html:2:6]
  1 | <div>

@@ -1,5 +1,5 @@
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
-use kirei::Session;
+use kirei::session::Session;
 use std::hint::black_box;
 
 fn generate_nested_html() -> String {
@@ -86,7 +86,7 @@ fn format_benchmark(c: &mut Criterion) {
         let mut session = Session::default();
         b.iter(|| {
             for template in &templates {
-                black_box(session.format(black_box(template), "bench.html").value);
+                black_box(session.format(black_box(template), "bench.html"));
             }
         });
     });
