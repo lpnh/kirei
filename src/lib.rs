@@ -1,5 +1,7 @@
+#![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::must_use_candidate)]
+#![allow(unused_assignments)]
 
 mod askama;
 pub mod cli;
@@ -54,32 +56,42 @@ pub enum ErrorKind {
     #[error("parser initialization failed")]
     ParserFailed { lang: String },
 
-    #[error("syntax error in {lang} code")]
-    SyntaxError {
-        lang: String,
-        #[source_code]
-        src: NamedSource<String>,
-        #[label("{message}")]
-        span: SourceSpan,
-        message: String,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    SyntaxError(#[from] Box<BoxedSyntaxError>),
 
-    #[error("unexpected closing tag")]
-    UnexpectedClosingTag {
-        expected: String,
-        found: String,
-        #[source_code]
-        src: NamedSource<String>,
-        #[label("expected `{expected}`, found `{found}`")]
-        close_span: SourceSpan,
-        #[label("expected due to this open tag name")]
-        open_span: SourceSpan,
-        #[help]
-        suggestion: Option<String>,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnexpectedClosingTag(#[from] Box<BoxedUnexpectedClosingTag>),
 
     #[error("nesting too deep")]
     NestingTooDeep,
+}
+
+#[derive(Error, Diagnostic, Debug)]
+#[error("syntax error in {lang} code")]
+pub struct BoxedSyntaxError {
+    lang: String,
+    #[source_code]
+    src: NamedSource<String>,
+    #[label("{message}")]
+    span: SourceSpan,
+    message: String,
+}
+
+#[derive(Error, Diagnostic, Debug)]
+#[error("unexpected closing tag")]
+pub struct BoxedUnexpectedClosingTag {
+    expected: String,
+    found: String,
+    #[source_code]
+    src: NamedSource<String>,
+    #[label("expected `{expected}`, found `{found}`")]
+    close_span: SourceSpan,
+    #[label("expected due to this open tag name")]
+    open_span: SourceSpan,
+    #[help]
+    suggestion: Option<String>,
 }
 
 #[derive(Error, Diagnostic, Debug, Clone)]

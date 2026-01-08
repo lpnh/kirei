@@ -57,7 +57,7 @@ impl SakuraParser {
                 source,
                 filepath,
             ) {
-                notes.errors.push(err)
+                notes.errors.push(err);
             }
             return None;
         }
@@ -85,7 +85,7 @@ impl SakuraParser {
             if let Some(err) =
                 syntax_error(&html_tree.root_node(), "HTML".to_string(), source, filepath)
             {
-                notes.errors.push(err)
+                notes.errors.push(err);
             }
             return None;
         }
@@ -120,8 +120,8 @@ impl<'a> SakuraSeed<'a> {
     pub fn grow_leaves(&self) -> Vec<Leaf<'a>> {
         let (askama_nodes, html_nodes) = (&self.askama, &self.html);
 
-        let (mut leaves, pruned) = self.leaves_from_html(html_nodes, askama_nodes, self.source);
-        leaves.extend(self.leaves_from_askama(askama_nodes, &pruned));
+        let (mut leaves, pruned) = Self::from_html(html_nodes, askama_nodes, self.source);
+        leaves.extend(Self::from_askama(askama_nodes, &pruned));
 
         let mut leaves: Vec<Leaf> = leaves.into_iter().collect();
 
@@ -156,11 +156,7 @@ impl<'a> SakuraSeed<'a> {
         leaves
     }
 
-    fn leaves_from_askama(
-        &self,
-        askama_nodes: &[AskamaNode<'a>],
-        pruned: &HashSet<usize>,
-    ) -> BTreeSet<Leaf<'a>> {
+    fn from_askama(askama_nodes: &[AskamaNode<'a>], pruned: &HashSet<usize>) -> BTreeSet<Leaf<'a>> {
         askama_nodes
             .iter()
             .enumerate()
@@ -169,8 +165,7 @@ impl<'a> SakuraSeed<'a> {
             .collect()
     }
 
-    fn leaves_from_html(
-        &self,
+    fn from_html(
         html_nodes: &[HtmlNode<'a>],
         askama_nodes: &[AskamaNode<'a>],
         source: &'a str,
@@ -183,7 +178,9 @@ impl<'a> SakuraSeed<'a> {
                 HtmlNode::Start { .. } | HtmlNode::Void { .. } | HtmlNode::SelfClosing { .. } => {
                     let Some(range) = node.range() else { continue };
                     let embed = Self::find_embedded(range, askama_nodes);
-                    if !embed.is_empty() {
+                    if embed.is_empty() {
+                        leaves.insert(Leaf::from_html(node));
+                    } else {
                         pruned.extend(embed.iter().copied());
                         let root = Root::Tag {
                             indent: 0,
@@ -194,23 +191,23 @@ impl<'a> SakuraSeed<'a> {
                         let content =
                             Cow::Owned(html::format_tag(range, source, askama_nodes, &embed));
                         leaves.insert(Leaf::grow(root, content, range.start, range.end));
-                    } else {
-                        leaves.insert(Leaf::from_html(node));
                     }
                 }
                 HtmlNode::Text { text, .. } => {
                     let Some(range) = node.range() else { continue };
                     let embed = Self::find_embedded(range, askama_nodes);
-                    if !embed.is_empty() {
-                        leaves.extend(Leaf::from_mixed_text(range, askama_nodes, &embed, source));
-                    } else {
+                    if embed.is_empty() {
                         leaves.insert(Leaf::from_text(text, range.start, range.end));
+                    } else {
+                        leaves.extend(Leaf::from_mixed_text(range, askama_nodes, &embed, source));
                     }
                 }
                 HtmlNode::Raw { .. } | HtmlNode::Comment { .. } => {
                     let Some(range) = node.range() else { continue };
                     let embed = Self::find_embedded(range, askama_nodes);
-                    if !embed.is_empty() {
+                    if embed.is_empty() {
+                        leaves.insert(Leaf::from_html(node));
+                    } else {
                         pruned.extend(embed.iter().copied());
                         let root = match node {
                             HtmlNode::Raw { .. } => Root::Raw,
@@ -220,8 +217,6 @@ impl<'a> SakuraSeed<'a> {
                         let content =
                             Cow::Owned(html::format_opaque(range, source, askama_nodes, &embed));
                         leaves.insert(Leaf::grow(root, content, range.start, range.end));
-                    } else {
-                        leaves.insert(Leaf::from_html(node));
                     }
                 }
                 _ => {
@@ -449,23 +444,23 @@ fn syntax_error(root_node: &Node, kind: String, source: &str, filepath: &str) ->
                 format!("expected {} here", node_kind)
             };
 
-            return ErrorKind::SyntaxError {
+            return ErrorKind::SyntaxError(Box::new(crate::BoxedSyntaxError {
                 lang: kind,
                 src: NamedSource::new(filepath, source.to_string()),
                 span: range_to_span(&node.range()),
                 message,
-            };
+            }));
         }
 
         let range = refine_error_range(&node);
         let span = range_to_span(&range);
 
-        ErrorKind::SyntaxError {
+        ErrorKind::SyntaxError(Box::new(crate::BoxedSyntaxError {
             lang: kind,
             src: NamedSource::new(filepath, source.to_string()),
             span,
             message: "due to this".to_string(),
-        }
+        }))
     })
 }
 

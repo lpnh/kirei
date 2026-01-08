@@ -1,3 +1,5 @@
+#![allow(clippy::struct_excessive_bools)]
+
 use clap::{Parser, ValueEnum};
 use std::io::{self, IsTerminal};
 

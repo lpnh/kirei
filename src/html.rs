@@ -169,12 +169,12 @@ pub fn extract_html_nodes<'a>(
     ranges: &[Range],
     path: &str,
 ) -> Option<Vec<HtmlNode<'a>>> {
-    let html_nodes = &mut Vec::new();
+    let mut html_nodes = Vec::new();
     let stack: &mut Vec<(&'a str, Range, usize)> = &mut Vec::new();
-    parse_recursive(notes, root, source, path, ranges, html_nodes, stack, 0);
+    parse_recursive(notes, root, source, path, ranges, &mut html_nodes, stack, 0);
 
     if notes.errors.is_empty() {
-        Some(html_nodes.to_vec())
+        Some(html_nodes)
     } else {
         None
     }
@@ -523,18 +523,18 @@ pub fn erroneous_end_tag(
     source: &str,
     filepath: &str,
 ) -> ErrorKind {
-    let suggestion = if !name.is_empty() {
-        Some(format!("consider using `{}`", name))
-    } else {
+    let suggestion = if name.is_empty() {
         None
+    } else {
+        Some(format!("consider using `{}`", name))
     };
 
-    ErrorKind::UnexpectedClosingTag {
+    ErrorKind::UnexpectedClosingTag(Box::new(crate::BoxedUnexpectedClosingTag {
         expected: name.to_string(),
         found: found.to_string(),
         src: NamedSource::new(filepath, source.to_string()),
         close_span: range_to_span(&close),
         open_span: range_to_span(&open),
         suggestion,
-    }
+    }))
 }

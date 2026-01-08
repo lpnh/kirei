@@ -77,9 +77,7 @@ impl Session {
             miette::GraphicalTheme::none()
         });
         let mut output = String::new();
-        handler
-            .render_report(&mut output, diagnostic)
-            .expect("failed to render diagnostic");
+        handler.render_report(&mut output, diagnostic).unwrap();
         output
     }
 }
