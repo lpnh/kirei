@@ -1,4 +1,3 @@
-use std::ops;
 use tree_sitter::{Node, Range};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -155,18 +154,18 @@ pub enum AskamaNode {
         dlmts: Delimiters,
         inner: String,
         tag: ControlTag,
-        range: ops::Range<usize>,
+        range: std::ops::Range<usize>,
         end: Option<usize>,
     },
     Expression {
         dlmts: Delimiters,
         inner: String,
-        range: ops::Range<usize>,
+        range: std::ops::Range<usize>,
     },
     Comment {
         dlmts: Delimiters,
         inner: String,
-        range: ops::Range<usize>,
+        range: std::ops::Range<usize>,
     },
 }
 

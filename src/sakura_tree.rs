@@ -1,9 +1,6 @@
-use std::ops::Range;
-
 use crate::{
-    askama::{self, AskamaNode, ControlTag},
+    askama::ControlTag,
     config::Config,
-    html::{self, HtmlNode},
     parse::{Leaf, Root},
 };
 
@@ -58,7 +55,7 @@ enum Ring {
 }
 
 impl SakuraTree {
-    pub fn grow(leaves: Vec<Leaf>, source: &str, cfg: &Config) -> Self {
+    pub fn grow(leaves: Vec<Leaf>, cfg: &Config) -> Self {
         let mut tree = Self {
             cfg: cfg.clone(),
             leaves,

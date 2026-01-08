@@ -12,13 +12,8 @@ use crate::{
     askama::{AskamaNode, ControlTag},
     html::{self, HtmlNode},
     range_to_span,
-    session::{Notes, Session},
+    session::Notes,
 };
-
-pub struct SakuraSeed {
-    pub askama: Vec<AskamaNode>,
-    pub html: Vec<HtmlNode>,
-}
 
 pub struct SakuraParser {
     askama: Parser,
@@ -41,45 +36,6 @@ impl Default for SakuraParser {
 }
 
 impl SakuraParser {
-    pub fn grow_leaves(seed: &SakuraSeed, src: &str) -> Vec<Leaf> {
-        let (askama_nodes, html_nodes) = (&seed.askama, &seed.html);
-
-        let (mut leaves, pruned) = leaves_from_html(html_nodes, askama_nodes, src);
-        leaves.extend(leaves_from_askama(askama_nodes, &pruned));
-
-        let mut leaves: Vec<Leaf> = leaves.into_iter().collect();
-
-        for leaf in &mut leaves {
-            leaf.ws_before = source_has_ws(src, leaf.start.wrapping_sub(1));
-            leaf.ws_after = source_has_ws(src, leaf.end);
-        }
-
-        for node in askama_nodes {
-            if let AskamaNode::Control { end, range, .. } = node
-                && let Some(start) = leaves.iter().position(|l| l.start == range.start)
-                && let end_idx = leaves.iter().position(|l| Some(l.start) == *end)
-                && let Root::Control { end, .. } = &mut leaves[start].root
-            {
-                *end = end_idx;
-            }
-        }
-
-        for html_node in html_nodes {
-            if let (Some(range), Some(end)) = (html_node.range(), html_node.end())
-                && let Some(start) = leaves.iter().position(|l| l.start == range.start)
-                && let Some(end_node) = html_nodes.get(end)
-                && let end_idx = leaves.iter().position(|l| l.start == end_node.start())
-                && let HtmlNode::Start { indent: i, .. } = html_node
-                && let Root::Tag { end, indent, .. } = &mut leaves[start].root
-            {
-                *end = end_idx;
-                *indent = *i;
-            }
-        }
-
-        leaves
-    }
-
     pub fn parse(&mut self, notes: &mut Notes, source: &str, filepath: &str) -> Option<SakuraSeed> {
         let ast_tree = self.askama.parse(source, None).or_else(|| {
             notes.errors.push(ErrorKind::ParserFailed {
@@ -144,6 +100,139 @@ impl SakuraParser {
     }
 }
 
+pub struct SakuraSeed {
+    pub askama: Vec<AskamaNode>,
+    pub html: Vec<HtmlNode>,
+}
+
+impl SakuraSeed {
+    pub fn grow_leaves(&self, source: &str) -> Vec<Leaf> {
+        let (askama_nodes, html_nodes) = (&self.askama, &self.html);
+
+        let (mut leaves, pruned) = self.leaves_from_html(html_nodes, askama_nodes, source);
+        leaves.extend(self.leaves_from_askama(askama_nodes, &pruned));
+
+        let mut leaves: Vec<Leaf> = leaves.into_iter().collect();
+
+        for leaf in &mut leaves {
+            leaf.ws_before = Self::source_has_ws(source, leaf.start.wrapping_sub(1));
+            leaf.ws_after = Self::source_has_ws(source, leaf.end);
+        }
+
+        for node in askama_nodes {
+            if let AskamaNode::Control { end, range, .. } = node
+                && let Some(start) = leaves.iter().position(|l| l.start == range.start)
+                && let end_idx = leaves.iter().position(|l| Some(l.start) == *end)
+                && let Root::Control { end, .. } = &mut leaves[start].root
+            {
+                *end = end_idx;
+            }
+        }
+
+        for html_node in html_nodes {
+            if let (Some(range), Some(end)) = (html_node.range(), html_node.end())
+                && let Some(start) = leaves.iter().position(|l| l.start == range.start)
+                && let Some(end_node) = html_nodes.get(end)
+                && let end_idx = leaves.iter().position(|l| l.start == end_node.start())
+                && let HtmlNode::Start { indent: i, .. } = html_node
+                && let Root::Tag { end, indent, .. } = &mut leaves[start].root
+            {
+                *end = end_idx;
+                *indent = *i;
+            }
+        }
+
+        leaves
+    }
+
+    fn leaves_from_askama(
+        &self,
+        askama_nodes: &[AskamaNode],
+        pruned: &HashSet<usize>,
+    ) -> BTreeSet<Leaf> {
+        askama_nodes
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| !pruned.contains(idx))
+            .map(|(_, node)| Leaf::from_askama(node))
+            .collect()
+    }
+
+    fn leaves_from_html(
+        &self,
+        html_nodes: &[HtmlNode],
+        askama_nodes: &[AskamaNode],
+        source: &str,
+    ) -> (BTreeSet<Leaf>, HashSet<usize>) {
+        let mut leaves = BTreeSet::new();
+        let mut pruned = HashSet::new();
+
+        for node in html_nodes {
+            match node {
+                HtmlNode::Start { .. } | HtmlNode::Void { .. } | HtmlNode::SelfClosing { .. } => {
+                    let Some(range) = node.range() else { continue };
+                    let embed = Self::find_embedded(range, askama_nodes);
+                    if !embed.is_empty() {
+                        pruned.extend(embed.iter().copied());
+                        let root = Root::Tag {
+                            indent: 0,
+                            is_phrasing: node.is_phrasing(),
+                            is_ws_sensitive: node.is_ws_sensitive(),
+                            end: None,
+                        };
+                        let content = html::format_tag(range, source, askama_nodes, &embed);
+                        leaves.insert(Leaf::grow(root, content, range.start, range.end));
+                    } else {
+                        leaves.insert(Leaf::from_html(node));
+                    }
+                }
+                HtmlNode::Text { text, .. } => {
+                    let Some(range) = node.range() else { continue };
+                    let embed = Self::find_embedded(range, askama_nodes);
+                    if !embed.is_empty() {
+                        leaves.extend(Leaf::from_mixed_text(range, askama_nodes, &embed, source));
+                    } else {
+                        leaves.insert(Leaf::from_text(text, range.start, range.end));
+                    }
+                }
+                HtmlNode::Raw { .. } | HtmlNode::Comment { .. } => {
+                    let Some(range) = node.range() else { continue };
+                    let embed = Self::find_embedded(range, askama_nodes);
+                    if !embed.is_empty() {
+                        pruned.extend(embed.iter().copied());
+                        let root = match node {
+                            HtmlNode::Raw { .. } => Root::Raw,
+                            HtmlNode::Comment { .. } => Root::Comment,
+                            _ => unreachable!(),
+                        };
+                        let content = html::format_opaque(range, source, askama_nodes, &embed);
+                        leaves.insert(Leaf::grow(root, content, range.start, range.end));
+                    } else {
+                        leaves.insert(Leaf::from_html(node));
+                    }
+                }
+                _ => {
+                    leaves.insert(Leaf::from_html(node));
+                }
+            }
+        }
+
+        (leaves, pruned)
+    }
+
+    fn source_has_ws(src: &str, pos: usize) -> bool {
+        src.as_bytes().get(pos).is_some_and(u8::is_ascii_whitespace)
+    }
+
+    fn find_embedded(range: &std::ops::Range<usize>, askama_nodes: &[AskamaNode]) -> Vec<usize> {
+        askama_nodes
+            .iter()
+            .enumerate()
+            .filter_map(|(i, n)| (n.start() >= range.start && n.end() <= range.end).then_some(i))
+            .collect()
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Leaf {
     pub root: Root,
@@ -199,13 +288,6 @@ impl Leaf {
         }
     }
 
-    pub fn pair(&self) -> Option<usize> {
-        match &self.root {
-            Root::Control { end: Some(end), .. } | Root::Tag { end: Some(end), .. } => Some(*end),
-            _ => None,
-        }
-    }
-
     fn from_askama(askama_node: &AskamaNode) -> Self {
         let content = askama::format_askama_node(askama_node);
 
@@ -255,6 +337,44 @@ impl Leaf {
         Self::grow(root, content, start, end)
     }
 
+    fn from_text(text: &str, start: usize, end: usize) -> Self {
+        Self::grow(Root::Text, crate::normalize_ws(text), start, end)
+    }
+
+    fn from_mixed_text(
+        range: &std::ops::Range<usize>,
+        askama_nodes: &[AskamaNode],
+        embed_askama: &[usize],
+        source: &str,
+    ) -> Vec<Self> {
+        let mut segments = Vec::new();
+        let mut curr_pos = range.start;
+
+        for &idx in embed_askama {
+            let node = &askama_nodes[idx];
+            if node.start() > curr_pos {
+                segments.push((curr_pos, node.start()));
+            }
+            curr_pos = node.end();
+        }
+
+        if curr_pos < range.end {
+            segments.push((curr_pos, range.end));
+        }
+
+        segments
+            .into_iter()
+            .map(|(start, end)| Self::from_text(&source[start..end], start, end))
+            .collect()
+    }
+
+    pub fn pair(&self) -> Option<usize> {
+        match &self.root {
+            Root::Control { end: Some(end), .. } | Root::Tag { end: Some(end), .. } => Some(*end),
+            _ => None,
+        }
+    }
+
     pub fn is_ctrl(&self) -> bool {
         matches!(self.root, Root::Control { .. })
     }
@@ -292,111 +412,6 @@ impl Leaf {
                 | Root::Entity
         )
     }
-
-    fn from_text(text: &str, start: usize, end: usize) -> Self {
-        Self::grow(Root::Text, crate::normalize_ws(text), start, end)
-    }
-
-    fn from_mixed_text(
-        range: &std::ops::Range<usize>,
-        askama_nodes: &[AskamaNode],
-        embed_askama: &[usize],
-        source: &str,
-    ) -> Vec<Self> {
-        let mut segments = Vec::new();
-        let mut curr_pos = range.start;
-
-        for &idx in embed_askama {
-            let node = &askama_nodes[idx];
-            if node.start() > curr_pos {
-                segments.push((curr_pos, node.start()));
-            }
-            curr_pos = node.end();
-        }
-
-        if curr_pos < range.end {
-            segments.push((curr_pos, range.end));
-        }
-
-        segments
-            .into_iter()
-            .map(|(start, end)| Self::from_text(&source[start..end], start, end))
-            .collect()
-    }
-}
-
-fn leaves_from_askama(askama_nodes: &[AskamaNode], pruned: &HashSet<usize>) -> BTreeSet<Leaf> {
-    askama_nodes
-        .iter()
-        .enumerate()
-        .filter(|(idx, _)| !pruned.contains(idx))
-        .map(|(_, node)| Leaf::from_askama(node))
-        .collect()
-}
-
-fn leaves_from_html(
-    html_nodes: &[HtmlNode],
-    askama_nodes: &[AskamaNode],
-    source: &str,
-) -> (BTreeSet<Leaf>, HashSet<usize>) {
-    let mut leaves = BTreeSet::new();
-    let mut pruned = HashSet::new();
-
-    for node in html_nodes {
-        match node {
-            HtmlNode::Start { .. } | HtmlNode::Void { .. } | HtmlNode::SelfClosing { .. } => {
-                let Some(range) = node.range() else { continue };
-                let embed = find_embedded(range, askama_nodes);
-                if !embed.is_empty() {
-                    pruned.extend(embed.iter().copied());
-                    let root = Root::Tag {
-                        indent: 0,
-                        is_phrasing: node.is_phrasing(),
-                        is_ws_sensitive: node.is_ws_sensitive(),
-                        end: None,
-                    };
-                    let content = html::format_tag(range, source, askama_nodes, &embed);
-                    leaves.insert(Leaf::grow(root, content, range.start, range.end));
-                } else {
-                    leaves.insert(Leaf::from_html(node));
-                }
-            }
-            HtmlNode::Text { text, .. } => {
-                let Some(range) = node.range() else { continue };
-                let embed = find_embedded(range, askama_nodes);
-                if !embed.is_empty() {
-                    leaves.extend(Leaf::from_mixed_text(range, askama_nodes, &embed, source));
-                } else {
-                    leaves.insert(Leaf::from_text(text, range.start, range.end));
-                }
-            }
-            HtmlNode::Raw { .. } | HtmlNode::Comment { .. } => {
-                let Some(range) = node.range() else { continue };
-                let embed = find_embedded(range, askama_nodes);
-                if !embed.is_empty() {
-                    pruned.extend(embed.iter().copied());
-                    let root = match node {
-                        HtmlNode::Raw { .. } => Root::Raw,
-                        HtmlNode::Comment { .. } => Root::Comment,
-                        _ => unreachable!(),
-                    };
-                    let content = html::format_opaque(range, source, askama_nodes, &embed);
-                    leaves.insert(Leaf::grow(root, content, range.start, range.end));
-                } else {
-                    leaves.insert(Leaf::from_html(node));
-                }
-            }
-            _ => {
-                leaves.insert(Leaf::from_html(node));
-            }
-        }
-    }
-
-    (leaves, pruned)
-}
-
-fn source_has_ws(src: &str, pos: usize) -> bool {
-    src.as_bytes().get(pos).is_some_and(u8::is_ascii_whitespace)
 }
 
 fn syntax_error(root_node: &Node, kind: String, source: &str, filepath: &str) -> Option<ErrorKind> {
@@ -634,12 +649,4 @@ fn byte_to_point(source: &str, byte_pos: usize) -> Point {
         }
     }
     Point { row, column: col }
-}
-
-fn find_embedded(range: &std::ops::Range<usize>, askama_nodes: &[AskamaNode]) -> Vec<usize> {
-    askama_nodes
-        .iter()
-        .enumerate()
-        .filter_map(|(i, n)| (n.start() >= range.start && n.end() <= range.end).then_some(i))
-        .collect()
 }

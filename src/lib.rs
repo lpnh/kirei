@@ -1,6 +1,5 @@
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::must_use_candidate)]
-#![allow(unused)]
 
 mod askama;
 pub mod cli;

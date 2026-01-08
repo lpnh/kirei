@@ -1,5 +1,4 @@
 use miette::NamedSource;
-use std::ops;
 use tree_sitter::{Node, Range};
 
 use crate::{
@@ -44,18 +43,18 @@ pub enum HtmlNode {
         name: String,
         attr: String,
         end: Option<usize>,
-        range: ops::Range<usize>,
+        range: std::ops::Range<usize>,
         indent: isize,
     },
     Void {
         name: String,
         attr: String,
-        range: ops::Range<usize>,
+        range: std::ops::Range<usize>,
     },
     SelfClosing {
         name: String,
         attr: String,
-        range: ops::Range<usize>,
+        range: std::ops::Range<usize>,
     },
     End {
         name: String,
@@ -65,11 +64,11 @@ pub enum HtmlNode {
 
     Text {
         text: String,
-        range: ops::Range<usize>,
+        range: std::ops::Range<usize>,
     },
     Raw {
         text: String,
-        range: ops::Range<usize>,
+        range: std::ops::Range<usize>,
     },
 
     Doctype {
@@ -82,7 +81,7 @@ pub enum HtmlNode {
     },
     Comment {
         text: String,
-        range: ops::Range<usize>,
+        range: std::ops::Range<usize>,
     },
 }
 
@@ -122,7 +121,7 @@ impl HtmlNode {
         }
     }
 
-    pub fn range(&self) -> Option<&ops::Range<usize>> {
+    pub fn range(&self) -> Option<&std::ops::Range<usize>> {
         match self {
             Self::Start { range, .. }
             | Self::Void { range, .. }
@@ -171,7 +170,6 @@ pub fn extract_html_nodes(
 ) -> Option<Vec<HtmlNode>> {
     let html_nodes = &mut Vec::new();
     let stack: &mut Vec<(String, Range, usize)> = &mut Vec::new();
-    let source_str = str::from_utf8(source.as_bytes()).expect("valid UTF-8");
     parse_recursive(notes, root, source, path, ranges, html_nodes, stack, 0);
 
     if notes.errors.is_empty() {
@@ -446,7 +444,7 @@ fn format_self_closing_or_void(name: &str, attr: &str) -> String {
 }
 
 pub fn format_tag(
-    range: &ops::Range<usize>,
+    range: &std::ops::Range<usize>,
     source: &str,
     askama_nodes: &[AskamaNode],
     embed: &[usize],
@@ -455,7 +453,7 @@ pub fn format_tag(
 }
 
 pub fn format_opaque(
-    range: &ops::Range<usize>,
+    range: &std::ops::Range<usize>,
     source: &str,
     askama_nodes: &[AskamaNode],
     embed: &[usize],
@@ -485,7 +483,7 @@ fn normalize_preserving_ends(text: &str) -> String {
 }
 
 fn format_with_embedded(
-    range: &ops::Range<usize>,
+    range: &std::ops::Range<usize>,
     source: &str,
     askama_nodes: &[AskamaNode],
     embed: &[usize],
