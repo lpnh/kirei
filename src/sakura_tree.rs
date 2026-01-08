@@ -1,16 +1,11 @@
 use crate::{
     askama::ControlTag,
     config::Config,
-    parse::{Leaf, Root},
+    parse::{Leaf, Root, SakuraSeed},
 };
 
 #[derive(Debug, Clone)]
-pub struct SakuraTree {
-    cfg: Config,
-    leaves: Vec<Leaf>,
-    branches: Vec<Branch>,
-    indent_map: Vec<usize>,
-}
+pub struct SakuraTree;
 
 #[derive(Debug, Clone)]
 struct Leaflet<'a> {
@@ -21,8 +16,9 @@ struct Leaflet<'a> {
 
 #[derive(Debug, Clone)]
 struct Branch {
-    indent: usize,
-    lines: Vec<String>,
+    start: usize,
+    end: usize,
+    style: Style,
 }
 
 #[derive(Debug, Clone)]
@@ -55,29 +51,96 @@ enum Ring {
 }
 
 impl SakuraTree {
-    pub fn grow(leaves: Vec<Leaf>, cfg: &Config) -> Self {
-        let mut tree = Self {
-            cfg: cfg.clone(),
-            leaves,
-            branches: Vec::new(),
-            indent_map: Vec::new(),
-        };
+    pub fn grow(seed: &SakuraSeed, cfg: &Config) -> String {
+        let leaves = seed.grow_leaves();
+        let indent_map = Self::generate_indent_map(&leaves);
+        let rings = Self::grow_rings_recursive(&leaves, &indent_map, cfg, 0, leaves.len(), false);
 
-        tree.generate_indent_map();
-
-        let rings = tree.grow_rings(0, tree.leaves.len(), false);
-
+        let mut branches = Vec::new();
         for ring in rings {
-            tree.grow_branch_recursive(&ring);
+            Self::grow_branches_recursive(&ring, &leaves, &indent_map, cfg, &mut branches);
         }
 
-        tree
+        let mut output = String::new();
+
+        for branch in branches {
+            let indent = indent_map[branch.start];
+            let base_indent = " ".repeat(indent * cfg.indent_size);
+
+            let lines = match branch.style {
+                Style::Inline => vec![Self::branch_content(branch.start, branch.end, &leaves)],
+                Style::Wrapped => {
+                    Self::render_wrapped(branch.start, branch.end, &leaves, &indent_map, cfg)
+                }
+                Style::Comment => Self::render_comment(branch.start, branch.end, &leaves, cfg),
+                Style::Raw => Self::render_raw(branch.start, branch.end, &leaves),
+            };
+
+            for line in lines {
+                if line.is_empty() {
+                    output.push('\n');
+                } else {
+                    output.push_str(&base_indent);
+                    output.push_str(&line);
+                    output.push('\n');
+                }
+            }
+        }
+
+        output
     }
 
-    fn generate_indent_map(&mut self) {
+    fn grow_branches_recursive(
+        ring: &Ring,
+        leaves: &[Leaf],
+        indent_map: &[usize],
+        cfg: &Config,
+        branches: &mut Vec<Branch>,
+    ) {
+        let add = |branches: &mut Vec<Branch>, start, end, style| {
+            branches.push(Branch { start, end, style });
+        };
+
+        match ring {
+            Ring::Block {
+                start,
+                end,
+                inner,
+                trailing,
+            } => {
+                let fits_inline = Self::fits(*start, *trailing, leaves, indent_map, cfg)
+                    && inner.iter().all(|r| matches!(r, Ring::Phrasing { .. }));
+
+                if fits_inline {
+                    add(branches, *start, *end, Style::Inline);
+                } else {
+                    add(branches, *start, *start, Style::Inline); // Open
+
+                    for child in inner {
+                        Self::grow_branches_recursive(child, leaves, indent_map, cfg, branches);
+                    }
+
+                    if leaves[*end].ws_after && trailing > end {
+                        add(branches, *end, *end, Style::Inline);
+                        add(branches, *end + 1, *trailing, Style::Wrapped);
+                    } else {
+                        add(branches, *end, *trailing, Style::Inline);
+                    }
+                }
+            }
+            Ring::Phrasing { start, end } => add(branches, *start, *end, Style::Wrapped),
+            Ring::MatchArm { start, end } => add(branches, *start, *end, Style::Inline),
+            Ring::Raw(idx) => add(branches, *idx, *idx, Style::Raw),
+            Ring::Comment(idx) => add(branches, *idx, *idx, Style::Comment),
+            Ring::Single(idx) => add(branches, *idx, *idx, Style::Inline),
+        }
+    }
+
+    fn generate_indent_map(leaves: &[Leaf]) -> Vec<usize> {
+        let mut indent_map = Vec::new();
         let mut curr_indent: usize = 0;
 
-        for leaf in &self.leaves {
+        for leaf in leaves {
             let (pre_delta, post_delta) = match &leaf.root {
                 Root::Control { tag, .. } => tag.indent(),
                 Root::Tag { indent, .. } => {
@@ -91,105 +154,40 @@ impl SakuraTree {
             };
 
             curr_indent = curr_indent.saturating_add_signed(pre_delta);
-            self.indent_map.push(curr_indent);
+            indent_map.push(curr_indent);
             curr_indent = curr_indent.saturating_add_signed(post_delta);
         }
+
+        indent_map
     }
 
-    fn grow_branch(&mut self, start: usize, end: usize, style: &Style) {
-        let indent = self.indent_map[start];
-
-        let lines = match style {
-            Style::Inline => vec![self.branch_content(start, end)],
-            Style::Wrapped => self.render_wrapped(start, end),
-            Style::Comment => self.render_comment(start, end),
-            Style::Raw => self.render_raw(start, end),
-        };
-
-        self.branches.push(Branch { indent, lines });
-    }
-
-    fn grow_rings(&self, start_idx: usize, end_idx: usize, phrasing_ctx: bool) -> Vec<Ring> {
+    fn grow_rings_recursive(
+        leaves: &[Leaf],
+        indent_map: &[usize],
+        cfg: &Config,
+        mut start: usize,
+        end: usize,
+        phrasing_ctx: bool,
+    ) -> Vec<Ring> {
         let mut rings = Vec::new();
-        let mut start = start_idx;
-
-        while start < end_idx {
-            let leaf = &self.leaves[start];
-
+        while start < end {
+            let leaf = &leaves[start];
             let (ring, last) = match leaf.root {
                 Root::Control {
                     tag: ControlTag::When | ControlTag::MatchElse,
                     ..
-                } => {
-                    let mut curr = start + 1;
-                    while curr < end_idx && !self.leaves.get(curr).is_none_or(Leaf::is_ctrl) {
-                        curr = self.leaves[curr].pair().unwrap_or(curr) + 1;
-                    }
-                    let end = if self.fits(start, curr.saturating_sub(1)) {
-                        curr.saturating_sub(1)
-                    } else {
-                        start
-                    };
-                    (Ring::MatchArm { start, end }, end)
-                }
+                } => Self::match_arm(start, end, leaves, indent_map, cfg),
+
                 Root::Raw => (Ring::Raw(start), start),
                 Root::Comment => (Ring::Comment(start), start),
-                //  Inline
+
                 _ if !leaf.is_block() && (leaf.pair().is_none() || !leaf.ws_after) => {
-                    let (mut curr, mut end) = (start, start);
-                    while curr < end_idx {
-                        let curr_leaf = &self.leaves[curr];
-                        if !curr_leaf.can_be_inline()
-                            || curr > start
-                                && curr_leaf
-                                    .pair()
-                                    .is_some_and(|idx| !self.fits(curr, idx) && curr_leaf.ws_after)
-                            || curr_leaf.is_ctrl() && curr_leaf.pair().is_none()
-                        {
-                            break;
-                        }
-                        end = curr_leaf.pair().unwrap_or(curr);
-                        curr = end + 1;
-                    }
-                    (Ring::Phrasing { start, end }, end)
+                    Self::phrasing(start, end, leaves, indent_map, cfg)
                 }
-                // Paired
+
                 _ => match leaf.pair() {
-                    Some(end) => {
-                        let curr = start + 1;
-                        let all_inline = self.leaves[curr..end].iter().all(Leaf::can_be_inline);
-
-                        let inner = self.grow_rings(
-                            curr,
-                            end,
-                            phrasing_ctx || all_inline || !leaf.ws_before,
-                        );
-
-                        let trailing = if leaf.can_be_inline() {
-                            self.find_trailing(end, end_idx)
-                        } else {
-                            end
-                        };
-
-                        if phrasing_ctx && all_inline && leaf.can_be_inline() && !leaf.ws_after {
-                            (
-                                Ring::Phrasing {
-                                    start,
-                                    end: trailing,
-                                },
-                                trailing,
-                            )
-                        } else {
-                            (
-                                Ring::Block {
-                                    start,
-                                    end,
-                                    inner,
-                                    trailing,
-                                },
-                                trailing,
-                            )
-                        }
+                    Some(pair) => {
+                        Self::block(start, pair, end, leaves, indent_map, cfg, phrasing_ctx)
                     }
                     None => (Ring::Single(start), start),
                 },
@@ -198,107 +196,134 @@ impl SakuraTree {
             rings.push(ring);
             start = last + 1;
         }
-
         rings
     }
 
-    fn find_trailing(&self, start: usize, end: usize) -> usize {
-        let mut trailing = start;
-        while trailing + 1 < end {
-            if self.leaves[trailing].ws_after {
-                break;
-            }
-            let next = &self.leaves[trailing + 1];
-            if next.ws_before {
-                break;
-            }
-            trailing = next.pair().unwrap_or(trailing + 1);
+    fn match_arm(
+        start: usize,
+        end_idx: usize,
+        leaves: &[Leaf],
+        indent_map: &[usize],
+        cfg: &Config,
+    ) -> (Ring, usize) {
+        let mut curr = start + 1;
+        while curr < end_idx && !leaves.get(curr).is_none_or(Leaf::is_ctrl) {
+            curr = leaves[curr].pair().unwrap_or(curr) + 1;
         }
-        trailing
+
+        let end = if Self::fits(start, curr.saturating_sub(1), leaves, indent_map, cfg) {
+            curr.saturating_sub(1)
+        } else {
+            start
+        };
+
+        (Ring::MatchArm { start, end }, end)
     }
 
-    fn grow_branch_recursive(&mut self, ring: &Ring) {
-        match ring {
+    fn phrasing(
+        start: usize,
+        end_idx: usize,
+        leaves: &[Leaf],
+        indent_map: &[usize],
+        cfg: &Config,
+    ) -> (Ring, usize) {
+        let (mut curr, mut end) = (start, start);
+
+        while curr < end_idx {
+            let curr_leaf = &leaves[curr];
+            if !curr_leaf.can_be_inline()
+                || curr > start
+                    && curr_leaf.pair().is_some_and(|idx| {
+                        !Self::fits(curr, idx, leaves, indent_map, cfg) && curr_leaf.ws_after
+                    })
+                || curr_leaf.is_ctrl() && curr_leaf.pair().is_none()
+            {
+                break;
+            }
+            end = curr_leaf.pair().unwrap_or(curr);
+            curr = end + 1;
+        }
+
+        (Ring::Phrasing { start, end }, end)
+    }
+
+    fn block(
+        start: usize,
+        pair: usize,
+        end: usize,
+        leaves: &[Leaf],
+        indent_map: &[usize],
+        cfg: &Config,
+        phrasing_ctx: bool,
+    ) -> (Ring, usize) {
+        let leaf = &leaves[start];
+        let curr = start + 1;
+        let all_inline = leaves[curr..pair].iter().all(Leaf::can_be_inline);
+
+        let trailing = if leaf.can_be_inline() {
+            let mut trailing = pair;
+            while trailing + 1 < end {
+                if leaves[trailing].ws_after {
+                    break;
+                }
+                let next = &leaves[trailing + 1];
+                if next.ws_before {
+                    break;
+                }
+                trailing = next.pair().unwrap_or(trailing + 1);
+            }
+            trailing
+        } else {
+            pair
+        };
+
+        let ring = if phrasing_ctx && all_inline && leaf.can_be_inline() && !leaf.ws_after {
+            Ring::Phrasing {
+                start,
+                end: trailing,
+            }
+        } else {
             Ring::Block {
                 start,
-                end,
-                inner,
+                end: pair,
+                inner: Self::grow_rings_recursive(
+                    leaves,
+                    indent_map,
+                    cfg,
+                    curr,
+                    pair,
+                    phrasing_ctx || all_inline || !leaf.ws_before,
+                ),
                 trailing,
-            } => {
-                if self.fits(*start, *trailing)
-                    && inner.iter().all(|r| matches!(r, Ring::Phrasing { .. }))
-                {
-                    self.grow_branch(*start, *end, &Style::Inline);
-                } else {
-                    self.grow_branch(*start, *start, &Style::Inline);
-                    for ring in inner {
-                        self.grow_branch_recursive(ring);
-                    }
-                    if self.leaves[*end].ws_after && trailing > end {
-                        self.grow_branch(*end, *end, &Style::Inline);
-                        self.grow_branch(*end + 1, *trailing, &Style::Wrapped);
-                    } else {
-                        self.grow_branch(*end, *trailing, &Style::Inline);
-                    }
-                }
             }
-            Ring::Phrasing { start, end } => self.grow_branch(*start, *end, &Style::Wrapped),
-            Ring::MatchArm { start, end } => self.grow_branch(*start, *end, &Style::Inline),
-            Ring::Raw(idx) => self.grow_branch(*idx, *idx, &Style::Raw),
-            Ring::Comment(idx) => self.grow_branch(*idx, *idx, &Style::Comment),
-            Ring::Single(idx) => self.grow_branch(*idx, *idx, &Style::Inline),
-        }
+        };
+
+        (ring, trailing)
     }
 
-    fn fits(&self, start: usize, end: usize) -> bool {
-        self.indent_map[start] * self.cfg.indent_size + self.width(start, end) <= self.cfg.max_width
+    fn fits(start: usize, end: usize, leaves: &[Leaf], indent_map: &[usize], cfg: &Config) -> bool {
+        indent_map[start] * cfg.indent_size + Self::width(start, end, leaves) <= cfg.max_width
     }
 
-    fn fits_2(&self, start: usize, line: &str, extra: usize) -> bool {
-        self.indent_map[start] * self.cfg.indent_size + line.chars().count() + extra
-            < self.cfg.max_width
+    fn fits_2(start: usize, line: &str, extra: usize, indent_map: &[usize], cfg: &Config) -> bool {
+        indent_map[start] * cfg.indent_size + line.chars().count() + extra < cfg.max_width
     }
 
-    fn width(&self, start: usize, end: usize) -> usize {
+    fn width(start: usize, end: usize, leaves: &[Leaf]) -> usize {
         (start..=end)
-            .filter_map(|i| self.leaves.get(i))
+            .filter_map(|i| leaves.get(i))
             .map(|l| l.content.chars().count())
             .sum()
     }
 
-    pub fn print(&self) -> String {
-        let estimated_size = self
-            .branches
-            .iter()
-            .map(|b| b.lines.iter().map(|l| l.len() + 1).sum::<usize>())
-            .sum::<usize>();
-
-        let mut output = String::with_capacity(estimated_size);
-
-        for branch in &self.branches {
-            let base_indent = self.indent_as_string(branch.indent);
-            for line in &branch.lines {
-                if line.is_empty() {
-                    output.push('\n');
-                } else {
-                    output.push_str(&base_indent);
-                    output.push_str(line);
-                    output.push('\n');
-                }
-            }
-        }
-
-        output
-    }
-
-    fn branch_content(&self, start: usize, end: usize) -> String {
+    fn branch_content(start: usize, end: usize, leaves: &[Leaf]) -> String {
         let mut content = String::new();
         let mut prev_idx = None;
 
         for leaf_idx in start..=end {
-            if let Some(leaf) = self.leaves.get(leaf_idx) {
+            if let Some(leaf) = leaves.get(leaf_idx) {
                 if let Some(prev) = prev_idx {
-                    let has_ws = self.leaves.get(prev).is_some_and(|l: &Leaf| {
+                    let has_ws = leaves.get(prev).is_some_and(|l: &Leaf| {
                         l.preserves_ws() && leaf.preserves_ws() && (l.ws_after || leaf.ws_before)
                     });
                     if has_ws {
@@ -313,12 +338,12 @@ impl SakuraTree {
         content
     }
 
-    fn grow_leaflets(&self, branch_start: usize, branch_end: usize) -> Vec<Leaflet<'_>> {
-        let leaves = &self.leaves[branch_start..=branch_end];
+    fn grow_leaflets(branch_start: usize, branch_end: usize, leaves: &[Leaf]) -> Vec<Leaflet<'_>> {
+        let leaf_slice = &leaves[branch_start..=branch_end];
         let mut leaflets = Vec::new();
         let mut pairs = Vec::new();
 
-        for leaf in leaves {
+        for leaf in leaf_slice {
             pairs.push(leaflets.len());
 
             if leaf.root == Root::Text {
@@ -338,7 +363,7 @@ impl SakuraTree {
             }
         }
 
-        for (i, leaf) in leaves.iter().enumerate() {
+        for (i, leaf) in leaf_slice.iter().enumerate() {
             if let Some(leaf_pair) = leaf.pair().and_then(|p| p.checked_sub(branch_start))
                 && let (Some(start), Some(end)) = (pairs.get(i), pairs.get(leaf_pair))
                 && let Some(leaflet) = leaflets.get_mut(*start)
@@ -357,8 +382,14 @@ impl SakuraTree {
         leaflets
     }
 
-    fn render_wrapped(&self, start: usize, end: usize) -> Vec<String> {
-        let leaflets = self.grow_leaflets(start, end);
+    fn render_wrapped(
+        start: usize,
+        end: usize,
+        leaves: &[Leaf],
+        indent_map: &[usize],
+        cfg: &Config,
+    ) -> Vec<String> {
+        let leaflets = Self::grow_leaflets(start, end, leaves);
         let mut lines = Vec::new();
         let mut curr_line = String::new();
         let mut pair = None;
@@ -379,7 +410,7 @@ impl SakuraTree {
             if leaflet.ws_before
                 && pair.is_none_or(|p| i > p)
                 && !curr_line.is_empty()
-                && !self.fits_2(start, &curr_line, curr_width)
+                && !Self::fits_2(start, &curr_line, curr_width, indent_map, cfg)
             {
                 lines.push(std::mem::take(&mut curr_line));
             }
@@ -396,10 +427,10 @@ impl SakuraTree {
         lines
     }
 
-    fn render_comment(&self, start: usize, end: usize) -> Vec<String> {
-        let content = self.branch_content(start, end);
+    fn render_comment(start: usize, end: usize, leaves: &[Leaf], cfg: &Config) -> Vec<String> {
+        let content = Self::branch_content(start, end, leaves);
         let lines: Vec<&str> = content.lines().collect();
-        let indent = self.indent_as_string(1);
+        let indent = " ".repeat(cfg.indent_size);
 
         lines
             .iter()
@@ -415,8 +446,8 @@ impl SakuraTree {
             .collect()
     }
 
-    fn render_raw(&self, start: usize, end: usize) -> Vec<String> {
-        let content = self.branch_content(start, end);
+    fn render_raw(start: usize, end: usize, leaves: &[Leaf]) -> Vec<String> {
+        let content = Self::branch_content(start, end, leaves);
         let lines: Vec<&str> = content.lines().collect();
 
         let indent = lines
@@ -438,9 +469,5 @@ impl SakuraTree {
                 }
             })
             .collect()
-    }
-
-    fn indent_as_string(&self, indent: usize) -> String {
-        " ".repeat(indent * self.cfg.indent_size)
     }
 }

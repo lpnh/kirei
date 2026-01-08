@@ -95,28 +95,33 @@ impl SakuraParser {
             let crossing_indices = element_across_control(notes, &html, &askama, source, filepath);
             html::unpair_crossing_tags(&mut html, &crossing_indices);
 
-            SakuraSeed { askama, html }
+            SakuraSeed {
+                askama,
+                html,
+                source: source.to_string(),
+            }
         })
     }
 }
 
 pub struct SakuraSeed {
-    pub askama: Vec<AskamaNode>,
-    pub html: Vec<HtmlNode>,
+    askama: Vec<AskamaNode>,
+    html: Vec<HtmlNode>,
+    source: String,
 }
 
 impl SakuraSeed {
-    pub fn grow_leaves(&self, source: &str) -> Vec<Leaf> {
+    pub fn grow_leaves(&self) -> Vec<Leaf> {
         let (askama_nodes, html_nodes) = (&self.askama, &self.html);
 
-        let (mut leaves, pruned) = self.leaves_from_html(html_nodes, askama_nodes, source);
+        let (mut leaves, pruned) = self.leaves_from_html(html_nodes, askama_nodes, &self.source);
         leaves.extend(self.leaves_from_askama(askama_nodes, &pruned));
 
         let mut leaves: Vec<Leaf> = leaves.into_iter().collect();
 
         for leaf in &mut leaves {
-            leaf.ws_before = Self::source_has_ws(source, leaf.start.wrapping_sub(1));
-            leaf.ws_after = Self::source_has_ws(source, leaf.end);
+            leaf.ws_before = Self::source_has_ws(&self.source, leaf.start.wrapping_sub(1));
+            leaf.ws_after = Self::source_has_ws(&self.source, leaf.end);
         }
 
         for node in askama_nodes {
@@ -510,7 +515,7 @@ fn range_between(first: &Node, last: &Node) -> Range {
     }
 }
 
-pub fn element_across_control(
+fn element_across_control(
     notes: &mut Notes,
     html_nodes: &[HtmlNode],
     askama_nodes: &[AskamaNode],

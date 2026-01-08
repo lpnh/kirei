@@ -29,10 +29,7 @@ impl Session {
     pub fn format(&mut self, source: &str, filepath: &str) -> Option<String> {
         SakuraParser::default()
             .parse(&mut self.notes, source, filepath)
-            .map(|seed| {
-                let leaves = seed.grow_leaves(source);
-                SakuraTree::grow(leaves, &self.config).print()
-            })
+            .map(|seed| SakuraTree::grow(&seed, &self.config))
     }
 
     pub fn format_and_print(&mut self, mode: &SessionMode, path: impl Into<PathBuf>, source: &str) {
