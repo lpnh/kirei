@@ -27,9 +27,14 @@ pub enum SessionMode {
 
 impl Session {
     pub fn format(&mut self, source: &str, filepath: &str) -> Option<String> {
-        SakuraParser::default()
+        if let Some(leaves) = SakuraParser::default()
             .parse(&mut self.notes, source, filepath)
-            .map(|seed| SakuraTree::grow(&seed, source, &self.config).print())
+            .map(|seed| SakuraParser::grow_leaves(&seed, source))
+        {
+            Some(SakuraTree::grow(leaves, source, &self.config).print())
+        } else {
+            None
+        }
     }
 
     pub fn format_and_print(&mut self, mode: &SessionMode, path: impl Into<PathBuf>, source: &str) {
