@@ -133,10 +133,9 @@ impl<'a> SakuraSeed<'a> {
         for node in askama_nodes {
             if let AskamaNode::Control { end, range, .. } = node
                 && let Some(start) = leaves.iter().position(|l| l.start == range.start)
-                && let end_idx = leaves.iter().position(|l| Some(l.start) == *end)
-                && let Root::Control { end, .. } = &mut leaves[start].root
+                && let Some(end_idx) = leaves.iter().position(|l| Some(l.start) == *end)
             {
-                *end = end_idx;
+                leaves[start].pair = Some(end_idx);
             }
         }
 
@@ -144,12 +143,12 @@ impl<'a> SakuraSeed<'a> {
             if let (Some(range), Some(end)) = (html_node.range(), html_node.end())
                 && let Some(start) = leaves.iter().position(|l| l.start == range.start)
                 && let Some(end_node) = html_nodes.get(end)
-                && let end_idx = leaves.iter().position(|l| l.start == end_node.start())
+                && let Some(end_idx) = leaves.iter().position(|l| l.start == end_node.start())
                 && let HtmlNode::Start { indent: i, .. } = html_node
-                && let Root::Tag { end, indent, .. } = &mut leaves[start].root
+                && let Root::Tag { indent, .. } = &mut leaves[start].root
             {
-                *end = end_idx;
                 *indent = *i;
+                leaves[start].pair = Some(end_idx);
             }
         }
 
@@ -186,7 +185,6 @@ impl<'a> SakuraSeed<'a> {
                             indent: 0,
                             is_phrasing: node.is_phrasing(),
                             is_ws_sensitive: node.is_ws_sensitive(),
-                            end: None,
                         };
                         let content =
                             Cow::Owned(html::format_tag(range, source, askama_nodes, &embed));
@@ -252,6 +250,7 @@ pub struct Leaf<'a> {
     pub ws_after: bool,
     pub start: usize,
     pub end: usize,
+    pub pair: Option<usize>,
 }
 
 impl Ord for Leaf<'_> {
@@ -270,7 +269,6 @@ impl PartialOrd for Leaf<'_> {
 pub enum Root {
     Control {
         tag: ControlTag,
-        end: Option<usize>,
     },
     Expr,
     Comment,
@@ -279,7 +277,6 @@ pub enum Root {
         indent: isize,
         is_phrasing: bool,
         is_ws_sensitive: bool,
-        end: Option<usize>,
     },
 
     Text,
@@ -296,6 +293,7 @@ impl<'a> Leaf<'a> {
             ws_after: false,
             start,
             end,
+            pair: None,
         }
     }
 
@@ -303,10 +301,7 @@ impl<'a> Leaf<'a> {
         let content = Cow::Owned(askama::format_askama_node(askama_node));
 
         let root = match askama_node {
-            AskamaNode::Control { tag, .. } => Root::Control {
-                tag: *tag,
-                end: None,
-            },
+            AskamaNode::Control { tag, .. } => Root::Control { tag: *tag },
             AskamaNode::Expression { .. } => Root::Expr,
             AskamaNode::Comment { .. } => Root::Comment,
         };
@@ -323,21 +318,18 @@ impl<'a> Leaf<'a> {
                 indent: 0,
                 is_phrasing: html_node.is_phrasing(),
                 is_ws_sensitive: html_node.is_ws_sensitive(),
-                end: None,
             },
             HtmlNode::Void { .. } | HtmlNode::SelfClosing { .. } | HtmlNode::Doctype { .. } => {
                 Root::Tag {
                     indent: 0,
                     is_phrasing: html_node.is_phrasing(),
                     is_ws_sensitive: false,
-                    end: None,
                 }
             }
             HtmlNode::End { indent, .. } => Root::Tag {
                 indent: *indent,
                 is_phrasing: html_node.is_phrasing(),
                 is_ws_sensitive: html_node.is_ws_sensitive(),
-                end: None,
             },
             HtmlNode::Text { .. } => Root::Text,
             HtmlNode::Entity { .. } => Root::Entity,
@@ -382,13 +374,6 @@ impl<'a> Leaf<'a> {
             .into_iter()
             .map(|(start, end)| Self::from_text(&source[start..end], start, end))
             .collect()
-    }
-
-    pub fn pair(&self) -> Option<usize> {
-        match &self.root {
-            Root::Control { end: Some(end), .. } | Root::Tag { end: Some(end), .. } => Some(*end),
-            _ => None,
-        }
     }
 
     pub fn is_ctrl(&self) -> bool {

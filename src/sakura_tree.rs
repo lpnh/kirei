@@ -11,7 +11,7 @@ pub struct SakuraTree;
 struct Leaflet<'a> {
     content: &'a str,
     ws_before: bool,
-    pair_end: Option<usize>,
+    pair: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -181,11 +181,11 @@ impl SakuraTree {
                 Root::Raw => (Ring::Raw(start), start),
                 Root::Comment => (Ring::Comment(start), start),
 
-                _ if !leaf.is_block() && (leaf.pair().is_none() || !leaf.ws_after) => {
+                _ if !leaf.is_block() && (leaf.pair.is_none() || !leaf.ws_after) => {
                     Self::phrasing(start, end, leaves, indent_map, cfg)
                 }
 
-                _ => match leaf.pair() {
+                _ => match leaf.pair {
                     Some(pair) => {
                         Self::block(start, pair, end, leaves, indent_map, cfg, phrasing_ctx)
                     }
@@ -208,7 +208,7 @@ impl SakuraTree {
     ) -> (Ring, usize) {
         let mut curr = start + 1;
         while curr < end_idx && !leaves.get(curr).is_none_or(Leaf::is_ctrl) {
-            curr = leaves[curr].pair().unwrap_or(curr) + 1;
+            curr = leaves[curr].pair.unwrap_or(curr) + 1;
         }
 
         let end = if Self::fits(start, curr.saturating_sub(1), leaves, indent_map, cfg) {
@@ -233,14 +233,14 @@ impl SakuraTree {
             let curr_leaf = &leaves[curr];
             if !curr_leaf.can_be_inline()
                 || curr > start
-                    && curr_leaf.pair().is_some_and(|idx| {
+                    && curr_leaf.pair.is_some_and(|idx| {
                         !Self::fits(curr, idx, leaves, indent_map, cfg) && curr_leaf.ws_after
                     })
-                || curr_leaf.is_ctrl() && curr_leaf.pair().is_none()
+                || curr_leaf.is_ctrl() && curr_leaf.pair.is_none()
             {
                 break;
             }
-            end = curr_leaf.pair().unwrap_or(curr);
+            end = curr_leaf.pair.unwrap_or(curr);
             curr = end + 1;
         }
 
@@ -270,7 +270,7 @@ impl SakuraTree {
                 if next.ws_before {
                     break;
                 }
-                trailing = next.pair().unwrap_or(trailing + 1);
+                trailing = next.pair.unwrap_or(trailing + 1);
             }
             trailing
         } else {
@@ -361,24 +361,24 @@ impl SakuraTree {
                     leaflets.push(Leaflet {
                         content,
                         ws_before: i > 0 || leaf.ws_before,
-                        pair_end: None,
+                        pair: None,
                     });
                 }
             } else {
                 leaflets.push(Leaflet {
                     content: &leaf.content,
                     ws_before: leaf.ws_before,
-                    pair_end: None,
+                    pair: None,
                 });
             }
         }
 
         for (i, leaf) in leaf_slice.iter().enumerate() {
-            if let Some(leaf_pair) = leaf.pair().and_then(|p| p.checked_sub(branch_start))
+            if let Some(leaf_pair) = leaf.pair.and_then(|p| p.checked_sub(branch_start))
                 && let (Some(start), Some(end)) = (pairs.get(i), pairs.get(leaf_pair))
                 && let Some(leaflet) = leaflets.get_mut(*start)
             {
-                leaflet.pair_end = Some(*end);
+                leaflet.pair = Some(*end);
             }
 
             if leaf.ws_after
@@ -405,10 +405,10 @@ impl SakuraTree {
         let mut pair = None;
 
         for (i, leaflet) in leaflets.iter().enumerate() {
-            let mut end = leaflets[i].pair_end.unwrap_or(i);
+            let mut end = leaflets[i].pair.unwrap_or(i);
 
             while let Some(next) = leaflets.get(end + 1).filter(|n| !n.ws_before) {
-                end = next.pair_end.unwrap_or(end + 1);
+                end = next.pair.unwrap_or(end + 1);
             }
 
             let curr_width = leaflets[i..=end]
@@ -430,7 +430,7 @@ impl SakuraTree {
             }
 
             curr_line.push_str(leaflet.content);
-            pair = pair.max(leaflet.pair_end);
+            pair = pair.max(leaflet.pair);
         }
 
         lines.push(curr_line);
