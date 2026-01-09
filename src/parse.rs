@@ -2,7 +2,7 @@ use miette::NamedSource;
 use std::{
     borrow::Cow,
     cmp::Ordering,
-    collections::{BTreeSet, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
 };
 use tree_sitter::{Node, Parser, Point, Range};
 use tree_sitter_askama::LANGUAGE as ASKAMA_LANGUAGE;
@@ -130,24 +130,26 @@ impl<'a> SakuraSeed<'a> {
             leaf.ws_after = Self::source_has_ws(self.source, leaf.end);
         }
 
-        for node in askama_nodes {
-            if let AskamaNode::Control { end, range, .. } = node
-                && let Some(start) = leaves.iter().position(|l| l.start == range.start)
-            {
-                leaves[start].pair = leaves.iter().position(|l| Some(l.start) == *end);
-            }
-        }
+        let start_idx: HashMap<usize, usize> = leaves
+            .iter()
+            .enumerate()
+            .map(|(i, leaf)| (leaf.start, i))
+            .collect();
 
-        for node in html_nodes {
-            if let HtmlNode::Start {
-                range, end, indent, ..
-            } = node
-                && let Some(start) = leaves.iter().position(|l| l.start == range.start)
-                && let Some(end_idx) = end
-                && let Root::Tag { indent: i, .. } = &mut leaves[start].root
-            {
-                *i = *indent;
-                leaves[start].pair = leaves.iter().position(|l| l.start == *end_idx);
+        let pairs = askama_nodes
+            .iter()
+            .filter_map(|node| match node {
+                AskamaNode::Control { range, end, .. } => Some((range.start, *end)),
+                _ => None,
+            })
+            .chain(html_nodes.iter().filter_map(|node| match node {
+                HtmlNode::Start { range, end, .. } => Some((range.start, *end)),
+                _ => None,
+            }));
+
+        for (start, end) in pairs {
+            if let Some(&idx) = start_idx.get(&start) {
+                leaves[idx].pair = end.and_then(|end| start_idx.get(&end)).copied();
             }
         }
 
@@ -181,7 +183,7 @@ impl<'a> SakuraSeed<'a> {
                     } else {
                         pruned.extend(embed.iter().copied());
                         let root = Root::Tag {
-                            indent: 0,
+                            indent: node.indent(),
                             is_phrasing: node.is_phrasing(),
                             is_ws_sensitive: node.is_ws_sensitive(),
                         };
@@ -313,20 +315,12 @@ impl<'a> Leaf<'a> {
         let start = html_node.start();
         let end = html_node.range().map_or(start, |r| r.end);
         let root = match html_node {
-            HtmlNode::Start { .. } => Root::Tag {
-                indent: 0,
-                is_phrasing: html_node.is_phrasing(),
-                is_ws_sensitive: html_node.is_ws_sensitive(),
-            },
-            HtmlNode::Void { .. } | HtmlNode::SelfClosing { .. } | HtmlNode::Doctype { .. } => {
-                Root::Tag {
-                    indent: 0,
-                    is_phrasing: html_node.is_phrasing(),
-                    is_ws_sensitive: false,
-                }
-            }
-            HtmlNode::End { indent, .. } => Root::Tag {
-                indent: *indent,
+            HtmlNode::Start { .. }
+            | HtmlNode::End { .. }
+            | HtmlNode::Void { .. }
+            | HtmlNode::SelfClosing { .. }
+            | HtmlNode::Doctype { .. } => Root::Tag {
+                indent: html_node.indent(),
                 is_phrasing: html_node.is_phrasing(),
                 is_ws_sensitive: html_node.is_ws_sensitive(),
             },

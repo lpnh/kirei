@@ -43,9 +43,8 @@ pub enum HtmlNode<'a> {
     Start {
         name: &'a str,
         attr: String,
-        end: Option<usize>,
         range: std::ops::Range<usize>,
-        indent: isize,
+        end: Option<usize>,
     },
     Void {
         name: &'a str,
@@ -60,7 +59,7 @@ pub enum HtmlNode<'a> {
     End {
         name: &'a str,
         start: usize,
-        indent: isize,
+        paired: bool,
     },
 
     Text {
@@ -152,6 +151,14 @@ impl<'a> HtmlNode<'a> {
         };
 
         WHITESPACE_SENSITIVE.contains(&name.to_lowercase().as_str())
+    }
+
+    pub fn indent(&self) -> isize {
+        match self {
+            Self::Start { end, .. } => end.is_some().into(),
+            Self::End { paired: true, .. } => -1,
+            _ => 0,
+        }
     }
 }
 
@@ -339,7 +346,6 @@ fn parse_start_tag<'a>(node: &Node, source: &'a [u8]) -> HtmlNode<'a> {
             attr,
             end: None,
             range: node.start_byte()..node.end_byte(),
-            indent: 1,
         }
     }
 }
@@ -360,7 +366,7 @@ fn parse_end_tag<'a>(node: &Node, source: &'a [u8]) -> HtmlNode<'a> {
     HtmlNode::End {
         name,
         start: node.start_byte(),
-        indent: -1,
+        paired: true,
     }
 }
 
@@ -498,12 +504,11 @@ fn format_with_embedded<'a>(
 
 pub fn unpair_crossing_tags(html_nodes: &mut [HtmlNode<'_>], crossing_pair_idx: &[(usize, usize)]) {
     for &(start_idx, end_idx) in crossing_pair_idx {
-        if let HtmlNode::Start { indent, end, .. } = &mut html_nodes[start_idx] {
-            *indent = 0;
+        if let HtmlNode::Start { end, .. } = &mut html_nodes[start_idx] {
             *end = None;
         }
-        if let HtmlNode::End { indent, .. } = &mut html_nodes[end_idx] {
-            *indent = 0;
+        if let HtmlNode::End { paired, .. } = &mut html_nodes[end_idx] {
+            *paired = false;
         }
     }
 }
