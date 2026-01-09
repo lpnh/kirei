@@ -153,13 +153,6 @@ impl<'a> HtmlNode<'a> {
 
         WHITESPACE_SENSITIVE.contains(&name.to_lowercase().as_str())
     }
-
-    pub fn end(&self) -> Option<usize> {
-        match self {
-            Self::Start { end, .. } => *end,
-            _ => None,
-        }
-    }
 }
 
 pub fn extract_html_nodes<'a>(
@@ -312,8 +305,8 @@ fn parse_recursive<'a>(
                     depth + 1,
                 );
             }
-            if has_end_tag {
-                let end_idx = html_nodes.len().saturating_sub(1);
+            if has_end_tag && let Some(HtmlNode::End { start, .. }) = html_nodes.last() {
+                let end_idx = *start;
                 if let Some(HtmlNode::Start { end, .. }) = html_nodes.get_mut(start_idx) {
                     *end = Some(end_idx);
                 }
