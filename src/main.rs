@@ -133,7 +133,11 @@ fn try_glob(pattern: &str, no_ignore: bool) -> Result<Vec<PathBuf>, ErrorKind> {
 }
 
 fn is_ignored(path: &Path) -> bool {
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let parent = match path.parent() {
+        Some(p) if !p.as_os_str().is_empty() => p,
+        _ => Path::new("."),
+    };
+
     let Ok(canonical) = path.canonicalize() else {
         return false;
     };
