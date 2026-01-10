@@ -9,11 +9,11 @@ use tree_sitter_askama::LANGUAGE as ASKAMA_LANGUAGE;
 use tree_sitter_html::LANGUAGE as HTML_LANGUAGE;
 
 use crate::{
-    ErrorKind, KireiWarning, askama,
-    askama::{AskamaNode, ControlTag},
+    ErrorKind,
+    askama::{self, AskamaNode, ControlTag},
     html::{self, HtmlNode},
     range_to_span,
-    session::Notes,
+    session::Session,
 };
 
 pub struct SakuraParser {
@@ -39,12 +39,12 @@ impl Default for SakuraParser {
 impl SakuraParser {
     pub fn parse<'a>(
         &mut self,
-        notes: &mut Notes,
+        session: &mut Session,
         source: &'a str,
         filepath: &str,
     ) -> Option<SakuraSeed<'a>> {
         let ast_tree = self.askama.parse(source, None).or_else(|| {
-            notes.errors.push(ErrorKind::ParserFailed {
+            session.emit_error(&ErrorKind::ParserFailed {
                 lang: "Askama".to_string(),
             });
             None
@@ -57,7 +57,7 @@ impl SakuraParser {
                 source,
                 filepath,
             ) {
-                notes.errors.push(err);
+                session.emit_error(&err);
             }
             return None;
         }
@@ -68,14 +68,14 @@ impl SakuraParser {
         if !content_node_ranges.is_empty()
             && self.html.set_included_ranges(&content_node_ranges).is_err()
         {
-            notes.errors.push(ErrorKind::ParserFailed {
+            session.emit_error(&ErrorKind::ParserFailed {
                 lang: "HTML".to_string(),
             });
             return None;
         }
 
         let html_tree = self.html.parse(source, None).or_else(|| {
-            notes.errors.push(ErrorKind::ParserFailed {
+            session.emit_error(&ErrorKind::ParserFailed {
                 lang: "HTML".to_string(),
             });
             None
@@ -85,27 +85,27 @@ impl SakuraParser {
             if let Some(err) =
                 syntax_error(&html_tree.root_node(), "HTML".to_string(), source, filepath)
             {
-                notes.errors.push(err);
+                session.emit_error(&err);
             }
             return None;
         }
 
-        html::extract_html_nodes(
-            notes,
+        let mut html = html::extract_html_nodes(
+            session,
             &html_tree.root_node(),
             source,
             &content_node_ranges,
             filepath,
-        )
-        .map(|mut html| {
-            let crossing_indices = element_across_control(notes, &html, &askama, source, filepath);
-            html::unpair_crossing_tags(&mut html, &crossing_indices);
+        );
 
-            SakuraSeed {
-                askama,
-                html,
-                source,
-            }
+        let crossing_indices = element_across_control(session, &html, &askama, source, filepath);
+
+        html::unpair_crossing_tags(&mut html, &crossing_indices);
+
+        Some(SakuraSeed {
+            askama,
+            html,
+            source,
         })
     }
 }
@@ -505,7 +505,7 @@ fn range_between(first: &Node, last: &Node) -> Range {
 }
 
 fn element_across_control<'a>(
-    notes: &mut Notes,
+    session: &mut Session,
     html_nodes: &[HtmlNode<'a>],
     askama_nodes: &[AskamaNode<'a>],
     source: &str,
@@ -527,7 +527,7 @@ fn element_across_control<'a>(
                     let close_tag_end = end_byte + 2 + name.len() + 1;
                     let span_range = range_from_bytes(source, start_byte, close_tag_end);
 
-                    notes.warnings.push(KireiWarning::UnbalancedHtml {
+                    session.emit_warning(&ErrorKind::UnbalancedHtml {
                         src: NamedSource::new(filepath, source.to_string()),
                         span: range_to_span(&span_range),
                     });

@@ -20,29 +20,6 @@ macro_rules! snapshot_test {
                 insta::assert_snapshot!(formatted);
             });
         }
-
-        let diagnostic_output = {
-            let mut output = String::new();
-            let notes = session.notes;
-            for error in &notes.errors {
-                output.push_str(&Session::render_diagnostic(error, false));
-            }
-            for warning in &notes.warnings {
-                output.push_str(&Session::render_diagnostic(warning, false));
-            }
-            output
-        };
-
-        if !diagnostic_output.is_empty() {
-            insta::with_settings!({
-                description => input,
-                omit_expression => true,
-                prepend_module_to_snapshot => false,
-                snapshot_path => "output/diagnostics",
-            }, {
-                insta::assert_snapshot!(diagnostic_output);
-            });
-        }
     };
 }
 

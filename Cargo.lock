@@ -556,7 +556,6 @@ dependencies = [
  "assert_fs",
  "clap",
  "criterion",
- "globset",
  "ignore",
  "insta",
  "miette",

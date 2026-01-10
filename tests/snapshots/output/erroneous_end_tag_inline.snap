@@ -1,0 +1,9 @@
+---
+source: tests/snapshots/diagnostics.rs
+description: "<div><foo>Some text</bar></div>\n"
+---
+<div>
+    <foo>
+    Some text
+    </bar>
+</div>

@@ -6,7 +6,7 @@ use crate::{
     ErrorKind,
     askama::{self, AskamaNode},
     range_to_span,
-    session::Notes,
+    session::Session,
 };
 
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Content_categories#phrasing_content
@@ -163,21 +163,25 @@ impl<'a> HtmlNode<'a> {
 }
 
 pub fn extract_html_nodes<'a>(
-    notes: &mut Notes,
+    session: &mut Session,
     root: &Node,
     source: &'a str,
     ranges: &[Range],
     path: &str,
-) -> Option<Vec<HtmlNode<'a>>> {
+) -> Vec<HtmlNode<'a>> {
     let mut html_nodes = Vec::new();
     let stack: &mut Vec<(&'a str, Range, usize)> = &mut Vec::new();
-    parse_recursive(notes, root, source, path, ranges, &mut html_nodes, stack, 0);
-
-    if notes.errors.is_empty() {
-        Some(html_nodes)
-    } else {
-        None
-    }
+    parse_recursive(
+        session,
+        root,
+        source,
+        path,
+        ranges,
+        &mut html_nodes,
+        stack,
+        0,
+    );
+    html_nodes
 }
 
 fn extract_text_from_ranges(node: &Node, source: &[u8], content_ranges: &[Range]) -> String {
@@ -201,7 +205,7 @@ fn extract_text_from_ranges(node: &Node, source: &[u8], content_ranges: &[Range]
 }
 
 fn parse_recursive<'a>(
-    notes: &mut Notes,
+    session: &mut Session,
     node: &Node,
     source: &'a str,
     path: &str,
@@ -211,7 +215,7 @@ fn parse_recursive<'a>(
     depth: usize,
 ) {
     if depth > 200 {
-        notes.errors.push(ErrorKind::NestingTooDeep);
+        session.emit_error(&ErrorKind::NestingTooDeep);
         return;
     }
 
@@ -221,7 +225,7 @@ fn parse_recursive<'a>(
         "document" => {
             for child in node.children(&mut node.walk()) {
                 parse_recursive(
-                    notes,
+                    session,
                     &child,
                     source,
                     path,
@@ -275,7 +279,22 @@ fn parse_recursive<'a>(
             {
                 let found = extract_tag_name(node, src_bytes, "erroneous_end_tag_name");
                 let err = erroneous_end_tag(name, found, err_end_node.range(), *open, source, path);
-                notes.errors.push(err);
+                session.emit_error(&err);
+
+                let end_tag_node = HtmlNode::End {
+                    name: found,
+                    start: node.start_byte(),
+                    paired: false,
+                };
+                if let HtmlNode::End { name, .. } = &end_tag_node
+                    && let Some(pos) = stack
+                        .iter()
+                        .rposition(|(stack_name, _, _)| stack_name == name)
+                {
+                    stack.truncate(pos);
+                }
+
+                html_nodes.push(end_tag_node);
             }
         }
         "comment" => {
@@ -302,7 +321,7 @@ fn parse_recursive<'a>(
                 .is_some_and(|n| n.kind() == "end_tag");
             for child in node.children(&mut node.walk()) {
                 parse_recursive(
-                    notes,
+                    session,
                     &child,
                     source,
                     path,

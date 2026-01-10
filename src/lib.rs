@@ -45,7 +45,7 @@ pub enum ErrorKind {
     NoHtmlFiles { path: String },
 
     #[error(transparent)]
-    Glob(#[from] globset::Error),
+    Ignore(#[from] ignore::Error),
 
     #[error("no matches for pattern `{pattern}`")]
     NoMatches { pattern: String },
@@ -59,6 +59,15 @@ pub enum ErrorKind {
     #[error(transparent)]
     #[diagnostic(transparent)]
     SyntaxError(#[from] Box<BoxedSyntaxError>),
+
+    #[error("unbalanced HTML across control blocks")]
+    #[diagnostic(severity(Warning))]
+    UnbalancedHtml {
+        #[source_code]
+        src: NamedSource<String>,
+        #[label]
+        span: SourceSpan,
+    },
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -92,18 +101,6 @@ pub struct BoxedUnexpectedClosingTag {
     open_span: SourceSpan,
     #[help]
     suggestion: Option<String>,
-}
-
-#[derive(Error, Diagnostic, Debug, Clone)]
-pub enum KireiWarning {
-    #[error("unbalanced HTML across control blocks")]
-    #[diagnostic(severity(Warning))]
-    UnbalancedHtml {
-        #[source_code]
-        src: NamedSource<String>,
-        #[label]
-        span: SourceSpan,
-    },
 }
 
 pub fn normalize_ws(text: &str) -> String {
