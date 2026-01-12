@@ -1,0 +1,19 @@
+---
+source: tests/snapshots/css.rs
+description: "<style>\n{% let primary = \"#3b82f6\" %}\n{% let secondary = \"#8b5cf6\" %}\n{% let spacing = 16 %}\n\n.button-primary {\n    background: {{ primary }};\n    padding: {{ spacing }}px {{ spacing * 2 }}px;\n}\n\n.button-secondary {\n    background: {{ secondary }};\n    padding: {{ spacing }}px {{ spacing * 2 }}px;\n}\n</style>\n"
+---
+<style>
+    {% let primary = "#3b82f6" %}
+    {% let secondary = "#8b5cf6" %}
+    {% let spacing = 16 %}
+
+    .button-primary {
+        background: {{ primary }};
+        padding: {{ spacing }}px {{ spacing * 2 }}px;
+    }
+
+    .button-secondary {
+        background: {{ secondary }};
+        padding: {{ spacing }}px {{ spacing * 2 }}px;
+    }
+</style>

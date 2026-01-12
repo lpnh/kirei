@@ -50,101 +50,41 @@ impl SakuraParser {
         source: &'a str,
         filepath: &str,
     ) -> Option<SakuraSeed<'a>> {
-        let askama_tree = self.askama.parse(source, None).or_else(|| {
-            session.emit_error(&ErrorKind::ParserFailed {
-                lang: "Askama".to_string(),
-            });
-            None
-        })?;
+        let askama_tree = parse_tree(&mut self.askama, source, "Askama", filepath, session, None)?;
 
-        if askama_tree.root_node().has_error() {
-            if let Some(err) = syntax_error(
-                &askama_tree.root_node(),
-                "Askama".to_string(),
-                source,
-                filepath,
-            ) {
-                session.emit_error(&err);
-            }
-            return None;
-        }
-
-        let (askama, content_node_ranges) =
+        let (askama, content_ranges) =
             askama::extract_askama_nodes(&askama_tree.root_node(), source);
 
-        if !content_node_ranges.is_empty()
-            && self.html.set_included_ranges(&content_node_ranges).is_err()
-        {
-            session.emit_error(&ErrorKind::ParserFailed {
-                lang: "HTML".to_string(),
-            });
-            return None;
-        }
+        let html_ranges = (!content_ranges.is_empty()).then_some(content_ranges.as_slice());
 
-        let html_tree = self.html.parse(source, None).or_else(|| {
-            session.emit_error(&ErrorKind::ParserFailed {
-                lang: "HTML".to_string(),
-            });
-            None
-        })?;
+        let html_tree = parse_tree(
+            &mut self.html,
+            source,
+            "HTML",
+            filepath,
+            session,
+            html_ranges,
+        )?;
 
-        if html_tree.root_node().has_error() {
-            if let Some(err) =
-                syntax_error(&html_tree.root_node(), "HTML".to_string(), source, filepath)
-            {
-                session.emit_error(&err);
-            }
-            return None;
-        }
-
-        let (mut html, raw_node_ranges) = html::extract_html_nodes(
+        let (mut html, raw_ranges) = html::extract_html_nodes(
             session,
             &html_tree.root_node(),
             source,
-            &content_node_ranges,
+            &content_ranges,
             filepath,
         );
 
         let crossing_indices = element_across_control(session, &html, &askama, source, filepath);
-
         html::unpair_crossing_tags(&mut html, &crossing_indices);
 
-        let css_ranges = intersect_ranges(&raw_node_ranges, &content_node_ranges);
-
-        let css = if !css_ranges.is_empty() {
-            if self.css.set_included_ranges(&css_ranges).is_err() {
-                session.emit_error(&ErrorKind::ParserFailed {
-                    lang: "CSS".to_string(),
-                });
-                return None;
-            }
-
-            let css_tree = self.css.parse(source, None).or_else(|| {
-                session.emit_error(&ErrorKind::ParserFailed {
-                    lang: "CSS".to_string(),
-                });
-                None
-            })?;
-
-            if css_tree.root_node().has_error() {
-                if let Some(err) =
-                    syntax_error(&css_tree.root_node(), "CSS".to_string(), source, filepath)
-                {
-                    session.emit_error(&err);
-                }
-                return None;
-            }
-
-            css::extract_css_nodes(
-                session,
-                &css_tree.root_node(),
-                source,
-                &css_ranges,
-                filepath,
-            )
-        } else {
-            Vec::new()
-        };
+        let css = self.parse_css(
+            session,
+            source,
+            filepath,
+            &content_ranges,
+            &raw_ranges,
+            &askama,
+        )?;
 
         Some(SakuraSeed {
             askama,
@@ -152,6 +92,80 @@ impl SakuraParser {
             css,
             source,
         })
+    }
+
+    fn parse_css<'a>(
+        &mut self,
+        session: &mut Session,
+        source: &'a str,
+        filepath: &str,
+        content_ranges: &[Range],
+        raw_ranges: &[Range],
+        askama_nodes: &[AskamaNode],
+    ) -> Option<Vec<CssNode<'a>>> {
+        let css_ranges: Vec<Range> = content_ranges
+            .iter()
+            .flat_map(|c| raw_ranges.iter().map(move |r| (c, r)))
+            .filter_map(|(c, r)| {
+                let start = c.start_byte.max(r.start_byte);
+                let end = c.end_byte.min(r.end_byte);
+                (start < end).then(|| Range {
+                    start_byte: start,
+                    end_byte: end,
+                    start_point: Point::new(0, 0),
+                    end_point: Point::new(0, 0),
+                })
+            })
+            .collect();
+
+        if css_ranges.is_empty() {
+            return Some(Vec::new());
+        }
+
+        if self.css.set_included_ranges(&css_ranges).is_err() {
+            session.emit_error(&ErrorKind::ParserFailed {
+                lang: "CSS".to_string(),
+            });
+            return None;
+        }
+
+        let css_tree = self.css.parse(source, None).or_else(|| {
+            session.emit_error(&ErrorKind::ParserFailed {
+                lang: "CSS".to_string(),
+            });
+            None
+        })?;
+
+        if css_tree.root_node().has_error() {
+            if raw_ranges.iter().any(|r| {
+                askama_nodes
+                    .iter()
+                    .any(|n| n.start() < r.end_byte && n.end() > r.start_byte)
+            }) {
+                return Some(
+                    raw_ranges
+                        .iter()
+                        .map(|r| CssNode::Unparsed {
+                            content: &source[r.start_byte..r.end_byte],
+                            range: r.start_byte..r.end_byte,
+                        })
+                        .collect(),
+                );
+            }
+
+            if let Some(err) = syntax_error(&css_tree.root_node(), "CSS".into(), source, filepath) {
+                session.emit_error(&err);
+            }
+            return None;
+        }
+
+        Some(css::extract_css_nodes(
+            session,
+            &css_tree.root_node(),
+            source,
+            &css_ranges,
+            filepath,
+        ))
     }
 }
 
@@ -234,45 +248,72 @@ impl<'a> SakuraSeed<'a> {
             match node {
                 HtmlNode::Start { .. } | HtmlNode::Void { .. } | HtmlNode::SelfClosing { .. } => {
                     let Some(range) = node.range() else { continue };
-                    let embed = Self::find_embedded(range, askama_nodes);
-                    if embed.is_empty() {
-                        leaves.insert(Leaf::from_html(node));
-                    } else {
-                        pruned.extend(embed.iter().copied());
-                        let root = Root::Tag {
-                            indent: node.indent(),
-                            is_phrasing: node.is_phrasing(),
-                            is_ws_sensitive: node.is_ws_sensitive(),
-                        };
-                        let content =
-                            Cow::Owned(html::format_tag(range, source, askama_nodes, &embed));
-                        leaves.insert(Leaf::grow(root, content, range.start, range.end));
-                    }
+                    match Self::find_embedded(range, askama_nodes) {
+                        None => leaves.insert(Leaf::from_html(node)),
+                        Some(embed) => {
+                            pruned.extend(embed.iter().copied());
+                            let root = Root::Tag {
+                                indent: node.indent(),
+                                is_phrasing: node.is_phrasing(),
+                                is_ws_sensitive: node.is_ws_sensitive(),
+                            };
+                            let content =
+                                Cow::Owned(html::format_tag(range, source, askama_nodes, &embed));
+                            leaves.insert(Leaf::grow(root, content, range.start, range.end))
+                        }
+                    };
                 }
                 HtmlNode::Text { text, .. } => {
                     let Some(range) = node.range() else { continue };
-                    let embed = Self::find_embedded(range, askama_nodes);
-                    if embed.is_empty() {
-                        leaves.insert(Leaf::from_text(text, range.start, range.end));
-                    } else {
-                        leaves.extend(Leaf::from_mixed_text(range, askama_nodes, &embed, source));
+                    match Self::find_embedded(range, askama_nodes) {
+                        None => {
+                            leaves.insert(Leaf::from_text(text, range.start, range.end));
+                        }
+                        Some(embed) => {
+                            let mut curr_pos = range.start;
+                            for &idx in &embed {
+                                let node = &askama_nodes[idx];
+                                if node.start() > curr_pos {
+                                    leaves.insert(Leaf::from_text(
+                                        &source[curr_pos..node.start()],
+                                        curr_pos,
+                                        node.start(),
+                                    ));
+                                }
+                                leaves.insert(Leaf::from_askama(node));
+                                curr_pos = node.end();
+                            }
+                            if curr_pos < range.end {
+                                leaves.insert(Leaf::from_text(
+                                    &source[curr_pos..range.end],
+                                    curr_pos,
+                                    range.end,
+                                ));
+                            }
+                        }
                     }
                 }
                 HtmlNode::Raw { .. } | HtmlNode::Comment { .. } => {
                     let Some(range) = node.range() else { continue };
-                    let embed = Self::find_embedded(range, askama_nodes);
-                    if embed.is_empty() {
-                        leaves.insert(Leaf::from_html(node));
-                    } else {
-                        pruned.extend(embed.iter().copied());
-                        let root = match node {
-                            HtmlNode::Raw { .. } => Root::Script,
-                            HtmlNode::Comment { .. } => Root::Comment,
-                            _ => unreachable!(),
-                        };
-                        let content =
-                            Cow::Owned(html::format_opaque(range, source, askama_nodes, &embed));
-                        leaves.insert(Leaf::grow(root, content, range.start, range.end));
+                    match Self::find_embedded(range, askama_nodes) {
+                        None => {
+                            leaves.insert(Leaf::from_html(node));
+                        }
+                        Some(embed) => {
+                            pruned.extend(embed.iter().copied());
+                            let root = match node {
+                                HtmlNode::Raw { .. } => Root::Script,
+                                HtmlNode::Comment { .. } => Root::Comment,
+                                _ => unreachable!(),
+                            };
+                            let content = Cow::Owned(html::format_opaque(
+                                range,
+                                source,
+                                askama_nodes,
+                                &embed,
+                            ));
+                            leaves.insert(Leaf::grow(root, content, range.start, range.end));
+                        }
                     }
                 }
                 _ => {
@@ -300,49 +341,39 @@ impl<'a> SakuraSeed<'a> {
                 | CssNode::End { .. } => {
                     leaves.insert(Leaf::from_css(node));
                 }
-                CssNode::Declaration {
-                    property_name,
-                    value_range,
-                    range,
-                    ..
-                } => {
-                    let embed = Self::find_embedded(value_range, askama_nodes);
-
-                    if embed.is_empty() {
-                        leaves.insert(Leaf::from_css(node));
-                    } else if Self::has_block_askama(value_range, askama_nodes) {
-                        pruned.extend(embed.iter().copied());
-
-                        let prop_with_colon = format!("{}:", property_name.trim());
-                        leaves.insert(Leaf::grow(
-                            Root::CssText,
-                            Cow::Owned(prop_with_colon),
-                            range.start,
-                            value_range.start,
-                        ));
-
-                        let value_leaves =
-                            Leaf::from_mixed_css_value(value_range, askama_nodes, &embed, source);
-                        for leaf in value_leaves {
-                            leaves.insert(leaf);
+                CssNode::Declaration { range, .. } => {
+                    match Self::find_embedded(range, askama_nodes) {
+                        Some(embed) => {
+                            pruned.extend(embed.iter().copied());
+                            let content = Cow::Owned(crate::format_with_embedded(
+                                range,
+                                source,
+                                askama_nodes,
+                                &embed,
+                                str::to_string,
+                            ));
+                            leaves.insert(Leaf::grow(
+                                Root::CssText,
+                                content,
+                                range.start,
+                                range.end,
+                            ));
                         }
-
-                        leaves.insert(Leaf::grow(
-                            Root::CssText,
-                            Cow::Borrowed(";"),
-                            value_range.end,
-                            range.end,
-                        ));
-                    } else {
-                        pruned.extend(embed.iter().copied());
-                        let content = Cow::Owned(css::format_css_node(
-                            range.clone(),
-                            source,
-                            askama_nodes,
-                            &embed,
-                        ));
-                        leaves.insert(Leaf::grow(Root::CssText, content, range.start, range.end));
+                        None => {
+                            leaves.insert(Leaf::from_css(node));
+                        }
                     }
+                }
+                CssNode::Unparsed { content, range } => {
+                    if let Some(embed) = Self::find_embedded(range, askama_nodes) {
+                        pruned.extend(embed);
+                    }
+                    leaves.insert(Leaf::grow(
+                        Root::Todo,
+                        Cow::Borrowed(content),
+                        range.start,
+                        range.end,
+                    ));
                 }
             }
         }
@@ -357,30 +388,18 @@ impl<'a> SakuraSeed<'a> {
     fn find_embedded(
         range: &std::ops::Range<usize>,
         askama_nodes: &[AskamaNode<'a>],
-    ) -> Vec<usize> {
-        askama_nodes
+    ) -> Option<Vec<usize>> {
+        let indices: Vec<usize> = askama_nodes
             .iter()
             .enumerate()
             .filter_map(|(i, n)| (n.start() >= range.start && n.end() <= range.end).then_some(i))
-            .collect()
-    }
+            .collect();
 
-    fn has_block_askama(range: &std::ops::Range<usize>, askama_nodes: &[AskamaNode<'a>]) -> bool {
-        askama_nodes.iter().any(|n| {
-            if n.start() >= range.start && n.end() <= range.end {
-                if let AskamaNode::Control { tag, .. } = n {
-                    use crate::askama::Boundary;
-                    matches!(
-                        tag.boundary(),
-                        Boundary::Open | Boundary::Inner | Boundary::Close
-                    )
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        })
+        if indices.is_empty() {
+            None
+        } else {
+            Some(indices)
+        }
     }
 }
 
@@ -429,6 +448,7 @@ pub enum Root {
         indent: isize,
     },
     CssText,
+    Todo,
 }
 
 impl<'a> Leaf<'a> {
@@ -480,7 +500,7 @@ impl<'a> Leaf<'a> {
     }
 
     fn from_css(css_node: &'a CssNode<'a>) -> Self {
-        let content = css_node.text();
+        let content = css_node.content();
         let start = css_node.start();
         let end = css_node.range().map_or(start, |r| r.end);
         let root = match css_node {
@@ -488,6 +508,7 @@ impl<'a> Leaf<'a> {
             CssNode::End { .. } => Root::CssBlock { indent: -1 },
             CssNode::Declaration { .. } => Root::CssText,
             CssNode::Comment { .. } => Root::Comment,
+            CssNode::Unparsed { .. } => Root::Todo,
         };
 
         Self::grow(root, content, start, end)
@@ -500,74 +521,6 @@ impl<'a> Leaf<'a> {
             start,
             end,
         )
-    }
-
-    fn from_mixed_text(
-        range: &std::ops::Range<usize>,
-        askama_nodes: &[AskamaNode<'a>],
-        embed_askama: &[usize],
-        source: &str,
-    ) -> Vec<Self> {
-        let mut segments = Vec::new();
-        let mut curr_pos = range.start;
-
-        for &idx in embed_askama {
-            let node = &askama_nodes[idx];
-            if node.start() > curr_pos {
-                segments.push((curr_pos, node.start()));
-            }
-            curr_pos = node.end();
-        }
-
-        if curr_pos < range.end {
-            segments.push((curr_pos, range.end));
-        }
-
-        segments
-            .into_iter()
-            .map(|(start, end)| Self::from_text(&source[start..end], start, end))
-            .collect()
-    }
-
-    fn from_mixed_css_value(
-        range: &std::ops::Range<usize>,
-        askama_nodes: &[AskamaNode<'a>],
-        embed_askama: &[usize],
-        source: &str,
-    ) -> Vec<Self> {
-        let mut leaves = Vec::new();
-        let mut curr_pos = range.start;
-
-        for &idx in embed_askama {
-            let node = &askama_nodes[idx];
-            if node.start() > curr_pos {
-                let css_text = source[curr_pos..node.start()].trim();
-                if !css_text.is_empty() {
-                    leaves.push(Self::grow(
-                        Root::CssText,
-                        Cow::Owned(css_text.to_string()),
-                        curr_pos,
-                        node.start(),
-                    ));
-                }
-            }
-            leaves.push(Self::from_askama(node));
-            curr_pos = node.end();
-        }
-
-        if curr_pos < range.end {
-            let css_text = source[curr_pos..range.end].trim();
-            if !css_text.is_empty() {
-                leaves.push(Self::grow(
-                    Root::CssText,
-                    Cow::Owned(css_text.to_string()),
-                    curr_pos,
-                    range.end,
-                ));
-            }
-        }
-
-        leaves
     }
 
     pub fn is_ctrl(&self) -> bool {
@@ -609,26 +562,38 @@ impl<'a> Leaf<'a> {
     }
 }
 
-fn intersect_ranges(ranges_a: &[Range], ranges_b: &[Range]) -> Vec<Range> {
-    let mut result = Vec::new();
-
-    for range_a in ranges_a {
-        for range_b in ranges_b {
-            let start = range_a.start_byte.max(range_b.start_byte);
-            let end = range_a.end_byte.min(range_b.end_byte);
-
-            if start < end {
-                result.push(Range {
-                    start_byte: start,
-                    end_byte: end,
-                    start_point: Point::new(0, 0),
-                    end_point: Point::new(0, 0),
-                });
-            }
-        }
+fn parse_tree(
+    parser: &mut Parser,
+    source: &str,
+    lang: &str,
+    filepath: &str,
+    session: &mut Session,
+    ranges: Option<&[Range]>,
+) -> Option<tree_sitter::Tree> {
+    if let Some(ranges) = ranges
+        && parser.set_included_ranges(ranges).is_err()
+    {
+        session.emit_error(&ErrorKind::ParserFailed {
+            lang: lang.to_string(),
+        });
+        return None;
     }
 
-    result
+    let tree = parser.parse(source, None).or_else(|| {
+        session.emit_error(&ErrorKind::ParserFailed {
+            lang: lang.to_string(),
+        });
+        None
+    })?;
+
+    if tree.root_node().has_error() {
+        if let Some(err) = syntax_error(&tree.root_node(), lang.to_string(), source, filepath) {
+            session.emit_error(&err);
+        }
+        return None;
+    }
+
+    Some(tree)
 }
 
 fn syntax_error(root_node: &Node, kind: String, source: &str, filepath: &str) -> Option<ErrorKind> {

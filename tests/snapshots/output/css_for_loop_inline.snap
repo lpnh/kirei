@@ -1,0 +1,7 @@
+---
+source: tests/snapshots/css.rs
+description: "<style>\n{% for i in 1..=5 %}.priority-{{ i }} { z-index: {{ i * 10 }}; } {% endfor %}\n</style>\n"
+---
+<style>
+    {% for i in 1..=5 %}.priority-{{ i }} { z-index: {{ i * 10 }}; } {% endfor %}
+</style>

@@ -15,7 +15,7 @@ pub mod session;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use std::io;
 use thiserror::Error;
-use tree_sitter::Range;
+use tree_sitter::{Node, Range};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum ErrorKind {
@@ -110,4 +110,50 @@ pub fn normalize_ws(text: &str) -> String {
 
 pub fn range_to_span(range: &Range) -> SourceSpan {
     SourceSpan::new(range.start_byte.into(), range.end_byte - range.start_byte)
+}
+
+pub fn extract_from_ranges(node: &Node, source: &[u8], ranges: &[Range]) -> String {
+    let node_start = node.start_byte();
+    let node_end = node.end_byte();
+
+    let mut result = Vec::new();
+    for range in ranges {
+        let range_start = range.start_byte;
+        let range_end = range.end_byte;
+
+        if range_start < node_end && range_end > node_start {
+            let start = range_start.max(node_start);
+            let end = range_end.min(node_end);
+            let slice = std::str::from_utf8(&source[start..end]).expect("valid UTF-8");
+            result.push(slice);
+        }
+    }
+
+    result.join("")
+}
+
+pub fn format_with_embedded<'a>(
+    range: &std::ops::Range<usize>,
+    source: &str,
+    askama_nodes: &[askama::AskamaNode<'a>],
+    embed: &[usize],
+    transform: fn(&str) -> String,
+) -> String {
+    let mut result = String::new();
+    let mut pos = range.start;
+
+    for &idx in embed {
+        let node = &askama_nodes[idx];
+        if node.start() > pos {
+            result.push_str(&transform(&source[pos..node.start()]));
+        }
+        result.push_str(&askama::format_askama_node(node));
+        pos = node.end();
+    }
+
+    if pos < range.end {
+        result.push_str(&transform(&source[pos..range.end]));
+    }
+
+    result
 }

@@ -3,9 +3,7 @@ use std::borrow::Cow;
 use tree_sitter::{Node, Point, Range};
 
 use crate::{
-    ErrorKind,
-    askama::{self, AskamaNode},
-    range_to_span,
+    ErrorKind, askama::AskamaNode, extract_from_ranges, format_with_embedded, range_to_span,
     session::Session,
 };
 
@@ -188,26 +186,6 @@ pub fn extract_html_nodes<'a>(
     (html_nodes, raw_node_ranges)
 }
 
-fn extract_text_from_ranges(node: &Node, source: &[u8], content_ranges: &[Range]) -> String {
-    let node_start = node.start_byte();
-    let node_end = node.end_byte();
-
-    let mut text_parts = Vec::new();
-    for range in content_ranges {
-        let range_start = range.start_byte;
-        let range_end = range.end_byte;
-
-        if range_start < node_end && range_end > node_start {
-            let start = range_start.max(node_start);
-            let end = range_end.min(node_end);
-            let text_slice = str::from_utf8(&source[start..end]).expect("valid UTF-8");
-            text_parts.push(text_slice);
-        }
-    }
-
-    text_parts.join("")
-}
-
 fn parse_recursive<'a>(
     session: &mut Session,
     node: &Node,
@@ -316,7 +294,7 @@ fn parse_recursive<'a>(
             });
         }
         "text" => {
-            let text = extract_text_from_ranges(node, src_bytes, ranges);
+            let text = extract_from_ranges(node, src_bytes, ranges);
             let range = node.start_byte()..node.end_byte();
             html_nodes.push(HtmlNode::Text { text, range });
         }
@@ -513,32 +491,6 @@ fn normalize_preserving_ends(text: &str) -> String {
         (false, true) => format!("{} ", normalized),
         (false, false) => normalized,
     }
-}
-
-fn format_with_embedded<'a>(
-    range: &std::ops::Range<usize>,
-    source: &str,
-    askama_nodes: &[AskamaNode<'a>],
-    embed: &[usize],
-    transform: fn(&str) -> String,
-) -> String {
-    let mut result = String::new();
-    let mut pos = range.start;
-
-    for &idx in embed {
-        let node = &askama_nodes[idx];
-        if node.start() > pos {
-            result.push_str(&transform(&source[pos..node.start()]));
-        }
-        result.push_str(&askama::format_askama_node(node));
-        pos = node.end();
-    }
-
-    if pos < range.end {
-        result.push_str(&transform(&source[pos..range.end]));
-    }
-
-    result
 }
 
 pub fn unpair_crossing_tags(html_nodes: &mut [HtmlNode<'_>], crossing_pair_idx: &[(usize, usize)]) {

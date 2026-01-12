@@ -4,11 +4,6 @@ description: "<style>\n.result { color: {% match status %}{% when \"success\" %}
 ---
 <style>
     .result {
-        color:
-        {% match status %}
-            {% when "success" %}green
-            {% when "error" %}red
-            {% else %}gray
-        {% endmatch %};
+        color: {% match status %}{% when "success" %}green{% when "error" %}red{% else %}gray{% endmatch %};
     }
 </style>

@@ -2,7 +2,7 @@ use miette::NamedSource;
 use std::borrow::Cow;
 use tree_sitter::{Node, Range};
 
-use crate::{ErrorKind, askama::AskamaNode, range_to_span, session::Session};
+use crate::{ErrorKind, extract_from_ranges, range_to_span, session::Session};
 
 #[derive(Debug, Clone)]
 pub enum CssNode<'a> {
@@ -15,18 +15,20 @@ pub enum CssNode<'a> {
         start: usize,
     },
     Declaration {
-        property_name: Cow<'a, str>,
-        value_range: std::ops::Range<usize>,
-        full_text: Cow<'a, str>,
+        content: Cow<'a, str>,
         range: std::ops::Range<usize>,
     },
     AtRule {
-        text: Cow<'a, str>,
+        content: Cow<'a, str>,
         range: std::ops::Range<usize>,
         end: Option<usize>,
     },
     Comment {
-        text: &'a str,
+        content: &'a str,
+        range: std::ops::Range<usize>,
+    },
+    Unparsed {
+        content: &'a str,
         range: std::ops::Range<usize>,
     },
 }
@@ -37,7 +39,8 @@ impl CssNode<'_> {
             Self::RuleSet { range, .. }
             | Self::Declaration { range, .. }
             | Self::AtRule { range, .. }
-            | Self::Comment { range, .. } => Some(range),
+            | Self::Comment { range, .. }
+            | Self::Unparsed { range, .. } => Some(range),
             Self::End { .. } => None,
         }
     }
@@ -47,17 +50,20 @@ impl CssNode<'_> {
             Self::RuleSet { range, .. }
             | Self::Declaration { range, .. }
             | Self::AtRule { range, .. }
-            | Self::Comment { range, .. } => range.start,
+            | Self::Comment { range, .. }
+            | Self::Unparsed { range, .. } => range.start,
             Self::End { start } => *start,
         }
     }
 
-    pub fn text(&self) -> Cow<'_, str> {
+    pub fn content(&self) -> Cow<'_, str> {
         match self {
             Self::RuleSet { selector, .. } => selector.clone(),
-            Self::Declaration { full_text, .. } => full_text.clone(),
-            Self::AtRule { text, .. } => text.clone(),
-            Self::Comment { text, .. } => Cow::Borrowed(text),
+            Self::Declaration { content, .. } => content.clone(),
+            Self::AtRule { content, .. } => content.clone(),
+            Self::Comment { content, .. } | Self::Unparsed { content, .. } => {
+                Cow::Borrowed(content)
+            }
             Self::End { .. } => Cow::Borrowed("}"),
         }
     }
@@ -109,11 +115,6 @@ fn parse_css_node<'a>(
     }
 
     match node.kind() {
-        "stylesheet" => {
-            for child in node.children(&mut node.walk()) {
-                parse_css_node(&child, source, ranges, css_nodes, session, source_str, path);
-            }
-        }
         "rule_set" => {
             let selector_text = extract_selector(node, source, ranges);
             let range = node.start_byte()..node.end_byte();
@@ -130,14 +131,10 @@ fn parse_css_node<'a>(
                 if child.kind() == "block" {
                     for grandchild in child.children(&mut child.walk()) {
                         if grandchild.kind() == "declaration" {
-                            let property_name = extract_property_name(&grandchild, source, ranges);
-                            let value_range = extract_value_range(&grandchild);
-                            let full_text = extract_text_from_ranges(&grandchild, source, ranges);
+                            let content = extract_from_ranges(&grandchild, source, ranges);
                             let decl_range = grandchild.start_byte()..grandchild.end_byte();
                             css_nodes.push(CssNode::Declaration {
-                                property_name: Cow::Owned(property_name),
-                                value_range,
-                                full_text: Cow::Owned(full_text.trim().to_string()),
+                                content: Cow::Owned(content.trim().to_string()),
                                 range: decl_range,
                             });
                         }
@@ -149,21 +146,17 @@ fn parse_css_node<'a>(
             css_nodes.push(CssNode::End { start: range.end });
         }
         "declaration" => {
-            let property_name = extract_property_name(node, source, ranges);
-            let value_range = extract_value_range(node);
-            let full_text = extract_text_from_ranges(node, source, ranges);
+            let content = extract_from_ranges(node, source, ranges);
             let range = node.start_byte()..node.end_byte();
             css_nodes.push(CssNode::Declaration {
-                property_name: Cow::Owned(property_name),
-                value_range,
-                full_text: Cow::Owned(full_text.trim().to_string()),
+                content: Cow::Owned(content.trim().to_string()),
                 range,
             });
         }
         "comment" | "js_comment" => {
-            let text = node.utf8_text(source).expect("valid UTF-8");
+            let content = node.utf8_text(source).expect("valid UTF-8");
             let range = node.start_byte()..node.end_byte();
-            css_nodes.push(CssNode::Comment { text, range });
+            css_nodes.push(CssNode::Comment { content, range });
         }
         "import_statement"
         | "media_statement"
@@ -179,11 +172,9 @@ fn parse_css_node<'a>(
             for child in node.children(&mut node.walk()) {
                 if child.kind() == "block" {
                     has_block = true;
-                } else {
-                    if let Ok(text) = child.utf8_text(source) {
-                        at_rule_text.push_str(text);
-                        at_rule_text.push(' ');
-                    }
+                } else if let Ok(text) = child.utf8_text(source) {
+                    at_rule_text.push_str(text);
+                    at_rule_text.push(' ');
                 }
             }
 
@@ -194,7 +185,7 @@ fn parse_css_node<'a>(
             let range = node.start_byte()..node.end_byte();
 
             css_nodes.push(CssNode::AtRule {
-                text: Cow::Owned(at_rule_text.trim().to_string()),
+                content: Cow::Owned(at_rule_text.trim().to_string()),
                 range: range.clone(),
                 end: if has_block { Some(range.end) } else { None },
             });
@@ -234,89 +225,6 @@ fn extract_selector(node: &Node, source: &[u8], _ranges: &[Range]) -> String {
         }
     }
     String::new()
-}
-
-fn extract_property_name(node: &Node, source: &[u8], ranges: &[Range]) -> String {
-    for child in node.children(&mut node.walk()) {
-        if child.kind() == "property_name" {
-            return extract_text_from_ranges(&child, source, ranges)
-                .trim()
-                .to_string();
-        }
-    }
-    String::new()
-}
-
-fn extract_value_range(node: &Node) -> std::ops::Range<usize> {
-    let mut colon_pos = None;
-    let mut semicolon_pos = None;
-
-    for child in node.children(&mut node.walk()) {
-        match child.kind() {
-            ":" => colon_pos = Some(child.end_byte()),
-            ";" => {
-                semicolon_pos = Some(child.start_byte());
-                break;
-            }
-            "important" => {
-                if semicolon_pos.is_none() {
-                    semicolon_pos = Some(child.start_byte());
-                }
-            }
-            _ => {}
-        }
-    }
-
-    let start = colon_pos.unwrap_or(node.start_byte());
-    let end = semicolon_pos.unwrap_or(node.end_byte());
-    start..end
-}
-
-fn extract_text_from_ranges(node: &Node, source: &[u8], content_ranges: &[Range]) -> String {
-    let node_start = node.start_byte();
-    let node_end = node.end_byte();
-
-    let mut text_parts = Vec::new();
-    for range in content_ranges {
-        let range_start = range.start_byte;
-        let range_end = range.end_byte;
-
-        if range_start < node_end && range_end > node_start {
-            let start = range_start.max(node_start);
-            let end = range_end.min(node_end);
-            let text_slice = std::str::from_utf8(&source[start..end]).expect("valid UTF-8");
-            text_parts.push(text_slice);
-        }
-    }
-
-    text_parts.join("")
-}
-
-pub fn format_css_node(
-    range: std::ops::Range<usize>,
-    source: &str,
-    askama_nodes: &[AskamaNode],
-    embedded_indices: &[usize],
-) -> String {
-    let mut result = String::new();
-    let mut pos = range.start;
-
-    for &idx in embedded_indices {
-        if let Some(askama_node) = askama_nodes.get(idx) {
-            if pos < askama_node.start() {
-                result.push_str(&source[pos..askama_node.start()]);
-            }
-
-            result.push_str(&crate::askama::format_askama_node(askama_node));
-            pos = askama_node.end();
-        }
-    }
-
-    if pos < range.end {
-        result.push_str(&source[pos..range.end]);
-    }
-
-    result
 }
 
 fn check_css_error(node: &Node, session: &mut Session, source: &str, path: &str) {

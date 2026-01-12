@@ -1,0 +1,21 @@
+---
+source: tests/snapshots/css.rs
+description: "<style>\n.header {\n    font-size: {{ base_size }}px;\n    line-height: {{ base_size * 1.5 }}px;\n    margin-bottom: {{ spacing }}rem;\n}\n\n.{{ class_name }} {\n    color: {{ primary_color }};\n    background: {{ secondary_color }};\n}\n\n#element-{{ element_id }} {\n    width: {{ width }}%;\n    height: {{ height }}px;\n}\n</style>\n"
+---
+<style>
+    .header {
+        font-size: {{ base_size }}px;
+        line-height: {{ base_size * 1.5 }}px;
+        margin-bottom: {{ spacing }}rem;
+    }
+
+    .{{ class_name }} {
+        color: {{ primary_color }};
+        background: {{ secondary_color }};
+    }
+
+    #element-{{ element_id }} {
+        width: {{ width }}%;
+        height: {{ height }}px;
+    }
+</style>

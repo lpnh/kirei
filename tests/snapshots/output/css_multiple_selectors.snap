@@ -1,0 +1,25 @@
+---
+source: tests/snapshots/css.rs
+description: "<style>\n{% for state in [\"hover\", \"focus\", \"active\"] %}\n.button:{{ state }} {\n    opacity: 0.8;\n}\n{% endfor %}\n\n.item-{{ id }},\n.item-{{ id }}-alt,\n#element-{{ id }} {\n    {% if is_special %}\n        background: gold;\n    {% endif %}\n    margin: {{ spacing }}px;\n}\n\n{% if include_utilities %}\n.mt-1, .my-1 { margin-top: 4px; }\n.mb-1, .my-1 { margin-bottom: 4px; }\n{% endif %}\n</style>\n"
+---
+<style>
+    {% for state in ["hover", "focus", "active"] %}
+    .button:{{ state }} {
+        opacity: 0.8;
+    }
+    {% endfor %}
+
+    .item-{{ id }},
+    .item-{{ id }}-alt,
+    #element-{{ id }} {
+        {% if is_special %}
+            background: gold;
+        {% endif %}
+        margin: {{ spacing }}px;
+    }
+
+    {% if include_utilities %}
+    .mt-1, .my-1 { margin-top: 4px; }
+    .mb-1, .my-1 { margin-bottom: 4px; }
+    {% endif %}
+</style>
