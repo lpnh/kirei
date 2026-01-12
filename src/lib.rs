@@ -6,6 +6,7 @@
 mod askama;
 pub mod cli;
 mod config;
+mod css;
 mod html;
 mod parse;
 mod sakura_tree;

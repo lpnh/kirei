@@ -39,10 +39,12 @@ macro_rules! diagnostic_snapshot {
 
 mod askama;
 mod axum_app;
+mod css;
 mod diagnostics;
 mod html;
 mod ice_cream_club;
 mod malformed;
+mod match_blocks;
 mod mixed;
 mod phrasing;
 mod rules;

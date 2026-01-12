@@ -4,8 +4,8 @@ description: "<style>\n  @media (max-width: 600px) {\n    body {\n      backgrou
 ---
 <style>
     @media (max-width: 600px) {
-      body {
-        background: lightblue;
-      }
+        body {
+            background: lightblue;
+        }
     }
 </style>

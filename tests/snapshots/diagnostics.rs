@@ -37,3 +37,8 @@ fn diagnostics_crossing_match() {
 fn diagnostics_missing_block_name() {
     snapshot_test!("diagnostics/missing_block_name.html");
 }
+
+#[test]
+fn diagnostics_invalid_css() {
+    snapshot_test!("diagnostics/invalid_css.html");
+}

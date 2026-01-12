@@ -15,21 +15,41 @@ description: "<!DOCTYPE html>\n<!-- Welcome to Scoops & Dreams! The most formatt
         <!-- Inline styles with various formatting challenges -->
         <style>
             /* CSS with mixed formatting */
-            body{font-family:'Comic Sans MS',cursive;background:#87CEEB;margin:0;padding:20px}
-            .ice-cream-header    {    color: #fff;    text-align: center;    }
-            .flavor{display:inline-block;margin:5px;padding:10px;background:#FFB6C1;border-radius:50%}
-
+            body {
+                font-family:'Comic Sans MS',cursive;
+                background:#87CEEB;
+                margin:0;
+                padding:20px
+            }
+            .ice-cream-header {
+                color: #fff;
+                text-align: center;
+            }
+            .flavor {
+                display:inline-block;
+                margin:5px;
+                padding:10px;
+                background:#FFB6C1;
+                border-radius:50%
+            }
             /* Unusual selectors and properties */
             input[type="text"]:not(:empty):nth-child(odd) + label::before {
                 content: "🍦 ";
             }
-
             @media (max-width: 768px) {
-                .responsive-ice-cream { font-size: 0.8em; }
+                .responsive-ice-cream {
+                    font-size: 0.8em;
+                }
             }
-
             /* Minified-style CSS */
-            .compact{background:#123;color:#fff;border:1px solid #456;margin:2px 4px 6px 8px;padding:1em 2em 3em 4em;font:bold 14px/1.5 Arial}
+            .compact {
+                background:#123;
+                color:#fff;
+                border:1px solid #456;
+                margin:2px 4px 6px 8px;
+                padding:1em 2em 3em 4em;
+                font:bold 14px/1.5 Arial
+            }
         </style>
         <!-- Multiple script blocks with different formatting styles -->
         <script>

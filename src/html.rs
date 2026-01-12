@@ -1,6 +1,6 @@
 use miette::NamedSource;
 use std::borrow::Cow;
-use tree_sitter::{Node, Range};
+use tree_sitter::{Node, Point, Range};
 
 use crate::{
     ErrorKind,
@@ -168,9 +168,11 @@ pub fn extract_html_nodes<'a>(
     source: &'a str,
     ranges: &[Range],
     path: &str,
-) -> Vec<HtmlNode<'a>> {
+) -> (Vec<HtmlNode<'a>>, Vec<Range>) {
     let mut html_nodes = Vec::new();
-    let stack: &mut Vec<(&'a str, Range, usize)> = &mut Vec::new();
+    let mut raw_node_ranges = Vec::new();
+    let mut stack = Vec::new();
+
     parse_recursive(
         session,
         root,
@@ -178,10 +180,12 @@ pub fn extract_html_nodes<'a>(
         path,
         ranges,
         &mut html_nodes,
-        stack,
+        &mut raw_node_ranges,
+        &mut stack,
         0,
     );
-    html_nodes
+
+    (html_nodes, raw_node_ranges)
 }
 
 fn extract_text_from_ranges(node: &Node, source: &[u8], content_ranges: &[Range]) -> String {
@@ -211,6 +215,7 @@ fn parse_recursive<'a>(
     path: &str,
     ranges: &[Range],
     html_nodes: &mut Vec<HtmlNode<'a>>,
+    raw_node_ranges: &mut Vec<Range>,
     stack: &mut Vec<(&'a str, Range, usize)>,
     depth: usize,
 ) {
@@ -231,6 +236,7 @@ fn parse_recursive<'a>(
                     path,
                     ranges,
                     html_nodes,
+                    raw_node_ranges,
                     stack,
                     depth + 1,
                 );
@@ -327,6 +333,7 @@ fn parse_recursive<'a>(
                     path,
                     ranges,
                     html_nodes,
+                    raw_node_ranges,
                     stack,
                     depth + 1,
                 );
@@ -341,8 +348,21 @@ fn parse_recursive<'a>(
         "raw_text" => {
             let text = node.utf8_text(src_bytes).expect("valid UTF-8");
             if !text.trim().is_empty() {
-                let range = node.start_byte()..node.end_byte();
-                html_nodes.push(HtmlNode::Raw { text, range });
+                let range_ts = Range {
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    start_point: Point::new(0, 0),
+                    end_point: Point::new(0, 0),
+                };
+
+                let is_style_tag = stack.last().is_some_and(|(name, _, _)| *name == "style");
+
+                if is_style_tag {
+                    raw_node_ranges.push(range_ts);
+                } else {
+                    let range = node.start_byte()..node.end_byte();
+                    html_nodes.push(HtmlNode::Raw { text, range });
+                }
             }
         }
         _ => unreachable!(),

@@ -1,0 +1,8 @@
+---
+source: tests/snapshots/match_blocks.rs
+description: "{% match multiple_choice_answer %}{% when 3 %}Correct!{% else %}Sorry, the right answer is \"3\".{% endmatch %}\n"
+---
+{% match multiple_choice_answer %}
+    {% when 3 %}Correct!
+    {% else %}Sorry, the right answer is "3".
+{% endmatch %}

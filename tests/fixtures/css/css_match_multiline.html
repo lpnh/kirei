@@ -1,0 +1,14 @@
+<style>
+.container {
+    {% match layout %}
+        {% when Some with ("grid") %}
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+        {% when Some with ("flex") %}
+            display: flex;
+            flex-direction: row;
+        {% when None %}
+            display: block;
+    {% endmatch %}
+}
+</style>

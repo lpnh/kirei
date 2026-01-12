@@ -1,0 +1,22 @@
+<style>
+:root {
+    --primary-color: {{ primary }};
+    --secondary-color: {{ secondary }};
+    --spacing-unit: {{ spacing }}px;
+    {% for i in 1..=5 %}
+    --spacing-{{ i }}: {{ i * spacing }}px;
+    {% endfor %}
+}
+
+{% if enable_dark_mode %}
+[data-theme="dark"] {
+    --primary-color: {{ dark_primary }};
+    --secondary-color: {{ dark_secondary }};
+}
+{% endif %}
+
+.component {
+    color: var(--primary-color);
+    padding: var(--spacing-2);
+}
+</style>

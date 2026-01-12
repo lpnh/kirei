@@ -1,0 +1,3 @@
+<style>
+.badge { {% match size %}{% when Some with (s) %}font-size: {{ s }}px; width: {{ s * 2 }}px;{% when None %}display: none;{% endmatch %} }
+</style>

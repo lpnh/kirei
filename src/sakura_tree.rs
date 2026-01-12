@@ -45,7 +45,7 @@ enum Ring {
         start: usize,
         end: usize,
     },
-    Raw(usize),
+    Script(usize),
     Comment(usize),
     Single(usize),
 }
@@ -130,7 +130,7 @@ impl SakuraTree {
             }
             Ring::Phrasing { start, end } => add(branches, *start, *end, Style::Wrapped),
             Ring::MatchArm { start, end } => add(branches, *start, *end, Style::Inline),
-            Ring::Raw(idx) => add(branches, *idx, *idx, Style::Raw),
+            Ring::Script(idx) => add(branches, *idx, *idx, Style::Raw),
             Ring::Comment(idx) => add(branches, *idx, *idx, Style::Comment),
             Ring::Single(idx) => add(branches, *idx, *idx, Style::Inline),
         }
@@ -143,7 +143,7 @@ impl SakuraTree {
         for leaf in leaves {
             let (pre_delta, post_delta) = match &leaf.root {
                 Root::Control { tag, .. } => tag.indent(),
-                Root::Tag { indent, .. } => {
+                Root::Tag { indent, .. } | Root::CssBlock { indent } => {
                     if *indent < 0 {
                         (*indent, 0)
                     } else {
@@ -178,8 +178,9 @@ impl SakuraTree {
                     ..
                 } => Self::match_arm(start, end, leaves, indent_map, cfg),
 
-                Root::Raw => (Ring::Raw(start), start),
+                Root::Script => (Ring::Script(start), start),
                 Root::Comment => (Ring::Comment(start), start),
+                Root::CssText => (Ring::Single(start), start),
 
                 _ if !leaf.is_block() && (leaf.pair.is_none() || !leaf.ws_after) => {
                     Self::phrasing(start, end, leaves, indent_map, cfg)
