@@ -9,19 +9,50 @@ description: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <title>{% block title %}Ice Cream Social Club{% endblock %}</title>
         <style>
-            :root{
-            --brand:#FFB6C1;
-            --accent:#87CEEB;
-            --muted:#666;
+            :root {
+                --brand:#FFB6C1;
+                --accent:#87CEEB;
+                --muted:#666;
             }
-
-            body{margin:0;padding:20px;font-family:system-ui;background:#fffaf5;color:#333;line-height:1.6}
-            header{ text-align:center }
-            .popular-badge{ background:gold;padding:4px 10px;border-radius:999px;font-weight:700 }
-
-            .btn{ display:inline-block;padding:8px 14px;border-radius:14px;border:2px solid var(--brand);background:var(--brand);color:#fff;cursor:pointer;font-family:inherit;text-decoration:none }
-            .btn.ghost{background:#fff;color:var(--brand)}
-            .card{ background:#fff;padding:16px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,0.06);margin-bottom:16px }
+            body {
+                margin:0;
+                padding:20px;
+                font-family:system-ui;
+                background:#fffaf5;
+                color:#333;
+                line-height:1.6
+            }
+            header {
+                text-align:center
+            }
+            .popular-badge {
+                background:gold;
+                padding:4px 10px;
+                border-radius:999px;
+                font-weight:700
+            }
+            .btn {
+                display:inline-block;
+                padding:8px 14px;
+                border-radius:14px;
+                border:2px solid var(--brand);
+                background:var(--brand);
+                color:#fff;
+                cursor:pointer;
+                font-family:inherit;
+                text-decoration:none
+            }
+            .btn.ghost {
+                background:#fff;
+                color:var(--brand)
+            }
+            .card {
+                background:#fff;
+                padding:16px;
+                border-radius:12px;
+                box-shadow:0 6px 18px rgba(0,0,0,0.06);
+                margin-bottom:16px
+            }
         </style>
     </head>
     <body>

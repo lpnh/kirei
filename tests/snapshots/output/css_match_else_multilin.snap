@@ -1,0 +1,15 @@
+---
+source: tests/snapshots/css.rs
+description: "<style>\n.button {\n    background: {% match theme %}\n        {% when \"dark\" %}\n            #333\n        {% when \"light\" %}\n            #fff\n        {% else %}\n            #ccc\n    {% endmatch %};\n    padding: 10px;\n}\n</style>\n"
+---
+<style>
+    .button {
+        background:
+        {% match theme %}
+            {% when "dark" %}#333
+            {% when "light" %}#fff
+            {% else %}#ccc
+        {% endmatch %};
+        padding: 10px;
+    }
+</style>

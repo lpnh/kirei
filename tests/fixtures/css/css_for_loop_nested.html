@@ -1,0 +1,11 @@
+<style>
+{% for breakpoint in breakpoints %}
+    @media (min-width: {{ breakpoint.width }}px) {
+        {% for col in 1..=12 %}
+            .{{ breakpoint.name }}-col-{{ col }} {
+                width: {{ col * 100 / 12 }}%;
+            }
+        {% endfor %}
+    }
+{% endfor %}
+</style>

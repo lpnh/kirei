@@ -1,0 +1,9 @@
+---
+source: tests/snapshots/match_blocks.rs
+description: "{% match item %}\n  {% when Some with (\"foo\") %}\n    Found literal foo\n  {% when Some with (val) %}\n    Found {{ val }}\n  {% when None %}\n{% endmatch %}\n"
+---
+{% match item %}
+    {% when Some with ("foo") %} Found literal foo
+    {% when Some with (val) %} Found {{ val }}
+    {% when None %}
+{% endmatch %}

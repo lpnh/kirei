@@ -5,8 +5,8 @@ description: "{% block head %}\n<style>\n.user {\n  color: blue;\n  margin-botto
 {% block head %}
     <style>
         .user {
-          color: blue;
-          margin-bottom: 5px;
+            color: blue;
+            margin-bottom: 5px;
         }
     </style>
     <script>

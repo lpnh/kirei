@@ -1,0 +1,28 @@
+---
+source: tests/snapshots/css.rs
+description: "<style>\n.container {\n    max-width: {{ container_width }}px;\n}\n\n@media (max-width: {{ breakpoint_md }}px) {\n    .container {\n        padding: {{ mobile_padding }}px;\n    }\n\n    {% if enable_mobile_nav %}\n    .nav-mobile {\n        display: block;\n    }\n    {% endif %}\n}\n\n{% if enable_dark_mode %}\n@media (prefers-color-scheme: dark) {\n    body {\n        background: #1a1a1a;\n        color: #f0f0f0;\n    }\n}\n{% endif %}\n</style>\n"
+---
+<style>
+    .container {
+        max-width: {{ container_width }}px;
+    }
+    @media (max-width: {{ breakpoint_md }}px) {
+        {{ breakpoint_md }}
+        .container {
+            padding: {{ mobile_padding }}px;
+        }
+        {% if enable_mobile_nav %}
+            .nav-mobile {
+                display: block;
+            }
+        {% endif %}
+    }
+    {% if enable_dark_mode %}
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: #1a1a1a;
+                color: #f0f0f0;
+            }
+        }
+    {% endif %}
+</style>

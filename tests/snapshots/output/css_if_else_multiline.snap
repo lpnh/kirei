@@ -1,0 +1,14 @@
+---
+source: tests/snapshots/css.rs
+description: "<style>\n.card {\n    {% if has_shadow %}\n        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);\n    {% else %}\n        border: 1px solid #e0e0e0;\n    {% endif %}\n    border-radius: 4px;\n}\n</style>\n"
+---
+<style>
+    .card {
+        {% if has_shadow %}
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        {% else %}
+            border: 1px solid #e0e0e0;
+        {% endif %}
+        border-radius: 4px;
+    }
+</style>

@@ -1,0 +1,49 @@
+<style>
+{# Theme styles with Askama logic #}
+{% let base_spacing = 8 %}
+{% let colors = ["red", "green", "blue"] %}
+
+/* Base styles */
+.app {
+    font-family: {{ font_family }};
+    font-size: {{ base_size }}px;
+}
+
+/* Dynamic color classes */
+{% for color in colors %}
+    {% for shade in 1..=3 %}
+.text-{{ color }}-{{ shade }} {
+    color: {{ color }}-{{ shade * 100 }};
+}
+    {% endfor %}
+{% endfor %}
+
+/* Conditional utilities */
+{% if enable_flexbox %}
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.flex-row { flex-direction: row; }
+{% endif %}
+
+/* Match-based sizing */
+{% match size_system %}
+    {% when "small" %}
+        .container { max-width: 640px; }
+    {% when "medium" %}
+        .container { max-width: 768px; }
+    {% when "large" %}
+        .container { max-width: 1024px; }
+    {% else %}
+        .container { max-width: 100%; }
+{% endmatch %}
+
+/* Responsive breakpoints */
+@media (min-width: {{ breakpoint }}px) {
+    {% if enable_grid %}
+    .grid {
+        display: grid;
+        gap: {{ base_spacing * 2 }}px;
+    }
+    {% endif %}
+}
+</style>
