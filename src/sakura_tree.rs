@@ -178,7 +178,7 @@ impl SakuraTree {
                     ..
                 } => Self::match_arm(start, end, leaves, indent_map, cfg),
 
-                Root::Script => (Ring::Script(start), start),
+                Root::Script | Root::Todo => (Ring::Script(start), start),
                 Root::Comment => (Ring::Comment(start), start),
                 Root::CssText => (Ring::Single(start), start),
 

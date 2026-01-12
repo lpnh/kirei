@@ -1,0 +1,18 @@
+---
+source: tests/snapshots/css.rs
+description: "<style>\n\n{# This is an Askama comment #}\n/* This is a CSS comment */\n\n.element {\n    {# Color from theme #}\n    color: {{ theme_color }};\n    /* Standard padding */\n    padding: 10px;\n}\n\n.debug { display: block; }\n\n</style>\n"
+---
+<style>
+
+    {# This is an Askama comment #}
+    /* This is a CSS comment */
+
+    .element {
+        {# Color from theme #}
+        color: {{ theme_color }};
+        /* Standard padding */
+        padding: 10px;
+    }
+
+    .debug { display: block; }
+</style>

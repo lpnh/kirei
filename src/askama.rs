@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use tree_sitter::{Node, Range};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Boundary {
+enum Boundary {
     Open,       // if, for, block, etc.
     Inner,      // when, else, else if, etc.
     Close,      // endif, endfor, endblock, etc.
@@ -81,7 +81,7 @@ impl ControlTag {
         }
     }
 
-    pub fn boundary(self) -> Boundary {
+    fn boundary(self) -> Boundary {
         match self {
             Self::If
             | Self::For
