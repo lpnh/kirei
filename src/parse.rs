@@ -46,143 +46,85 @@ impl Default for SakuraParser {
 impl SakuraParser {
     pub fn parse<'a>(
         &mut self,
-        session: &mut Session,
-        source: &'a str,
-        filepath: &str,
+        sess: &mut Session,
+        src: &'a str,
+        path: &str,
     ) -> Option<SakuraSeed<'a>> {
-        let askama_tree = parse_tree(&mut self.askama, source, "Askama", filepath, session, None)?;
+        let askama_tree = parse_tree(&mut self.askama, src, "Askama", &[], sess, path)?;
+        let (askama, content) = askama::extract_askama(&askama_tree.root_node(), src);
+        if content.is_empty() {
+            return Some(SakuraSeed {
+                askama,
+                html: Vec::new(),
+                css: Vec::new(),
+                src,
+            });
+        }
 
-        let (askama, content_ranges) =
-            askama::extract_askama_nodes(&askama_tree.root_node(), source);
-
-        let html_ranges = (!content_ranges.is_empty()).then_some(content_ranges.as_slice());
-
-        let html_tree = parse_tree(
-            &mut self.html,
-            source,
-            "HTML",
-            filepath,
-            session,
-            html_ranges,
-        )?;
-
-        let (mut html, raw_ranges) = html::extract_html_nodes(
-            session,
-            &html_tree.root_node(),
-            source,
-            &content_ranges,
-            filepath,
-        );
-
-        let crossing_indices = element_across_control(session, &html, &askama, source, filepath);
+        let html_tree = parse_tree(&mut self.html, src, "HTML", &content, sess, path)?;
+        let (mut html, raw) = html::extract_html(sess, &html_tree.root_node(), src, &content, path);
+        let crossing_indices = element_across_control(sess, &html, &askama, src, path);
         html::unpair_crossing_tags(&mut html, &crossing_indices);
+        if raw.is_empty() {
+            return Some(SakuraSeed {
+                askama,
+                html,
+                css: Vec::new(),
+                src,
+            });
+        }
 
-        let css = self.parse_css(
-            session,
-            source,
-            filepath,
-            &content_ranges,
-            &raw_ranges,
-            &askama,
-        )?;
-
+        let css_tree = parse_tree(&mut self.css, src, "CSS", &raw, sess, path)?;
+        let css = css::extract_css(sess, &css_tree.root_node(), src, &raw, path);
         Some(SakuraSeed {
             askama,
             html,
             css,
-            source,
+            src,
         })
     }
+}
 
-    fn parse_css<'a>(
-        &mut self,
-        session: &mut Session,
-        source: &'a str,
-        filepath: &str,
-        content_ranges: &[Range],
-        raw_ranges: &[Range],
-        askama_nodes: &[AskamaNode],
-    ) -> Option<Vec<CssNode<'a>>> {
-        let css_ranges: Vec<Range> = content_ranges
-            .iter()
-            .flat_map(|c| raw_ranges.iter().map(move |r| (c, r)))
-            .filter_map(|(c, r)| {
-                let start = c.start_byte.max(r.start_byte);
-                let end = c.end_byte.min(r.end_byte);
-                (start < end).then(|| Range {
-                    start_byte: start,
-                    end_byte: end,
-                    start_point: Point::new(0, 0),
-                    end_point: Point::new(0, 0),
-                })
-            })
-            .collect();
-
-        if css_ranges.is_empty() {
-            return Some(Vec::new());
-        }
-
-        if self.css.set_included_ranges(&css_ranges).is_err() {
-            session.emit_error(&ErrorKind::ParserFailed {
-                lang: "CSS".to_string(),
-            });
-            return None;
-        }
-
-        let css_tree = self.css.parse(source, None).or_else(|| {
-            session.emit_error(&ErrorKind::ParserFailed {
-                lang: "CSS".to_string(),
-            });
-            None
-        })?;
-
-        if css_tree.root_node().has_error() {
-            if raw_ranges.iter().any(|r| {
-                askama_nodes
-                    .iter()
-                    .any(|n| n.start() < r.end_byte && n.end() > r.start_byte)
-            }) {
-                return Some(
-                    raw_ranges
-                        .iter()
-                        .map(|r| CssNode::Unparsed {
-                            content: &source[r.start_byte..r.end_byte],
-                            range: r.start_byte..r.end_byte,
-                        })
-                        .collect(),
-                );
-            }
-
-            if let Some(err) = syntax_error(&css_tree.root_node(), "CSS".into(), source, filepath) {
-                session.emit_error(&err);
-            }
-            return None;
-        }
-
-        Some(css::extract_css_nodes(
-            session,
-            &css_tree.root_node(),
-            source,
-            &css_ranges,
-            filepath,
-        ))
+fn parse_tree(
+    parser: &mut Parser,
+    src: &str,
+    lang: &str,
+    ranges: &[Range],
+    sess: &mut Session,
+    path: &str,
+) -> Option<tree_sitter::Tree> {
+    if !ranges.is_empty() && parser.set_included_ranges(ranges).is_err() {
+        sess.emit_error(&ErrorKind::ParserFailed { lang: lang.into() });
+        return None;
     }
+
+    let tree = parser.parse(src, None)?;
+
+    if tree.root_node().has_error() {
+        if let Some(err) = syntax_error(&tree.root_node(), lang.into(), src, path) {
+            sess.emit_error(&err);
+        }
+        return None;
+    }
+
+    Some(tree)
 }
 
 pub struct SakuraSeed<'a> {
     askama: Vec<AskamaNode<'a>>,
     html: Vec<HtmlNode<'a>>,
     css: Vec<CssNode<'a>>,
-    source: &'a str,
+    src: &'a str,
 }
 
 impl<'a> SakuraSeed<'a> {
     pub fn grow_leaves(&'a self) -> Vec<Leaf<'a>> {
         let (askama_nodes, html_nodes, css_nodes) = (&self.askama, &self.html, &self.css);
 
-        let (mut leaves, mut pruned) = Self::from_html(html_nodes, askama_nodes, self.source);
+        let (mut leaves, mut pruned) = Self::from_html(html_nodes, askama_nodes, self.src);
 
-        let (css_leaves, css_pruned) = Self::from_css(css_nodes, askama_nodes, self.source);
+        let (css_leaves, css_pruned) = Self::from_css(css_nodes, askama_nodes, self.src);
+
         leaves.extend(css_leaves);
         pruned.extend(css_pruned);
 
@@ -191,8 +133,8 @@ impl<'a> SakuraSeed<'a> {
         let mut leaves: Vec<Leaf> = leaves.into_iter().collect();
 
         for leaf in &mut leaves {
-            leaf.ws_before = Self::source_has_ws(self.source, leaf.start.wrapping_sub(1));
-            leaf.ws_after = Self::source_has_ws(self.source, leaf.end);
+            leaf.ws_before = Self::source_has_ws(self.src, leaf.start.wrapping_sub(1));
+            leaf.ws_after = Self::source_has_ws(self.src, leaf.end);
         }
 
         let start_idx: HashMap<usize, usize> = leaves
@@ -335,40 +277,51 @@ impl<'a> SakuraSeed<'a> {
 
         for node in css_nodes {
             match node {
-                CssNode::RuleSet { .. }
-                | CssNode::AtRule { .. }
-                | CssNode::Comment { .. }
-                | CssNode::End { .. } => {
+                CssNode::End(_) => {
                     leaves.insert(Leaf::from_css(node));
                 }
-                CssNode::Declaration { range, .. } => {
-                    match Self::find_embedded(range, askama_nodes) {
-                        Some(embed) => {
-                            pruned.extend(embed.iter().copied());
-                            let content = Cow::Owned(crate::format_with_embedded(
-                                range,
-                                source,
-                                askama_nodes,
-                                &embed,
-                                str::to_string,
-                            ));
-                            leaves.insert(Leaf::grow(Root::Todo, content, range.start, range.end));
-                        }
-                        None => {
-                            leaves.insert(Leaf::from_css(node));
-                        }
-                    }
-                }
-                CssNode::Unparsed { content, range } => {
+                CssNode::RuleSet { range, .. }
+                | CssNode::AtRule { range, .. }
+                | CssNode::Comment { range, .. }
+                | CssNode::Declaration { range, .. } => {
                     if let Some(embed) = Self::find_embedded(range, askama_nodes) {
-                        pruned.extend(embed);
+                        let (ctrls, exprs): (Vec<usize>, Vec<usize>) = embed
+                            .iter()
+                            .partition(|&i| matches!(askama_nodes[*i], AskamaNode::Control { .. }));
+
+                        pruned.extend(exprs);
+
+                        let mut ctrl_leaves = Vec::new();
+                        let mut curr_pos = range.start;
+
+                        for idx in ctrls {
+                            let ctrl = &askama_nodes[idx];
+                            if ctrl.start() > curr_pos {
+                                let content = Cow::Borrowed(source[curr_pos..ctrl.start()].trim());
+                                ctrl_leaves.push(Leaf::grow(
+                                    Root::Opaque,
+                                    content,
+                                    curr_pos,
+                                    ctrl.start(),
+                                ));
+                            }
+                            curr_pos = ctrl.end();
+                        }
+
+                        if curr_pos < range.end {
+                            let content = Cow::Borrowed(source[curr_pos..range.end].trim());
+                            ctrl_leaves.push(Leaf::grow(
+                                Root::Opaque,
+                                content,
+                                curr_pos,
+                                range.end,
+                            ));
+                        }
+
+                        leaves.extend(ctrl_leaves);
+                    } else {
+                        leaves.insert(Leaf::from_css(node));
                     }
-                    leaves.insert(Leaf::grow(
-                        Root::Todo,
-                        Cow::Borrowed(content),
-                        range.start,
-                        range.end,
-                    ));
                 }
             }
         }
@@ -443,7 +396,8 @@ pub enum Root {
         indent: isize,
     },
     CssText,
-    Todo,
+
+    Opaque,
 }
 
 impl<'a> Leaf<'a> {
@@ -503,7 +457,6 @@ impl<'a> Leaf<'a> {
             CssNode::End { .. } => Root::CssBlock { indent: -1 },
             CssNode::Declaration { .. } => Root::CssText,
             CssNode::Comment { .. } => Root::Comment,
-            CssNode::Unparsed { .. } => Root::Todo,
         };
 
         Self::grow(root, content, start, end)
@@ -555,40 +508,6 @@ impl<'a> Leaf<'a> {
                 | Root::Entity
         )
     }
-}
-
-fn parse_tree(
-    parser: &mut Parser,
-    source: &str,
-    lang: &str,
-    filepath: &str,
-    session: &mut Session,
-    ranges: Option<&[Range]>,
-) -> Option<tree_sitter::Tree> {
-    if let Some(ranges) = ranges
-        && parser.set_included_ranges(ranges).is_err()
-    {
-        session.emit_error(&ErrorKind::ParserFailed {
-            lang: lang.to_string(),
-        });
-        return None;
-    }
-
-    let tree = parser.parse(source, None).or_else(|| {
-        session.emit_error(&ErrorKind::ParserFailed {
-            lang: lang.to_string(),
-        });
-        None
-    })?;
-
-    if tree.root_node().has_error() {
-        if let Some(err) = syntax_error(&tree.root_node(), lang.to_string(), source, filepath) {
-            session.emit_error(&err);
-        }
-        return None;
-    }
-
-    Some(tree)
 }
 
 fn syntax_error(root_node: &Node, kind: String, source: &str, filepath: &str) -> Option<ErrorKind> {

@@ -1,0 +1,8 @@
+---
+source: tests/snapshots/diagnostics.rs
+description: "<style>\n  .foo {\n    color: red;\n</style>\n"
+---
+<style>
+    .foo {
+      color: red;
+</style>

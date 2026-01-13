@@ -208,7 +208,7 @@ impl AskamaNode<'_> {
     }
 }
 
-pub fn extract_askama_nodes<'a>(root: &Node, source: &'a str) -> (Vec<AskamaNode<'a>>, Vec<Range>) {
+pub fn extract_askama<'a>(root: &Node, source: &'a str) -> (Vec<AskamaNode<'a>>, Vec<Range>) {
     let mut nodes = Vec::new();
     let mut content_node_ranges = Vec::new();
     let mut stack: Vec<(usize, ControlTag)> = Vec::new();

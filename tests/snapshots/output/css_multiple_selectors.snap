@@ -4,22 +4,20 @@ description: "<style>\n{% for state in [\"hover\", \"focus\", \"active\"] %}\n.b
 ---
 <style>
     {% for state in ["hover", "focus", "active"] %}
-    .button:{{ state }} {
-        opacity: 0.8;
-    }
+        .button:{{ state }} {
+            opacity: 0.8;
+        }
     {% endfor %}
-
     .item-{{ id }},
     .item-{{ id }}-alt,
     #element-{{ id }} {
-        {% if is_special %}
-            background: gold;
-        {% endif %}
-        margin: {{ spacing }}px;
+    {% if is_special %}
+        background: gold;
+    {% endif %}
+    margin: {{ spacing }}px;
     }
-
     {% if include_utilities %}
-    .mt-1, .my-1 { margin-top: 4px; }
-    .mb-1, .my-1 { margin-bottom: 4px; }
+        .mt-1, .my-1 { margin-top: 4px; }
+        .mb-1, .my-1 { margin-bottom: 4px; }
     {% endif %}
 </style>

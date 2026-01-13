@@ -11,9 +11,7 @@ pub enum CssNode<'a> {
         range: std::ops::Range<usize>,
         end: Option<usize>,
     },
-    End {
-        start: usize,
-    },
+    End(usize),
     Declaration {
         content: Cow<'a, str>,
         range: std::ops::Range<usize>,
@@ -27,10 +25,6 @@ pub enum CssNode<'a> {
         content: &'a str,
         range: std::ops::Range<usize>,
     },
-    Unparsed {
-        content: &'a str,
-        range: std::ops::Range<usize>,
-    },
 }
 
 impl CssNode<'_> {
@@ -39,8 +33,7 @@ impl CssNode<'_> {
             Self::RuleSet { range, .. }
             | Self::Declaration { range, .. }
             | Self::AtRule { range, .. }
-            | Self::Comment { range, .. }
-            | Self::Unparsed { range, .. } => Some(range),
+            | Self::Comment { range, .. } => Some(range),
             Self::End { .. } => None,
         }
     }
@@ -50,29 +43,25 @@ impl CssNode<'_> {
             Self::RuleSet { range, .. }
             | Self::Declaration { range, .. }
             | Self::AtRule { range, .. }
-            | Self::Comment { range, .. }
-            | Self::Unparsed { range, .. } => range.start,
-            Self::End { start } => *start,
+            | Self::Comment { range, .. } => range.start,
+            Self::End(start) => *start,
         }
     }
 
     pub fn content(&self) -> Cow<'_, str> {
         match self {
             Self::RuleSet { selector, .. } => selector.clone(),
-            Self::Declaration { content, .. } => content.clone(),
-            Self::AtRule { content, .. } => content.clone(),
-            Self::Comment { content, .. } | Self::Unparsed { content, .. } => {
-                Cow::Borrowed(content)
-            }
+            Self::Declaration { content, .. } | Self::AtRule { content, .. } => content.clone(),
+            Self::Comment { content, .. } => Cow::Borrowed(content),
             Self::End { .. } => Cow::Borrowed("}"),
         }
     }
 }
 
-pub fn extract_css_nodes<'a>(
+pub fn extract_css<'a>(
     session: &mut Session,
     root: &Node,
-    source: &'a str,
+    src: &'a str,
     ranges: &[Range],
     path: &str,
 ) -> Vec<CssNode<'a>> {
@@ -82,79 +71,78 @@ pub fn extract_css_nodes<'a>(
         return css_nodes;
     }
 
-    let src_bytes = source.as_bytes();
     let mut cursor = root.walk();
 
     for child in root.children(&mut cursor) {
-        parse_css_node(
-            &child,
-            src_bytes,
-            ranges,
-            &mut css_nodes,
-            session,
-            source,
-            path,
-        );
+        parse_css_recursive(&child, ranges, &mut css_nodes, session, src, path);
     }
 
     css_nodes
 }
 
-fn parse_css_node<'a>(
+fn parse_css_recursive<'a>(
     node: &Node,
-    source: &'a [u8],
     ranges: &[Range],
     css_nodes: &mut Vec<CssNode<'a>>,
-    session: &mut Session,
-    source_str: &str,
+    sess: &mut Session,
+    src: &'a str,
     path: &str,
 ) {
     if node.is_error() || node.is_missing() {
-        check_css_error(node, session, source_str, path);
+        check_css_error(node, sess, src, path);
         return;
     }
 
     match node.kind() {
         "rule_set" => {
-            let selector_text = extract_selector(node, source, ranges);
+            let selector_text = extract_selector(node, src.as_bytes(), ranges);
             let range = node.start_byte()..node.end_byte();
 
-            let formatted_selector = format!("{} {{", selector_text.trim());
-
-            css_nodes.push(CssNode::RuleSet {
-                selector: Cow::Owned(formatted_selector),
-                range: range.clone(),
-                end: Some(range.end),
-            });
+            let mut start = None;
+            let mut end = None;
 
             for child in node.children(&mut node.walk()) {
                 if child.kind() == "block" {
-                    for grandchild in child.children(&mut child.walk()) {
-                        if grandchild.kind() == "declaration" {
-                            let content = extract_from_ranges(&grandchild, source, ranges);
-                            let decl_range = grandchild.start_byte()..grandchild.end_byte();
+                    for g_child in child.children(&mut child.walk()) {
+                        let start_byte = g_child.start_byte();
+                        let end_byte = g_child.end_byte();
+                        let kind = g_child.kind();
+                        if kind == "{" {
+                            start = Some(end_byte);
+                        } else if kind == "}" {
+                            end = Some(start_byte);
+                        } else if kind == "declaration" {
+                            let content = extract_from_ranges(&g_child, src.as_bytes(), ranges);
                             css_nodes.push(CssNode::Declaration {
-                                content: Cow::Owned(content.trim().to_string()),
-                                range: decl_range,
+                                content: Cow::Owned(content),
+                                range: start_byte..end_byte,
                             });
+                        } else {
+                            parse_css_recursive(&g_child, ranges, css_nodes, sess, src, path);
                         }
                     }
                     break;
                 }
             }
 
-            css_nodes.push(CssNode::End { start: range.end });
+            css_nodes.push(CssNode::RuleSet {
+                selector: Cow::Owned(format!("{} {{", selector_text)),
+                range: range.start..start.unwrap_or(range.start),
+                end: Some(end.unwrap_or(range.end)),
+            });
+            css_nodes.push(CssNode::End(end.unwrap_or(range.end)));
         }
         "declaration" => {
-            let content = extract_from_ranges(node, source, ranges);
+            let content = Cow::Owned(
+                extract_from_ranges(node, src.as_bytes(), ranges)
+                    .trim()
+                    .to_string(),
+            );
             let range = node.start_byte()..node.end_byte();
-            css_nodes.push(CssNode::Declaration {
-                content: Cow::Owned(content.trim().to_string()),
-                range,
-            });
+            css_nodes.push(CssNode::Declaration { content, range });
         }
         "comment" | "js_comment" => {
-            let content = node.utf8_text(source).expect("valid UTF-8");
+            let content = node.utf8_text(src.as_bytes()).expect("valid UTF-8");
             let range = node.start_byte()..node.end_byte();
             css_nodes.push(CssNode::Comment { content, range });
         }
@@ -166,53 +154,55 @@ fn parse_css_node<'a>(
         | "supports_statement"
         | "scope_statement"
         | "at_rule" => {
-            let mut at_rule_text = String::new();
+            let mut content = String::new();
             let mut has_block = false;
+            let range = node.start_byte()..node.end_byte();
+
+            let mut start = None;
+            let mut end = None;
 
             for child in node.children(&mut node.walk()) {
                 if child.kind() == "block" {
                     has_block = true;
-                } else if let Ok(text) = child.utf8_text(source) {
-                    at_rule_text.push_str(text);
-                    at_rule_text.push(' ');
-                }
-            }
-
-            if has_block {
-                at_rule_text.push('{');
-            }
-
-            let range = node.start_byte()..node.end_byte();
-
-            css_nodes.push(CssNode::AtRule {
-                content: Cow::Owned(at_rule_text.trim().to_string()),
-                range: range.clone(),
-                end: if has_block { Some(range.end) } else { None },
-            });
-
-            if has_block {
-                for child in node.children(&mut node.walk()) {
-                    if child.kind() == "block" {
-                        for grandchild in child.children(&mut child.walk()) {
-                            parse_css_node(
-                                &grandchild,
-                                source,
-                                ranges,
-                                css_nodes,
-                                session,
-                                source_str,
-                                path,
-                            );
+                    for g_child in child.children(&mut child.walk()) {
+                        if g_child.kind() == "{" {
+                            start = Some(g_child.end_byte());
+                        } else if g_child.kind() == "}" {
+                            end = Some(g_child.start_byte());
+                        } else {
+                            parse_css_recursive(&g_child, ranges, css_nodes, sess, src, path);
                         }
-                        break;
                     }
+                } else if let Ok(text) = child.utf8_text(src.as_bytes()) {
+                    content.push_str(text);
+                    content.push(' ');
                 }
-                css_nodes.push(CssNode::End { start: range.end });
+            }
+
+            if has_block {
+                content.push('{');
+            }
+
+            let content = Cow::Owned(content.trim().to_string());
+
+            if has_block {
+                css_nodes.push(CssNode::AtRule {
+                    content,
+                    range: range.start..start.unwrap(),
+                    end,
+                });
+                css_nodes.push(CssNode::End(end.unwrap()));
+            } else {
+                css_nodes.push(CssNode::AtRule {
+                    content,
+                    range: range.start..start.unwrap(),
+                    end: None,
+                });
             }
         }
         _ => {
             for child in node.children(&mut node.walk()) {
-                parse_css_node(&child, source, ranges, css_nodes, session, source_str, path);
+                parse_css_recursive(&child, ranges, css_nodes, sess, src, path);
             }
         }
     }
@@ -234,12 +224,10 @@ fn check_css_error(node: &Node, session: &mut Session, source: &str, path: &str)
         "due to this".to_string()
     };
 
-    let err = ErrorKind::SyntaxError(Box::new(crate::BoxedSyntaxError {
+    session.emit_error(&ErrorKind::SyntaxError(Box::new(crate::BoxedSyntaxError {
         lang: "CSS".to_string(),
         src: NamedSource::new(path, source.to_string()),
         span: range_to_span(&node.range()),
         message,
-    }));
-
-    session.emit_error(&err);
+    })));
 }

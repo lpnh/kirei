@@ -6,7 +6,6 @@ description: "<style>\n{% let primary = \"#3b82f6\" %}\n{% let secondary = \"#8b
     {% let primary = "#3b82f6" %}
     {% let secondary = "#8b5cf6" %}
     {% let spacing = 16 %}
-
     .button-primary {
         background: {{ primary }};
         padding: {{ spacing }}px {{ spacing * 2 }}px;
