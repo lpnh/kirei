@@ -352,12 +352,7 @@ impl<'a> SakuraSeed<'a> {
                                 &embed,
                                 str::to_string,
                             ));
-                            leaves.insert(Leaf::grow(
-                                Root::CssText,
-                                content,
-                                range.start,
-                                range.end,
-                            ));
+                            leaves.insert(Leaf::grow(Root::Todo, content, range.start, range.end));
                         }
                         None => {
                             leaves.insert(Leaf::from_css(node));
