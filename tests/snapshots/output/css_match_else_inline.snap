@@ -3,7 +3,10 @@ source: tests/snapshots/css.rs
 description: "<style>\n.result { color: {% match status %}{% when \"success\" %}green{% when \"error\" %}red{% else %}gray{% endmatch %}; }\n</style>\n"
 ---
 <style>
-    .result {
-        color: {% match status %}{% when "success" %}green{% when "error" %}red{% else %}gray{% endmatch %};
-    }
+    .result { color:
+    {% match status %}
+        {% when "success" %}green
+        {% when "error" %}red
+        {% else %}gray
+    {% endmatch %}; }
 </style>

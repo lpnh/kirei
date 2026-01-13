@@ -26,7 +26,8 @@ enum Style {
     Inline,
     Wrapped,
     Comment,
-    Raw,
+
+    Opaque,
 }
 
 #[derive(Debug, Clone)]
@@ -45,9 +46,10 @@ enum Ring {
         start: usize,
         end: usize,
     },
-    Script(usize),
     Comment(usize),
     Single(usize),
+
+    Opaque(usize),
 }
 
 impl SakuraTree {
@@ -73,7 +75,7 @@ impl SakuraTree {
                     Self::render_wrapped(branch.start, branch.end, &leaves, &indent_map, cfg)
                 }
                 Style::Comment => Self::render_comment(branch.start, branch.end, &leaves, cfg),
-                Style::Raw => Self::render_raw(branch.start, branch.end, &leaves),
+                Style::Opaque => Self::render_opaque(branch.start, branch.end, &leaves),
             };
 
             for line in lines {
@@ -130,7 +132,7 @@ impl SakuraTree {
             }
             Ring::Phrasing { start, end } => add(branches, *start, *end, Style::Wrapped),
             Ring::MatchArm { start, end } => add(branches, *start, *end, Style::Inline),
-            Ring::Script(idx) => add(branches, *idx, *idx, Style::Raw),
+            Ring::Opaque(idx) => add(branches, *idx, *idx, Style::Opaque),
             Ring::Comment(idx) => add(branches, *idx, *idx, Style::Comment),
             Ring::Single(idx) => add(branches, *idx, *idx, Style::Inline),
         }
@@ -178,10 +180,9 @@ impl SakuraTree {
                     ..
                 } => Self::match_arm(start, end, leaves, indent_map, cfg),
 
-                Root::Script | Root::Todo => (Ring::Script(start), start),
+                Root::Script | Root::Opaque => (Ring::Opaque(start), start),
                 Root::Comment => (Ring::Comment(start), start),
                 Root::CssText => (Ring::Single(start), start),
-
                 _ if !leaf.is_block() && (leaf.pair.is_none() || !leaf.ws_after) => {
                     Self::phrasing(start, end, leaves, indent_map, cfg)
                 }
@@ -457,7 +458,7 @@ impl SakuraTree {
             .collect()
     }
 
-    fn render_raw(start: usize, end: usize, leaves: &[Leaf<'_>]) -> Vec<String> {
+    fn render_opaque(start: usize, end: usize, leaves: &[Leaf<'_>]) -> Vec<String> {
         let content = Self::branch_content(start, end, leaves);
         let lines: Vec<&str> = content.lines().collect();
 

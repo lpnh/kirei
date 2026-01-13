@@ -6,16 +6,16 @@ description: "<style>\n.container {\n    max-width: {{ container_width }}px;\n}\
     .container {
         max-width: {{ container_width }}px;
     }
+
     @media (max-width: {{ breakpoint_md }}px) {
-        {{ breakpoint_md }}
         .container {
             padding: {{ mobile_padding }}px;
         }
-        {% if enable_mobile_nav %}
-            .nav-mobile {
+    {% if enable_mobile_nav %}
+        .nav-mobile {
                 display: block;
             }
-        {% endif %}
+    {% endif %}
     }
     {% if enable_dark_mode %}
         @media (prefers-color-scheme: dark) {

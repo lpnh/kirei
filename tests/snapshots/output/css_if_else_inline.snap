@@ -3,8 +3,10 @@ source: tests/snapshots/css.rs
 description: "<style>\n.alert { border: 1px solid {% if is_danger %}red{% else %}blue{% endif %}; padding: 8px; }\n</style>\n"
 ---
 <style>
-    .alert {
-        border: 1px solid {% if is_danger %}red{% else %}blue{% endif %};
-        padding: 8px;
-    }
+    .alert { border: 1px solid
+    {% if is_danger %}
+        red
+    {% else %}
+        blue
+    {% endif %}; padding: 8px; }
 </style>

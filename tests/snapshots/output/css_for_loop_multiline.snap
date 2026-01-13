@@ -4,9 +4,9 @@ description: "<style>\n{% for color in colors %}\n.bg-{{ color.name }} {\n    ba
 ---
 <style>
     {% for color in colors %}
-    .bg-{{ color.name }} {
-        background-color: {{ color.hex }};
-        color: {{ color.text }};
-    }
+        .bg-{{ color.name }} {
+            background-color: {{ color.hex }};
+            color: {{ color.text }};
+        }
     {% endfor %}
 </style>

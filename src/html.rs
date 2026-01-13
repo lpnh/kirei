@@ -160,7 +160,7 @@ impl<'a> HtmlNode<'a> {
     }
 }
 
-pub fn extract_html_nodes<'a>(
+pub fn extract_html<'a>(
     session: &mut Session,
     root: &Node,
     source: &'a str,

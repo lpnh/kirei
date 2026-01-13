@@ -17,11 +17,10 @@ description: "<style>\n@keyframes {{ animation_name }} {\n    from {\n        op
     .animated {
         animation: {{ animation_name }} {{ duration }}s ease-out;
     }
-
     {% for i in 1..=3 %}
-    @keyframes fade-{{ i }} {
-        from { opacity: 0; }
-        to { opacity: {{ i * 0.33 }}; }
-    }
+        @keyframes fade-{{ i }} {
+            from { opacity: 0; }
+            to { opacity: {{ i * 0.33 }}; }
+        }
     {% endfor %}
 </style>
