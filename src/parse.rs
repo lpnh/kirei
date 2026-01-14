@@ -44,21 +44,11 @@ impl Default for SakuraParser {
 }
 
 impl SakuraParser {
-    pub fn parse<'a>(
-        &mut self,
-        sess: &mut Session,
-        src: &'a str,
-        path: &str,
-    ) -> Option<SakuraSeed<'a>> {
+    pub fn parse<'a>(&mut self, sess: &mut Session, src: &'a str, path: &str) -> Option<Seed<'a>> {
         let askama_tree = parse_tree(&mut self.askama, src, "Askama", &[], sess, path)?;
         let (askama, content) = askama::extract_askama(&askama_tree.root_node(), src);
         if content.is_empty() {
-            return Some(SakuraSeed {
-                askama,
-                html: Vec::new(),
-                css: Vec::new(),
-                src,
-            });
+            return Some(Self::new_seed(askama, Vec::new(), Vec::new(), src));
         }
 
         let html_tree = parse_tree(&mut self.html, src, "HTML", &content, sess, path)?;
@@ -66,22 +56,26 @@ impl SakuraParser {
         let crossing_indices = element_across_control(sess, &html, &askama, src, path);
         html::unpair_crossing_tags(&mut html, &crossing_indices);
         if raw.is_empty() {
-            return Some(SakuraSeed {
-                askama,
-                html,
-                css: Vec::new(),
-                src,
-            });
+            return Some(Self::new_seed(askama, html, Vec::new(), src));
         }
 
         let css_tree = parse_tree(&mut self.css, src, "CSS", &raw, sess, path)?;
         let css = css::extract_css(sess, &css_tree.root_node(), src, &raw, path);
-        Some(SakuraSeed {
+        Some(Self::new_seed(askama, html, css, src))
+    }
+
+    fn new_seed<'a>(
+        askama: Vec<AskamaNode<'a>>,
+        html: Vec<HtmlNode<'a>>,
+        css: Vec<CssNode<'a>>,
+        src: &'a str,
+    ) -> Seed<'a> {
+        Seed {
             askama,
             html,
             css,
             src,
-        })
+        }
     }
 }
 
@@ -93,7 +87,7 @@ fn parse_tree(
     sess: &mut Session,
     path: &str,
 ) -> Option<tree_sitter::Tree> {
-    if !ranges.is_empty() && parser.set_included_ranges(ranges).is_err() {
+    if parser.set_included_ranges(ranges).is_err() {
         sess.emit_error(&ErrorKind::ParserFailed { lang: lang.into() });
         return None;
     }
@@ -110,14 +104,14 @@ fn parse_tree(
     Some(tree)
 }
 
-pub struct SakuraSeed<'a> {
+pub struct Seed<'a> {
     askama: Vec<AskamaNode<'a>>,
     html: Vec<HtmlNode<'a>>,
     css: Vec<CssNode<'a>>,
     src: &'a str,
 }
 
-impl<'a> SakuraSeed<'a> {
+impl<'a> Seed<'a> {
     pub fn grow_leaves(&'a self) -> Vec<Leaf<'a>> {
         let (askama_nodes, html_nodes, css_nodes) = (&self.askama, &self.html, &self.css);
 

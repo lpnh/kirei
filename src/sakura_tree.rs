@@ -1,7 +1,7 @@
 use crate::{
     askama::ControlTag,
     config::Config,
-    parse::{Leaf, Root, SakuraSeed},
+    parse::{Leaf, Root, Seed},
 };
 
 #[derive(Debug, Clone)]
@@ -53,7 +53,7 @@ enum Ring {
 }
 
 impl SakuraTree {
-    pub fn grow(seed: &SakuraSeed<'_>, cfg: &Config) -> String {
+    pub fn grow(seed: &Seed<'_>, cfg: &Config) -> String {
         let leaves = seed.grow_leaves();
         let indent_map = Self::generate_indent_map(&leaves);
         let rings = Self::grow_rings_recursive(&leaves, &indent_map, cfg, 0, leaves.len(), false);
