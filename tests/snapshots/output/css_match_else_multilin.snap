@@ -5,11 +5,11 @@ description: "<style>\n.button {\n    background: {% match theme %}\n        {% 
 <style>
     .button {
         background:
-    {% match theme %}
-        {% when "dark" %}#333
-        {% when "light" %}#fff
-        {% else %}#ccc
-    {% endmatch %};
-    padding: 10px;
-}
+        {% match theme %}
+            {% when "dark" %}#333
+            {% when "light" %}#fff
+            {% else %}#ccc
+        {% endmatch %};
+        padding: 10px;
+    }
 </style>

@@ -6,23 +6,22 @@ description: "<style>\n.container {\n    max-width: {{ container_width }}px;\n}\
     .container {
         max-width: {{ container_width }}px;
     }
-
     @media (max-width: {{ breakpoint_md }}px) {
-        .container {
-            padding: {{ mobile_padding }}px;
-        }
+    .container {
+        padding: {{ mobile_padding }}px;
+    }
     {% if enable_mobile_nav %}
         .nav-mobile {
-                display: block;
-            }
-    {% endif %}
-    }
-    {% if enable_dark_mode %}
-        @media (prefers-color-scheme: dark) {
-            body {
-                background: #1a1a1a;
-                color: #f0f0f0;
-            }
+            display: block;
         }
     {% endif %}
+}
+{% if enable_dark_mode %}
+    @media (prefers-color-scheme: dark) {
+        body {
+            background: #1a1a1a;
+            color: #f0f0f0;
+        }
+    }
+{% endif %}
 </style>
