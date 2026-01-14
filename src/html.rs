@@ -1,6 +1,6 @@
 use miette::NamedSource;
 use std::borrow::Cow;
-use tree_sitter::{Node, Point, Range};
+use tree_sitter::{Node, Range};
 
 use crate::{
     ErrorKind, askama::AskamaNode, extract_from_ranges, format_with_embedded, range_to_span,
@@ -329,8 +329,8 @@ fn parse_recursive<'a>(
                 let range_ts = Range {
                     start_byte: node.start_byte(),
                     end_byte: node.end_byte(),
-                    start_point: Point::new(0, 0),
-                    end_point: Point::new(0, 0),
+                    start_point: node.start_position(),
+                    end_point: node.end_position(),
                 };
 
                 let is_style_tag = stack.last().is_some_and(|(name, _, _)| *name == "style");
