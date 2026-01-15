@@ -110,48 +110,6 @@ fn range_between(first: &Node, last: &Node) -> Range {
     }
 }
 
-pub fn exclude_askama_from_ranges(ranges: &[Range], askama_nodes: &[AskamaNode]) -> Vec<Range> {
-    let mut result = Vec::new();
-
-    for range in ranges {
-        let mut current_pos = range.start_byte;
-        let range_end = range.end_byte;
-
-        let embedded: Vec<_> = askama_nodes
-            .iter()
-            .filter(|node| node.start() >= range.start_byte && node.end() <= range_end)
-            .collect();
-
-        if embedded.is_empty() {
-            result.push(range.to_owned());
-            continue;
-        }
-
-        for node in embedded {
-            if node.start() > current_pos {
-                result.push(Range {
-                    start_byte: current_pos,
-                    end_byte: node.start(),
-                    start_point: Point::new(0, 0),
-                    end_point: Point::new(0, 0),
-                });
-            }
-            current_pos = node.end();
-        }
-
-        if current_pos < range_end {
-            result.push(Range {
-                start_byte: current_pos,
-                end_byte: range_end,
-                start_point: Point::new(0, 0),
-                end_point: Point::new(0, 0),
-            });
-        }
-    }
-
-    result
-}
-
 pub fn element_across_control(
     session: &mut Session,
     html_nodes: &[HtmlNode],

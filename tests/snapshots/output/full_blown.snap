@@ -9,8 +9,8 @@ description: "{% extends \"base.html\" %}\n{% block title %}Profile{% endblock %
     <style>
         /* CSS comment: highlight user name */
         .username {
-        font-weight: bold;
-        color: {{ name_color }};
+            font-weight: bold;
+            color: {{ name_color }};
         }
     </style>
     <script>

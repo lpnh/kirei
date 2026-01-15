@@ -195,7 +195,7 @@ fn parse_css_recursive(
             } else {
                 css_nodes.push(CssNode::AtRule {
                     content,
-                    range: range.start..start.unwrap(),
+                    range: range.start..range.end,
                     end: None,
                 });
             }

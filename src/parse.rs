@@ -62,9 +62,9 @@ impl SakuraParser {
             return Some(Self::new_seed(askama, html, Vec::new(), src.to_string()));
         }
 
-        let css_ranges = check::exclude_askama_from_ranges(&raw, &askama);
-        let css_tree = parse_tree(&mut self.css, src, "CSS", &css_ranges, sess, path)?;
-        let css = css::extract_css(sess, &css_tree.root_node(), src, &css_ranges, path);
+        let shadow_src = shadow(src, &askama);
+        let css_tree = parse_tree(&mut self.css, &shadow_src, "CSS", &raw, sess, path)?;
+        let css = css::extract_css(sess, &css_tree.root_node(), src, &raw, path);
         Some(Self::new_seed(askama, html, css, src.to_string()))
     }
 
@@ -108,6 +108,32 @@ fn parse_tree(
     Some(tree)
 }
 
+fn shadow(source: &str, askama_nodes: &[AskamaNode]) -> String {
+    let mut shadow = source.to_string();
+
+    let mut nodes: Vec<_> = askama_nodes.iter().collect();
+    nodes.sort_by_key(|n| std::cmp::Reverse(n.start()));
+
+    for node in nodes {
+        let placeholder = match node {
+            AskamaNode::Expression { range, .. } => {
+                let next_char = source.as_bytes().get(range.end).copied();
+                if next_char == Some(b'%') {
+                    "0".repeat(range.len())
+                } else {
+                    "_".repeat(range.len())
+                }
+            }
+            AskamaNode::Control { range, .. } | AskamaNode::Comment { range, .. } => {
+                format!("/*{}*/", "_".repeat(range.len() - 4))
+            }
+        };
+        shadow.replace_range(node.start()..node.end(), &placeholder);
+    }
+
+    shadow
+}
+
 pub struct Seed {
     askama: Vec<AskamaNode>,
     html: Vec<HtmlNode>,
@@ -121,7 +147,7 @@ impl Seed {
 
         let (mut leaves, mut pruned) = Self::from_html(html_nodes, askama_nodes, &self.src);
 
-        let (css_leaves, css_pruned) = Self::from_css(css_nodes, askama_nodes, &self.src);
+        let (css_leaves, css_pruned) = Self::from_css(css_nodes, askama_nodes);
 
         leaves.extend(css_leaves);
         pruned.extend(css_pruned);
@@ -262,60 +288,20 @@ impl Seed {
     fn from_css(
         css_nodes: &[CssNode],
         askama_nodes: &[AskamaNode],
-        source: &str,
     ) -> (BTreeSet<Leaf>, HashSet<usize>) {
         let mut leaves = BTreeSet::new();
         let mut pruned = HashSet::new();
 
         for node in css_nodes {
-            match node {
-                CssNode::End(_) => {
-                    leaves.insert(Leaf::from_css(node));
+            if let Some(range) = node.range()
+                && let Some(embed) = Self::find_embedded(range, askama_nodes)
+            {
+                if matches!(node, CssNode::Comment { .. }) {
+                    continue;
                 }
-                CssNode::RuleSet { range, .. }
-                | CssNode::AtRule { range, .. }
-                | CssNode::Comment { range, .. }
-                | CssNode::Declaration { range, .. } => {
-                    if let Some(embed) = Self::find_embedded(range, askama_nodes) {
-                        let (ctrls, exprs): (Vec<usize>, Vec<usize>) = embed
-                            .iter()
-                            .partition(|&i| matches!(askama_nodes[*i], AskamaNode::Control { .. }));
-
-                        pruned.extend(exprs);
-
-                        let mut ctrl_leaves = Vec::new();
-                        let mut curr_pos = range.start;
-
-                        for idx in ctrls {
-                            let ctrl = &askama_nodes[idx];
-                            if ctrl.start() > curr_pos {
-                                let content = source[curr_pos..ctrl.start()].trim().to_string();
-                                ctrl_leaves.push(Leaf::grow(
-                                    Root::Opaque,
-                                    content,
-                                    curr_pos,
-                                    ctrl.start(),
-                                ));
-                            }
-                            curr_pos = ctrl.end();
-                        }
-
-                        if curr_pos < range.end {
-                            let content = source[curr_pos..range.end].trim().to_string();
-                            ctrl_leaves.push(Leaf::grow(
-                                Root::Opaque,
-                                content,
-                                curr_pos,
-                                range.end,
-                            ));
-                        }
-
-                        leaves.extend(ctrl_leaves);
-                    } else {
-                        leaves.insert(Leaf::from_css(node));
-                    }
-                }
+                pruned.extend(embed);
             }
+            leaves.insert(Leaf::from_css(node));
         }
 
         (leaves, pruned)
@@ -388,8 +374,6 @@ pub enum Root {
         indent: isize,
     },
     CssText,
-
-    Opaque,
 }
 
 impl Leaf {

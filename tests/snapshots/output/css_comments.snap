@@ -5,13 +5,13 @@ description: "<style>\n\n{# This is an Askama comment #}\n/* This is a CSS comme
 <style>
     {# This is an Askama comment #}
     /* This is a CSS comment */
-
     .element {
         {# Color from theme #}
         color: {{ theme_color }};
         /* Standard padding */
         padding: 10px;
     }
-
-    .debug { display: block; }
+    .debug {
+        display: block;
+    }
 </style>

@@ -4,6 +4,8 @@ description: "<style>\n{% for i in 1..=5 %}.priority-{{ i }} { z-index: {{ i * 1
 ---
 <style>
     {% for i in 1..=5 %}
-        .priority-{{ i }} { z-index: {{ i * 10 }}; }
+        .priority-{{ i }} {
+            z-index: {{ i * 10 }};
+        }
     {% endfor %}
 </style>

@@ -177,7 +177,7 @@ impl SakuraTree {
                     tag: ControlTag::When | ControlTag::MatchElse,
                     ..
                 } => Self::match_arm(start, end, leaves, indent_map, cfg),
-                Root::Script | Root::Opaque => (Ring::Opaque(start), start),
+                Root::Script => (Ring::Opaque(start), start),
                 Root::Comment => (Ring::Comment(start), start),
                 Root::CssText => (Ring::Single(start), start),
                 _ if !leaf.is_block() && (leaf.pair.is_none() || !leaf.ws_after) => {

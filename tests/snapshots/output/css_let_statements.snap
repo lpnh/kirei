@@ -10,7 +10,6 @@ description: "<style>\n{% let primary = \"#3b82f6\" %}\n{% let secondary = \"#8b
         background: {{ primary }};
         padding: {{ spacing }}px {{ spacing * 2 }}px;
     }
-
     .button-secondary {
         background: {{ secondary }};
         padding: {{ spacing }}px {{ spacing * 2 }}px;

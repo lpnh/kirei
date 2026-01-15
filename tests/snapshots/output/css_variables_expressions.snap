@@ -8,12 +8,10 @@ description: "<style>\n.header {\n    font-size: {{ base_size }}px;\n    line-he
         line-height: {{ base_size * 1.5 }}px;
         margin-bottom: {{ spacing }}rem;
     }
-
     .{{ class_name }} {
         color: {{ primary_color }};
         background: {{ secondary_color }};
     }
-
     #element-{{ element_id }} {
         width: {{ width }}%;
         height: {{ height }}px;
