@@ -8,8 +8,8 @@ use crate::{
 pub struct SakuraTree;
 
 #[derive(Debug, Clone)]
-struct Leaflet<'a> {
-    content: &'a str,
+struct Leaflet {
+    content: String,
     ws_before: bool,
     pair: Option<usize>,
 }
@@ -53,7 +53,7 @@ enum Ring {
 }
 
 impl SakuraTree {
-    pub fn grow(seed: &Seed<'_>, cfg: &Config) -> String {
+    pub fn grow(seed: &Seed, cfg: &Config) -> String {
         let leaves = seed.grow_leaves();
         let indent_map = Self::generate_indent_map(&leaves);
         let rings = Self::grow_rings_recursive(&leaves, &indent_map, cfg, 0, leaves.len(), false);
@@ -94,7 +94,7 @@ impl SakuraTree {
 
     fn grow_branches_recursive(
         ring: &Ring,
-        leaves: &[Leaf<'_>],
+        leaves: &[Leaf],
         indent_map: &[usize],
         cfg: &Config,
         branches: &mut Vec<Branch>,
@@ -138,7 +138,7 @@ impl SakuraTree {
         }
     }
 
-    fn generate_indent_map(leaves: &[Leaf<'_>]) -> Vec<usize> {
+    fn generate_indent_map(leaves: &[Leaf]) -> Vec<usize> {
         let mut indent_map = Vec::new();
         let mut curr_indent: usize = 0;
 
@@ -164,7 +164,7 @@ impl SakuraTree {
     }
 
     fn grow_rings_recursive(
-        leaves: &[Leaf<'_>],
+        leaves: &[Leaf],
         indent_map: &[usize],
         cfg: &Config,
         mut start: usize,
@@ -204,7 +204,7 @@ impl SakuraTree {
     fn match_arm(
         start: usize,
         end_idx: usize,
-        leaves: &[Leaf<'_>],
+        leaves: &[Leaf],
         indent_map: &[usize],
         cfg: &Config,
     ) -> (Ring, usize) {
@@ -225,7 +225,7 @@ impl SakuraTree {
     fn phrasing(
         start: usize,
         end_idx: usize,
-        leaves: &[Leaf<'_>],
+        leaves: &[Leaf],
         indent_map: &[usize],
         cfg: &Config,
     ) -> (Ring, usize) {
@@ -253,7 +253,7 @@ impl SakuraTree {
         start: usize,
         pair: usize,
         end: usize,
-        leaves: &[Leaf<'_>],
+        leaves: &[Leaf],
         indent_map: &[usize],
         cfg: &Config,
         phrasing_ctx: bool,
@@ -303,13 +303,7 @@ impl SakuraTree {
         (ring, trailing)
     }
 
-    fn fits(
-        start: usize,
-        end: usize,
-        leaves: &[Leaf<'_>],
-        indent_map: &[usize],
-        cfg: &Config,
-    ) -> bool {
+    fn fits(start: usize, end: usize, leaves: &[Leaf], indent_map: &[usize], cfg: &Config) -> bool {
         indent_map[start] * cfg.indent_size + Self::width(start, end, leaves) <= cfg.max_width
     }
 
@@ -317,14 +311,14 @@ impl SakuraTree {
         indent_map[start] * cfg.indent_size + line.chars().count() + extra < cfg.max_width
     }
 
-    fn width(start: usize, end: usize, leaves: &[Leaf<'_>]) -> usize {
+    fn width(start: usize, end: usize, leaves: &[Leaf]) -> usize {
         (start..=end)
             .filter_map(|i| leaves.get(i))
             .map(|l| l.content.chars().count())
             .sum()
     }
 
-    fn branch_content(start: usize, end: usize, leaves: &[Leaf<'_>]) -> String {
+    fn branch_content(start: usize, end: usize, leaves: &[Leaf]) -> String {
         let mut content = String::new();
         let mut prev_idx = None;
 
@@ -346,11 +340,7 @@ impl SakuraTree {
         content
     }
 
-    fn grow_leaflets<'a>(
-        branch_start: usize,
-        branch_end: usize,
-        leaves: &'a [Leaf<'a>],
-    ) -> Vec<Leaflet<'a>> {
+    fn grow_leaflets(branch_start: usize, branch_end: usize, leaves: &[Leaf]) -> Vec<Leaflet> {
         let leaf_slice = &leaves[branch_start..=branch_end];
         let mut leaflets = Vec::new();
         let mut pairs = Vec::new();
@@ -361,14 +351,14 @@ impl SakuraTree {
             if leaf.root == Root::Text {
                 for (i, content) in leaf.content.split_whitespace().enumerate() {
                     leaflets.push(Leaflet {
-                        content,
+                        content: content.to_string(),
                         ws_before: i > 0 || leaf.ws_before,
                         pair: None,
                     });
                 }
             } else {
                 leaflets.push(Leaflet {
-                    content: &leaf.content,
+                    content: leaf.content.clone(),
                     ws_before: leaf.ws_before,
                     pair: None,
                 });
@@ -397,7 +387,7 @@ impl SakuraTree {
     fn render_wrapped(
         start: usize,
         end: usize,
-        leaves: &[Leaf<'_>],
+        leaves: &[Leaf],
         indent_map: &[usize],
         cfg: &Config,
     ) -> Vec<String> {
@@ -431,7 +421,7 @@ impl SakuraTree {
                 curr_line.push(' ');
             }
 
-            curr_line.push_str(leaflet.content);
+            curr_line.push_str(&leaflet.content);
             pair = pair.max(leaflet.pair);
         }
 
@@ -439,7 +429,7 @@ impl SakuraTree {
         lines
     }
 
-    fn render_comment(start: usize, end: usize, leaves: &[Leaf<'_>], cfg: &Config) -> Vec<String> {
+    fn render_comment(start: usize, end: usize, leaves: &[Leaf], cfg: &Config) -> Vec<String> {
         let content = Self::branch_content(start, end, leaves);
         let lines: Vec<&str> = content.lines().collect();
         let indent = " ".repeat(cfg.indent_size);
@@ -458,7 +448,7 @@ impl SakuraTree {
             .collect()
     }
 
-    fn render_opaque(start: usize, end: usize, leaves: &[Leaf<'_>]) -> Vec<String> {
+    fn render_opaque(start: usize, end: usize, leaves: &[Leaf]) -> Vec<String> {
         let content = Self::branch_content(start, end, leaves);
         let lines: Vec<&str> = content.lines().collect();
 

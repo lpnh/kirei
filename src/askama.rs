@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use tree_sitter::{Node, Range};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -144,33 +143,33 @@ impl ControlTag {
 }
 
 #[derive(Debug, Clone)]
-pub struct Delimiters<'a> {
-    open: &'a str,
-    close: &'a str,
+pub struct Delimiters {
+    open: String,
+    close: String,
 }
 
 #[derive(Debug, Clone)]
-pub enum AskamaNode<'a> {
+pub enum AskamaNode {
     Control {
-        dlmts: Delimiters<'a>,
-        inner: Cow<'a, str>,
+        dlmts: Delimiters,
+        inner: String,
         tag: ControlTag,
         range: std::ops::Range<usize>,
         end: Option<usize>,
     },
     Expression {
-        dlmts: Delimiters<'a>,
-        inner: Cow<'a, str>,
+        dlmts: Delimiters,
+        inner: String,
         range: std::ops::Range<usize>,
     },
     Comment {
-        dlmts: Delimiters<'a>,
-        inner: Cow<'a, str>,
+        dlmts: Delimiters,
+        inner: String,
         range: std::ops::Range<usize>,
     },
 }
 
-impl AskamaNode<'_> {
+impl AskamaNode {
     pub fn start(&self) -> usize {
         match self {
             Self::Control { range, .. }
@@ -191,7 +190,7 @@ impl AskamaNode<'_> {
         match self {
             Self::Control { dlmts, .. }
             | Self::Expression { dlmts, .. }
-            | Self::Comment { dlmts, .. } => (dlmts.open, dlmts.close),
+            | Self::Comment { dlmts, .. } => (dlmts.open.as_str(), dlmts.close.as_str()),
         }
     }
 
@@ -199,7 +198,7 @@ impl AskamaNode<'_> {
         match self {
             Self::Control { inner, .. }
             | Self::Expression { inner, .. }
-            | Self::Comment { inner, .. } => inner,
+            | Self::Comment { inner, .. } => inner.as_str(),
         }
     }
 
@@ -208,7 +207,7 @@ impl AskamaNode<'_> {
     }
 }
 
-pub fn extract_askama<'a>(root: &Node, source: &'a str) -> (Vec<AskamaNode<'a>>, Vec<Range>) {
+pub fn extract_askama(root: &Node, source: &str) -> (Vec<AskamaNode>, Vec<Range>) {
     let mut nodes = Vec::new();
     let mut content_node_ranges = Vec::new();
     let mut stack: Vec<(usize, ControlTag)> = Vec::new();
@@ -253,7 +252,7 @@ pub fn extract_askama<'a>(root: &Node, source: &'a str) -> (Vec<AskamaNode<'a>>,
     (nodes, content_node_ranges)
 }
 
-fn parse_askama_node<'a>(node: Node, source: &'a str) -> AskamaNode<'a> {
+fn parse_askama_node(node: Node, source: &str) -> AskamaNode {
     let (dlmts, inner) = extract_delimiters(node, source);
     let range = node.start_byte()..node.end_byte();
 
@@ -315,7 +314,7 @@ fn is_match_arm(node: Node) -> bool {
         .is_some_and(|child| child.kind() == "when_statement")
 }
 
-fn extract_delimiters<'a>(node: Node, source: &'a str) -> (Delimiters<'a>, Cow<'a, str>) {
+fn extract_delimiters(node: Node, source: &str) -> (Delimiters, String) {
     let first = node.child(0).expect("node should have first child");
     let last = node
         .child(node.child_count().saturating_sub(1) as u32)
@@ -324,19 +323,21 @@ fn extract_delimiters<'a>(node: Node, source: &'a str) -> (Delimiters<'a>, Cow<'
     let open = first
         .utf8_text(source.as_bytes())
         .expect("valid UTF-8")
-        .trim();
+        .trim()
+        .to_string();
     let close = last
         .utf8_text(source.as_bytes())
         .expect("valid UTF-8")
-        .trim();
+        .trim()
+        .to_string();
 
     let start = first.end_byte();
     let end = last.start_byte();
 
     let inner = if start < end {
-        Cow::Borrowed(&source[start..end])
+        source[start..end].to_string()
     } else {
-        Cow::Borrowed("")
+        String::new()
     };
 
     (Delimiters { open, close }, inner)

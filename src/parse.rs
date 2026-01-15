@@ -1,6 +1,5 @@
 use miette::NamedSource;
 use std::{
-    borrow::Cow,
     cmp::Ordering,
     collections::{BTreeSet, HashMap, HashSet},
 };
@@ -44,11 +43,16 @@ impl Default for SakuraParser {
 }
 
 impl SakuraParser {
-    pub fn parse<'a>(&mut self, sess: &mut Session, src: &'a str, path: &str) -> Option<Seed<'a>> {
+    pub fn parse(&mut self, sess: &mut Session, src: &str, path: &str) -> Option<Seed> {
         let askama_tree = parse_tree(&mut self.askama, src, "Askama", &[], sess, path)?;
         let (askama, content) = askama::extract_askama(&askama_tree.root_node(), src);
         if content.is_empty() {
-            return Some(Self::new_seed(askama, Vec::new(), Vec::new(), src));
+            return Some(Self::new_seed(
+                askama,
+                Vec::new(),
+                Vec::new(),
+                src.to_string(),
+            ));
         }
 
         let html_tree = parse_tree(&mut self.html, src, "HTML", &content, sess, path)?;
@@ -56,21 +60,21 @@ impl SakuraParser {
         let crossing_indices = element_across_control(sess, &html, &askama, src, path);
         html::unpair_crossing_tags(&mut html, &crossing_indices);
         if raw.is_empty() {
-            return Some(Self::new_seed(askama, html, Vec::new(), src));
+            return Some(Self::new_seed(askama, html, Vec::new(), src.to_string()));
         }
 
         let css_ranges = exclude_askama_from_ranges(&raw, &askama);
         let css_tree = parse_tree(&mut self.css, src, "CSS", &css_ranges, sess, path)?;
         let css = css::extract_css(sess, &css_tree.root_node(), src, &css_ranges, path);
-        Some(Self::new_seed(askama, html, css, src))
+        Some(Self::new_seed(askama, html, css, src.to_string()))
     }
 
-    fn new_seed<'a>(
-        askama: Vec<AskamaNode<'a>>,
-        html: Vec<HtmlNode<'a>>,
-        css: Vec<CssNode<'a>>,
-        src: &'a str,
-    ) -> Seed<'a> {
+    fn new_seed(
+        askama: Vec<AskamaNode>,
+        html: Vec<HtmlNode>,
+        css: Vec<CssNode>,
+        src: String,
+    ) -> Seed {
         Seed {
             askama,
             html,
@@ -105,20 +109,20 @@ fn parse_tree(
     Some(tree)
 }
 
-pub struct Seed<'a> {
-    askama: Vec<AskamaNode<'a>>,
-    html: Vec<HtmlNode<'a>>,
-    css: Vec<CssNode<'a>>,
-    src: &'a str,
+pub struct Seed {
+    askama: Vec<AskamaNode>,
+    html: Vec<HtmlNode>,
+    css: Vec<CssNode>,
+    src: String,
 }
 
-impl<'a> Seed<'a> {
-    pub fn grow_leaves(&'a self) -> Vec<Leaf<'a>> {
+impl Seed {
+    pub fn grow_leaves(&self) -> Vec<Leaf> {
         let (askama_nodes, html_nodes, css_nodes) = (&self.askama, &self.html, &self.css);
 
-        let (mut leaves, mut pruned) = Self::from_html(html_nodes, askama_nodes, self.src);
+        let (mut leaves, mut pruned) = Self::from_html(html_nodes, askama_nodes, &self.src);
 
-        let (css_leaves, css_pruned) = Self::from_css(css_nodes, askama_nodes, self.src);
+        let (css_leaves, css_pruned) = Self::from_css(css_nodes, askama_nodes, &self.src);
 
         leaves.extend(css_leaves);
         pruned.extend(css_pruned);
@@ -128,8 +132,8 @@ impl<'a> Seed<'a> {
         let mut leaves: Vec<Leaf> = leaves.into_iter().collect();
 
         for leaf in &mut leaves {
-            leaf.ws_before = Self::source_has_ws(self.src, leaf.start.wrapping_sub(1));
-            leaf.ws_after = Self::source_has_ws(self.src, leaf.end);
+            leaf.ws_before = Self::source_has_ws(&self.src, leaf.start.wrapping_sub(1));
+            leaf.ws_after = Self::source_has_ws(&self.src, leaf.end);
         }
 
         let start_idx: HashMap<usize, usize> = leaves
@@ -164,7 +168,7 @@ impl<'a> Seed<'a> {
         leaves
     }
 
-    fn from_askama(askama_nodes: &[AskamaNode<'a>], pruned: &HashSet<usize>) -> BTreeSet<Leaf<'a>> {
+    fn from_askama(askama_nodes: &[AskamaNode], pruned: &HashSet<usize>) -> BTreeSet<Leaf> {
         askama_nodes
             .iter()
             .enumerate()
@@ -174,10 +178,10 @@ impl<'a> Seed<'a> {
     }
 
     fn from_html(
-        html_nodes: &[HtmlNode<'a>],
-        askama_nodes: &[AskamaNode<'a>],
-        source: &'a str,
-    ) -> (BTreeSet<Leaf<'a>>, HashSet<usize>) {
+        html_nodes: &[HtmlNode],
+        askama_nodes: &[AskamaNode],
+        source: &str,
+    ) -> (BTreeSet<Leaf>, HashSet<usize>) {
         let mut leaves = BTreeSet::new();
         let mut pruned = HashSet::new();
 
@@ -194,8 +198,7 @@ impl<'a> Seed<'a> {
                                 is_phrasing: node.is_phrasing(),
                                 is_ws_sensitive: node.is_ws_sensitive(),
                             };
-                            let content =
-                                Cow::Owned(html::format_tag(range, source, askama_nodes, &embed));
+                            let content = html::format_tag(range, source, askama_nodes, &embed);
                             leaves.insert(Leaf::grow(root, content, range.start, range.end))
                         }
                     };
@@ -243,12 +246,7 @@ impl<'a> Seed<'a> {
                                 HtmlNode::Comment { .. } => Root::Comment,
                                 _ => unreachable!(),
                             };
-                            let content = Cow::Owned(html::format_opaque(
-                                range,
-                                source,
-                                askama_nodes,
-                                &embed,
-                            ));
+                            let content = html::format_opaque(range, source, askama_nodes, &embed);
                             leaves.insert(Leaf::grow(root, content, range.start, range.end));
                         }
                     }
@@ -263,10 +261,10 @@ impl<'a> Seed<'a> {
     }
 
     fn from_css(
-        css_nodes: &'a [CssNode<'a>],
-        askama_nodes: &[AskamaNode<'a>],
-        source: &'a str,
-    ) -> (BTreeSet<Leaf<'a>>, HashSet<usize>) {
+        css_nodes: &[CssNode],
+        askama_nodes: &[AskamaNode],
+        source: &str,
+    ) -> (BTreeSet<Leaf>, HashSet<usize>) {
         let mut leaves = BTreeSet::new();
         let mut pruned = HashSet::new();
 
@@ -292,7 +290,7 @@ impl<'a> Seed<'a> {
                         for idx in ctrls {
                             let ctrl = &askama_nodes[idx];
                             if ctrl.start() > curr_pos {
-                                let content = Cow::Borrowed(source[curr_pos..ctrl.start()].trim());
+                                let content = source[curr_pos..ctrl.start()].trim().to_string();
                                 ctrl_leaves.push(Leaf::grow(
                                     Root::Opaque,
                                     content,
@@ -304,7 +302,7 @@ impl<'a> Seed<'a> {
                         }
 
                         if curr_pos < range.end {
-                            let content = Cow::Borrowed(source[curr_pos..range.end].trim());
+                            let content = source[curr_pos..range.end].trim().to_string();
                             ctrl_leaves.push(Leaf::grow(
                                 Root::Opaque,
                                 content,
@@ -330,7 +328,7 @@ impl<'a> Seed<'a> {
 
     fn find_embedded(
         range: &std::ops::Range<usize>,
-        askama_nodes: &[AskamaNode<'a>],
+        askama_nodes: &[AskamaNode],
     ) -> Option<Vec<usize>> {
         let indices: Vec<usize> = askama_nodes
             .iter()
@@ -347,9 +345,9 @@ impl<'a> Seed<'a> {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Leaf<'a> {
+pub struct Leaf {
     pub root: Root,
-    pub content: Cow<'a, str>,
+    pub content: String,
     pub ws_before: bool,
     pub ws_after: bool,
     pub start: usize,
@@ -357,13 +355,13 @@ pub struct Leaf<'a> {
     pub pair: Option<usize>,
 }
 
-impl Ord for Leaf<'_> {
+impl Ord for Leaf {
     fn cmp(&self, other: &Self) -> Ordering {
         self.start.cmp(&other.start)
     }
 }
 
-impl PartialOrd for Leaf<'_> {
+impl PartialOrd for Leaf {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
@@ -395,8 +393,8 @@ pub enum Root {
     Opaque,
 }
 
-impl<'a> Leaf<'a> {
-    fn grow(root: Root, content: Cow<'a, str>, start: usize, end: usize) -> Self {
+impl Leaf {
+    fn grow(root: Root, content: String, start: usize, end: usize) -> Self {
         Self {
             root,
             content,
@@ -408,8 +406,8 @@ impl<'a> Leaf<'a> {
         }
     }
 
-    fn from_askama(askama_node: &AskamaNode<'a>) -> Self {
-        let content = Cow::Owned(askama::format_askama_node(askama_node));
+    fn from_askama(askama_node: &AskamaNode) -> Self {
+        let content = askama::format_askama_node(askama_node);
 
         let root = match askama_node {
             AskamaNode::Control { tag, .. } => Root::Control { tag: *tag },
@@ -420,7 +418,7 @@ impl<'a> Leaf<'a> {
         Self::grow(root, content, askama_node.start(), askama_node.end())
     }
 
-    fn from_html(html_node: &HtmlNode<'a>) -> Self {
+    fn from_html(html_node: &HtmlNode) -> Self {
         let content = html_node.format();
         let start = html_node.start();
         let end = html_node.range().map_or(start, |r| r.end);
@@ -443,7 +441,7 @@ impl<'a> Leaf<'a> {
         Self::grow(root, content, start, end)
     }
 
-    fn from_css(css_node: &'a CssNode<'a>) -> Self {
+    fn from_css(css_node: &CssNode) -> Self {
         let content = css_node.content();
         let start = css_node.start();
         let end = css_node.range().map_or(start, |r| r.end);
@@ -458,12 +456,7 @@ impl<'a> Leaf<'a> {
     }
 
     fn from_text(text: &str, start: usize, end: usize) -> Self {
-        Self::grow(
-            Root::Text,
-            Cow::Owned(crate::normalize_ws(text)),
-            start,
-            end,
-        )
+        Self::grow(Root::Text, crate::normalize_ws(text), start, end)
     }
 
     pub fn is_ctrl(&self) -> bool {
@@ -601,7 +594,7 @@ fn range_between(first: &Node, last: &Node) -> Range {
     }
 }
 
-fn exclude_askama_from_ranges(ranges: &[Range], askama_nodes: &[AskamaNode<'_>]) -> Vec<Range> {
+fn exclude_askama_from_ranges(ranges: &[Range], askama_nodes: &[AskamaNode]) -> Vec<Range> {
     let mut result = Vec::new();
 
     for range in ranges {
@@ -643,10 +636,10 @@ fn exclude_askama_from_ranges(ranges: &[Range], askama_nodes: &[AskamaNode<'_>])
     result
 }
 
-fn element_across_control<'a>(
+fn element_across_control(
     session: &mut Session,
-    html_nodes: &[HtmlNode<'a>],
-    askama_nodes: &[AskamaNode<'a>],
+    html_nodes: &[HtmlNode],
+    askama_nodes: &[AskamaNode],
     source: &str,
     filepath: &str,
 ) -> Vec<(usize, usize)> {
@@ -680,7 +673,7 @@ fn element_across_control<'a>(
         .collect()
 }
 
-fn has_crossing_boundary(start: usize, end: usize, askama_nodes: &[AskamaNode<'_>]) -> bool {
+fn has_crossing_boundary(start: usize, end: usize, askama_nodes: &[AskamaNode]) -> bool {
     if start == end {
         return false;
     }
@@ -726,7 +719,7 @@ fn has_crossing_boundary(start: usize, end: usize, askama_nodes: &[AskamaNode<'_
 
 fn find_closest_parent(
     range: &std::ops::Range<usize>,
-    askama_nodes: &[AskamaNode<'_>],
+    askama_nodes: &[AskamaNode],
 ) -> Option<(usize, usize)> {
     let mut closest_parent = None;
     let mut smallest_size = usize::MAX;

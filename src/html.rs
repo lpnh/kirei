@@ -1,5 +1,4 @@
 use miette::NamedSource;
-use std::borrow::Cow;
 use tree_sitter::{Node, Range};
 
 use crate::{
@@ -37,25 +36,25 @@ const VOID_ELEMENTS: &[&str] = &[
 const WHITESPACE_SENSITIVE: &[&str] = &["title"];
 
 #[derive(Debug, Clone)]
-pub enum HtmlNode<'a> {
+pub enum HtmlNode {
     Start {
-        name: &'a str,
+        name: String,
         attr: String,
         range: std::ops::Range<usize>,
         end: Option<usize>,
     },
     Void {
-        name: &'a str,
+        name: String,
         attr: String,
         range: std::ops::Range<usize>,
     },
     SelfClosing {
-        name: &'a str,
+        name: String,
         attr: String,
         range: std::ops::Range<usize>,
     },
     End {
-        name: &'a str,
+        name: String,
         start: usize,
         paired: bool,
     },
@@ -65,25 +64,25 @@ pub enum HtmlNode<'a> {
         range: std::ops::Range<usize>,
     },
     Raw {
-        text: &'a str,
+        text: String,
         range: std::ops::Range<usize>,
     },
 
     Doctype {
-        text: &'a str,
+        text: String,
         start: usize,
     },
     Entity {
-        text: &'a str,
+        text: String,
         start: usize,
     },
     Comment {
-        text: &'a str,
+        text: String,
         range: std::ops::Range<usize>,
     },
 }
 
-impl<'a> HtmlNode<'a> {
+impl HtmlNode {
     // https://github.com/tree-sitter/tree-sitter-html/issues/97
     fn is_void(name: &str) -> bool {
         VOID_ELEMENTS.contains(&name.to_lowercase().as_str())
@@ -103,19 +102,19 @@ impl<'a> HtmlNode<'a> {
         }
     }
 
-    pub fn format(&self) -> Cow<'a, str> {
+    pub fn format(&self) -> String {
         match self {
-            Self::Start { name, attr, .. } => Cow::Owned(format_opening_tag(name, attr)),
+            Self::Start { name, attr, .. } => format_opening_tag(name, attr),
             Self::Void { name, attr, .. } | Self::SelfClosing { name, attr, .. } => {
-                Cow::Owned(format_self_closing_or_void(name, attr))
+                format_self_closing_or_void(name, attr)
             }
-            Self::Text { text, .. } => Cow::Owned(text.clone()),
+            Self::Text { text, .. } => text.clone(),
             Self::Raw { text, .. }
             | Self::Entity { text, .. }
             | Self::Comment { text, .. }
-            | Self::Doctype { text, .. } => Cow::Borrowed(text),
+            | Self::Doctype { text, .. } => text.clone(),
 
-            Self::End { name, .. } => Cow::Owned(format!("</{}>", name)),
+            Self::End { name, .. } => format!("</{}>", name),
         }
     }
 
@@ -160,13 +159,13 @@ impl<'a> HtmlNode<'a> {
     }
 }
 
-pub fn extract_html<'a>(
+pub fn extract_html(
     session: &mut Session,
     root: &Node,
-    source: &'a str,
+    source: &str,
     ranges: &[Range],
     path: &str,
-) -> (Vec<HtmlNode<'a>>, Vec<Range>) {
+) -> (Vec<HtmlNode>, Vec<Range>) {
     let mut html_nodes = Vec::new();
     let mut raw_node_ranges = Vec::new();
     let mut stack = Vec::new();
@@ -186,15 +185,15 @@ pub fn extract_html<'a>(
     (html_nodes, raw_node_ranges)
 }
 
-fn parse_recursive<'a>(
+fn parse_recursive(
     session: &mut Session,
     node: &Node,
-    source: &'a str,
+    source: &str,
     path: &str,
     ranges: &[Range],
-    html_nodes: &mut Vec<HtmlNode<'a>>,
+    html_nodes: &mut Vec<HtmlNode>,
     raw_node_ranges: &mut Vec<Range>,
-    stack: &mut Vec<(&'a str, Range, usize)>,
+    stack: &mut Vec<(String, Range, usize)>,
     depth: usize,
 ) {
     if depth > 200 {
@@ -221,7 +220,7 @@ fn parse_recursive<'a>(
             }
         }
         "doctype" => {
-            let text = node.utf8_text(src_bytes).expect("valid UTF-8");
+            let text = node.utf8_text(src_bytes).expect("valid UTF-8").to_string();
             html_nodes.push(HtmlNode::Doctype {
                 text,
                 start: node.start_byte(),
@@ -235,7 +234,7 @@ fn parse_recursive<'a>(
                     .find(|c| c.kind() == "tag_name")
                     .expect("start_tag must have tag_name");
 
-                stack.push((*name, tag_name_node.range(), node.start_byte()));
+                stack.push((name.clone(), tag_name_node.range(), node.start_byte()));
             }
 
             html_nodes.push(html_node);
@@ -261,8 +260,9 @@ fn parse_recursive<'a>(
                 .find(|c| c.kind() == "erroneous_end_tag_name")
                 && let Some((name, open, _)) = stack.last()
             {
-                let found = extract_tag_name(node, src_bytes, "erroneous_end_tag_name");
-                let err = erroneous_end_tag(name, found, err_end_node.range(), *open, source, path);
+                let found = extract_tag_name(node, src_bytes, "erroneous_end_tag_name").to_string();
+                let err =
+                    erroneous_end_tag(name, &found, err_end_node.range(), *open, source, path);
                 session.emit_error(&err);
 
                 let end_tag_node = HtmlNode::End {
@@ -282,12 +282,12 @@ fn parse_recursive<'a>(
             }
         }
         "comment" => {
-            let text = node.utf8_text(src_bytes).expect("valid UTF-8");
+            let text = node.utf8_text(src_bytes).expect("valid UTF-8").to_string();
             let range = node.start_byte()..node.end_byte();
             html_nodes.push(HtmlNode::Comment { text, range });
         }
         "entity" => {
-            let text = node.utf8_text(src_bytes).expect("valid UTF-8");
+            let text = node.utf8_text(src_bytes).expect("valid UTF-8").to_string();
             html_nodes.push(HtmlNode::Entity {
                 text,
                 start: node.start_byte(),
@@ -339,7 +339,10 @@ fn parse_recursive<'a>(
                     raw_node_ranges.push(range_ts);
                 } else {
                     let range = node.start_byte()..node.end_byte();
-                    html_nodes.push(HtmlNode::Raw { text, range });
+                    html_nodes.push(HtmlNode::Raw {
+                        text: text.to_string(),
+                        range,
+                    });
                 }
             }
         }
@@ -347,11 +350,11 @@ fn parse_recursive<'a>(
     }
 }
 
-fn parse_start_tag<'a>(node: &Node, source: &'a [u8]) -> HtmlNode<'a> {
+fn parse_start_tag(node: &Node, source: &[u8]) -> HtmlNode {
     let name = extract_tag_name(node, source, "tag_name");
     let attr = extract_attr(node, source);
 
-    if HtmlNode::is_void(name) {
+    if HtmlNode::is_void(&name) {
         HtmlNode::Void {
             name,
             attr,
@@ -367,7 +370,7 @@ fn parse_start_tag<'a>(node: &Node, source: &'a [u8]) -> HtmlNode<'a> {
     }
 }
 
-fn parse_self_closing_tag<'a>(node: &Node, source: &'a [u8]) -> HtmlNode<'a> {
+fn parse_self_closing_tag(node: &Node, source: &[u8]) -> HtmlNode {
     let name = extract_tag_name(node, source, "tag_name");
     let attr = extract_attr(node, source);
 
@@ -378,7 +381,7 @@ fn parse_self_closing_tag<'a>(node: &Node, source: &'a [u8]) -> HtmlNode<'a> {
     }
 }
 
-fn parse_end_tag<'a>(node: &Node, source: &'a [u8]) -> HtmlNode<'a> {
+fn parse_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
     let name = extract_tag_name(node, source, "tag_name");
     HtmlNode::End {
         name,
@@ -387,11 +390,12 @@ fn parse_end_tag<'a>(node: &Node, source: &'a [u8]) -> HtmlNode<'a> {
     }
 }
 
-fn extract_tag_name<'a>(node: &Node, source: &'a [u8], kind: &str) -> &'a str {
+fn extract_tag_name(node: &Node, source: &[u8], kind: &str) -> String {
     node.children(&mut node.walk())
         .find(|c| c.kind() == kind)
         .and_then(|n| n.utf8_text(source).ok())
         .expect("tag name must exist")
+        .to_string()
 }
 
 fn extract_attr(node: &Node, source: &[u8]) -> String {
@@ -457,7 +461,7 @@ fn format_self_closing_or_void(name: &str, attr: &str) -> String {
 pub fn format_tag(
     range: &std::ops::Range<usize>,
     source: &str,
-    askama_nodes: &[AskamaNode<'_>],
+    askama_nodes: &[AskamaNode],
     embed: &[usize],
 ) -> String {
     format_with_embedded(range, source, askama_nodes, embed, normalize_fragment)
@@ -466,7 +470,7 @@ pub fn format_tag(
 pub fn format_opaque(
     range: &std::ops::Range<usize>,
     source: &str,
-    askama_nodes: &[AskamaNode<'_>],
+    askama_nodes: &[AskamaNode],
     embed: &[usize],
 ) -> String {
     format_with_embedded(range, source, askama_nodes, embed, str::to_string)
@@ -493,7 +497,7 @@ fn normalize_preserving_ends(text: &str) -> String {
     }
 }
 
-pub fn unpair_crossing_tags(html_nodes: &mut [HtmlNode<'_>], crossing_pair_idx: &[(usize, usize)]) {
+pub fn unpair_crossing_tags(html_nodes: &mut [HtmlNode], crossing_pair_idx: &[(usize, usize)]) {
     for &(start_idx, end_idx) in crossing_pair_idx {
         if let HtmlNode::Start { end, .. } = &mut html_nodes[start_idx] {
             *end = None;

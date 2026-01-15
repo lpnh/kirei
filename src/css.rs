@@ -1,33 +1,32 @@
 use miette::NamedSource;
-use std::borrow::Cow;
 use tree_sitter::{Node, Range};
 
 use crate::{ErrorKind, extract_from_ranges, range_to_span, session::Session};
 
 #[derive(Debug, Clone)]
-pub enum CssNode<'a> {
+pub enum CssNode {
     RuleSet {
-        selector: Cow<'a, str>,
+        selector: String,
         range: std::ops::Range<usize>,
         end: Option<usize>,
     },
     End(usize),
     Declaration {
-        content: Cow<'a, str>,
+        content: String,
         range: std::ops::Range<usize>,
     },
     AtRule {
-        content: Cow<'a, str>,
+        content: String,
         range: std::ops::Range<usize>,
         end: Option<usize>,
     },
     Comment {
-        content: &'a str,
+        content: String,
         range: std::ops::Range<usize>,
     },
 }
 
-impl CssNode<'_> {
+impl CssNode {
     pub fn range(&self) -> Option<&std::ops::Range<usize>> {
         match self {
             Self::RuleSet { range, .. }
@@ -48,23 +47,23 @@ impl CssNode<'_> {
         }
     }
 
-    pub fn content(&self) -> Cow<'_, str> {
+    pub fn content(&self) -> String {
         match self {
             Self::RuleSet { selector, .. } => selector.clone(),
             Self::Declaration { content, .. } | Self::AtRule { content, .. } => content.clone(),
-            Self::Comment { content, .. } => Cow::Borrowed(content),
-            Self::End { .. } => Cow::Borrowed("}"),
+            Self::Comment { content, .. } => content.clone(),
+            Self::End { .. } => String::from("}"),
         }
     }
 }
 
-pub fn extract_css<'a>(
+pub fn extract_css(
     session: &mut Session,
     root: &Node,
-    src: &'a str,
+    src: &str,
     ranges: &[Range],
     path: &str,
-) -> Vec<CssNode<'a>> {
+) -> Vec<CssNode> {
     let mut css_nodes = Vec::new();
 
     if ranges.is_empty() {
@@ -80,12 +79,12 @@ pub fn extract_css<'a>(
     css_nodes
 }
 
-fn parse_css_recursive<'a>(
+fn parse_css_recursive(
     node: &Node,
     ranges: &[Range],
-    css_nodes: &mut Vec<CssNode<'a>>,
+    css_nodes: &mut Vec<CssNode>,
     sess: &mut Session,
-    src: &'a str,
+    src: &str,
     path: &str,
 ) {
     if node.is_error() || node.is_missing() {
@@ -114,7 +113,7 @@ fn parse_css_recursive<'a>(
                         } else if kind == "declaration" {
                             let content = extract_from_ranges(&g_child, src.as_bytes(), ranges);
                             css_nodes.push(CssNode::Declaration {
-                                content: Cow::Owned(content),
+                                content,
                                 range: start_byte..end_byte,
                             });
                         } else {
@@ -126,23 +125,24 @@ fn parse_css_recursive<'a>(
             }
 
             css_nodes.push(CssNode::RuleSet {
-                selector: Cow::Owned(format!("{} {{", selector_text)),
+                selector: format!("{} {{", selector_text),
                 range: range.start..start.unwrap_or(range.start),
                 end: Some(end.unwrap_or(range.end)),
             });
             css_nodes.push(CssNode::End(end.unwrap_or(range.end)));
         }
         "declaration" => {
-            let content = Cow::Owned(
-                extract_from_ranges(node, src.as_bytes(), ranges)
-                    .trim()
-                    .to_string(),
-            );
+            let content = extract_from_ranges(node, src.as_bytes(), ranges)
+                .trim()
+                .to_string();
             let range = node.start_byte()..node.end_byte();
             css_nodes.push(CssNode::Declaration { content, range });
         }
         "comment" | "js_comment" => {
-            let content = node.utf8_text(src.as_bytes()).expect("valid UTF-8");
+            let content = node
+                .utf8_text(src.as_bytes())
+                .expect("valid UTF-8")
+                .to_string();
             let range = node.start_byte()..node.end_byte();
             css_nodes.push(CssNode::Comment { content, range });
         }
@@ -183,7 +183,7 @@ fn parse_css_recursive<'a>(
                 content.push('{');
             }
 
-            let content = Cow::Owned(content.trim().to_string());
+            let content = content.trim().to_string();
 
             if has_block {
                 css_nodes.push(CssNode::AtRule {

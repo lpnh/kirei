@@ -132,10 +132,10 @@ pub fn extract_from_ranges(node: &Node, source: &[u8], ranges: &[Range]) -> Stri
     result.join("")
 }
 
-pub fn format_with_embedded<'a>(
+pub fn format_with_embedded(
     range: &std::ops::Range<usize>,
     source: &str,
-    askama_nodes: &[askama::AskamaNode<'a>],
+    askama_nodes: &[askama::AskamaNode],
     embed: &[usize],
     transform: fn(&str) -> String,
 ) -> String {
