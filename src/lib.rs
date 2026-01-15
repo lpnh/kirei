@@ -4,6 +4,7 @@
 #![allow(unused_assignments)]
 
 mod askama;
+mod check;
 pub mod cli;
 mod config;
 mod css;
