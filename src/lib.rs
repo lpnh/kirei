@@ -132,29 +132,3 @@ pub fn extract_from_ranges(node: &Node, source: &[u8], ranges: &[Range]) -> Stri
 
     result.join("")
 }
-
-pub fn format_with_embedded(
-    range: &std::ops::Range<usize>,
-    source: &str,
-    askama_nodes: &[askama::AskamaNode],
-    embed: &[usize],
-    transform: fn(&str) -> String,
-) -> String {
-    let mut result = String::new();
-    let mut pos = range.start;
-
-    for &idx in embed {
-        let node = &askama_nodes[idx];
-        if node.start() > pos {
-            result.push_str(&transform(&source[pos..node.start()]));
-        }
-        result.push_str(&askama::format_askama_node(node));
-        pos = node.end();
-    }
-
-    if pos < range.end {
-        result.push_str(&transform(&source[pos..range.end]));
-    }
-
-    result
-}

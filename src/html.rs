@@ -1,10 +1,7 @@
 use miette::NamedSource;
 use tree_sitter::{Node, Range};
 
-use crate::{
-    ErrorKind, askama::AskamaNode, extract_from_ranges, format_with_embedded, range_to_span,
-    session::Session,
-};
+use crate::{ErrorKind, extract_from_ranges, range_to_span, session::Session};
 
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Content_categories#phrasing_content
 const PHRASING_CONTENT: &[&str] = &[
@@ -56,7 +53,7 @@ pub enum HtmlNode {
     End {
         name: String,
         start: usize,
-        paired: bool,
+        pair: bool,
     },
 
     Text {
@@ -113,7 +110,6 @@ impl HtmlNode {
             | Self::Entity { text, .. }
             | Self::Comment { text, .. }
             | Self::Doctype { text, .. } => text.clone(),
-
             Self::End { name, .. } => format!("</{}>", name),
         }
     }
@@ -153,7 +149,7 @@ impl HtmlNode {
     pub fn indent(&self) -> isize {
         match self {
             Self::Start { end, .. } => end.is_some().into(),
-            Self::End { paired: true, .. } => -1,
+            Self::End { pair: true, .. } => -1,
             _ => 0,
         }
     }
@@ -236,7 +232,6 @@ fn parse_recursive(
 
                 stack.push((name.clone(), tag_name_node.range(), node.start_byte()));
             }
-
             html_nodes.push(html_node);
         }
         "end_tag" => {
@@ -248,7 +243,6 @@ fn parse_recursive(
             {
                 stack.truncate(pos);
             }
-
             html_nodes.push(end_tag_node);
         }
         "self_closing_tag" => {
@@ -264,11 +258,10 @@ fn parse_recursive(
                 let err =
                     erroneous_end_tag(name, &found, err_end_node.range(), *open, source, path);
                 session.emit_error(&err);
-
                 let end_tag_node = HtmlNode::End {
                     name: found,
                     start: node.start_byte(),
-                    paired: false,
+                    pair: false,
                 };
                 if let HtmlNode::End { name, .. } = &end_tag_node
                     && let Some(pos) = stack
@@ -277,7 +270,6 @@ fn parse_recursive(
                 {
                     stack.truncate(pos);
                 }
-
                 html_nodes.push(end_tag_node);
             }
         }
@@ -288,10 +280,8 @@ fn parse_recursive(
         }
         "entity" => {
             let text = node.utf8_text(src_bytes).expect("valid UTF-8").to_string();
-            html_nodes.push(HtmlNode::Entity {
-                text,
-                start: node.start_byte(),
-            });
+            let start = node.start_byte();
+            html_nodes.push(HtmlNode::Entity { text, start });
         }
         "text" => {
             let text = extract_from_ranges(node, src_bytes, ranges);
@@ -333,16 +323,13 @@ fn parse_recursive(
                     end_point: node.end_position(),
                 };
 
-                let is_style_tag = stack.last().is_some_and(|(name, _, _)| *name == "style");
-
-                if is_style_tag {
+                let is_style = stack.last().is_some_and(|(name, _, _)| *name == "style");
+                if is_style {
                     raw_node_ranges.push(range_ts);
                 } else {
+                    let text = text.to_string();
                     let range = node.start_byte()..node.end_byte();
-                    html_nodes.push(HtmlNode::Raw {
-                        text: text.to_string(),
-                        range,
-                    });
+                    html_nodes.push(HtmlNode::Raw { text, range });
                 }
             }
         }
@@ -353,19 +340,16 @@ fn parse_recursive(
 fn parse_start_tag(node: &Node, source: &[u8]) -> HtmlNode {
     let name = extract_tag_name(node, source, "tag_name");
     let attr = extract_attr(node, source);
+    let range = node.start_byte()..node.end_byte();
 
     if HtmlNode::is_void(&name) {
-        HtmlNode::Void {
-            name,
-            attr,
-            range: node.start_byte()..node.end_byte(),
-        }
+        HtmlNode::Void { name, attr, range }
     } else {
         HtmlNode::Start {
             name,
             attr,
             end: None,
-            range: node.start_byte()..node.end_byte(),
+            range,
         }
     }
 }
@@ -373,21 +357,15 @@ fn parse_start_tag(node: &Node, source: &[u8]) -> HtmlNode {
 fn parse_self_closing_tag(node: &Node, source: &[u8]) -> HtmlNode {
     let name = extract_tag_name(node, source, "tag_name");
     let attr = extract_attr(node, source);
-
-    HtmlNode::SelfClosing {
-        name,
-        attr,
-        range: node.start_byte()..node.end_byte(),
-    }
+    let range = node.start_byte()..node.end_byte();
+    HtmlNode::SelfClosing { name, attr, range }
 }
 
 fn parse_end_tag(node: &Node, source: &[u8]) -> HtmlNode {
     let name = extract_tag_name(node, source, "tag_name");
-    HtmlNode::End {
-        name,
-        start: node.start_byte(),
-        paired: true,
-    }
+    let start = node.start_byte();
+    let pair = true;
+    HtmlNode::End { name, start, pair }
 }
 
 fn extract_tag_name(node: &Node, source: &[u8], kind: &str) -> String {
@@ -458,52 +436,13 @@ fn format_self_closing_or_void(name: &str, attr: &str) -> String {
     }
 }
 
-pub fn format_tag(
-    range: &std::ops::Range<usize>,
-    source: &str,
-    askama_nodes: &[AskamaNode],
-    embed: &[usize],
-) -> String {
-    format_with_embedded(range, source, askama_nodes, embed, normalize_fragment)
-}
-
-pub fn format_opaque(
-    range: &std::ops::Range<usize>,
-    source: &str,
-    askama_nodes: &[AskamaNode],
-    embed: &[usize],
-) -> String {
-    format_with_embedded(range, source, askama_nodes, embed, str::to_string)
-}
-
-fn normalize_fragment(fragment: &str) -> String {
-    if let Some(rest) = fragment.strip_suffix('>') {
-        format!("{}>", normalize_preserving_ends(rest).trim_end())
-    } else {
-        normalize_preserving_ends(fragment)
-    }
-}
-
-fn normalize_preserving_ends(text: &str) -> String {
-    let normalized = crate::normalize_ws(text);
-    match (
-        text.starts_with(char::is_whitespace),
-        text.ends_with(char::is_whitespace),
-    ) {
-        (true, true) => format!(" {} ", normalized),
-        (true, false) => format!(" {}", normalized),
-        (false, true) => format!("{} ", normalized),
-        (false, false) => normalized,
-    }
-}
-
 pub fn unpair_crossing_tags(html_nodes: &mut [HtmlNode], crossing_pair_idx: &[(usize, usize)]) {
     for &(start_idx, end_idx) in crossing_pair_idx {
         if let HtmlNode::Start { end, .. } = &mut html_nodes[start_idx] {
             *end = None;
         }
-        if let HtmlNode::End { paired, .. } = &mut html_nodes[end_idx] {
-            *paired = false;
+        if let HtmlNode::End { pair, .. } = &mut html_nodes[end_idx] {
+            *pair = false;
         }
     }
 }

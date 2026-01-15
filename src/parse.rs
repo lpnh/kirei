@@ -177,18 +177,18 @@ impl Seed {
     }
 
     fn from_html(
-        html_nodes: &[HtmlNode],
-        askama_nodes: &[AskamaNode],
-        source: &str,
+        html: &[HtmlNode],
+        askama: &[AskamaNode],
+        src: &str,
     ) -> (BTreeSet<Leaf>, HashSet<usize>) {
         let mut leaves = BTreeSet::new();
         let mut pruned = HashSet::new();
 
-        for node in html_nodes {
+        for node in html {
             match node {
                 HtmlNode::Start { .. } | HtmlNode::Void { .. } | HtmlNode::SelfClosing { .. } => {
                     let Some(range) = node.range() else { continue };
-                    match Self::find_embedded(range, askama_nodes) {
+                    match Self::find_embedded(range, askama) {
                         None => leaves.insert(Leaf::from_html(node)),
                         Some(embed) => {
                             pruned.extend(embed.iter().copied());
@@ -197,24 +197,24 @@ impl Seed {
                                 is_phrasing: node.is_phrasing(),
                                 is_ws_sensitive: node.is_ws_sensitive(),
                             };
-                            let content = html::format_tag(range, source, askama_nodes, &embed);
+                            let content = format_embed(range, src, askama, &embed, normalize_embed);
                             leaves.insert(Leaf::grow(root, content, range.start, range.end))
                         }
                     };
                 }
                 HtmlNode::Text { text, .. } => {
                     let Some(range) = node.range() else { continue };
-                    match Self::find_embedded(range, askama_nodes) {
+                    match Self::find_embedded(range, askama) {
                         None => {
                             leaves.insert(Leaf::from_text(text, range.start, range.end));
                         }
                         Some(embed) => {
                             let mut curr_pos = range.start;
                             for &idx in &embed {
-                                let node = &askama_nodes[idx];
+                                let node = &askama[idx];
                                 if node.start() > curr_pos {
                                     leaves.insert(Leaf::from_text(
-                                        &source[curr_pos..node.start()],
+                                        &src[curr_pos..node.start()],
                                         curr_pos,
                                         node.start(),
                                     ));
@@ -224,7 +224,7 @@ impl Seed {
                             }
                             if curr_pos < range.end {
                                 leaves.insert(Leaf::from_text(
-                                    &source[curr_pos..range.end],
+                                    &src[curr_pos..range.end],
                                     curr_pos,
                                     range.end,
                                 ));
@@ -234,7 +234,7 @@ impl Seed {
                 }
                 HtmlNode::Raw { .. } | HtmlNode::Comment { .. } => {
                     let Some(range) = node.range() else { continue };
-                    match Self::find_embedded(range, askama_nodes) {
+                    match Self::find_embedded(range, askama) {
                         None => {
                             leaves.insert(Leaf::from_html(node));
                         }
@@ -245,7 +245,7 @@ impl Seed {
                                 HtmlNode::Comment { .. } => Root::Comment,
                                 _ => unreachable!(),
                             };
-                            let content = html::format_opaque(range, source, askama_nodes, &embed);
+                            let content = format_embed(range, src, askama, &embed, str::to_string);
                             leaves.insert(Leaf::grow(root, content, range.start, range.end));
                         }
                     }
@@ -495,4 +495,51 @@ impl Leaf {
                 | Root::Entity
         )
     }
+}
+
+fn normalize_embed(fragment: &str) -> String {
+    if let Some(rest) = fragment.strip_suffix('>') {
+        format!("{}>", normalize_preserving_ends(rest).trim_end())
+    } else {
+        normalize_preserving_ends(fragment)
+    }
+}
+
+fn normalize_preserving_ends(text: &str) -> String {
+    let normalized = crate::normalize_ws(text);
+    match (
+        text.starts_with(char::is_whitespace),
+        text.ends_with(char::is_whitespace),
+    ) {
+        (true, true) => format!(" {} ", normalized),
+        (true, false) => format!(" {}", normalized),
+        (false, true) => format!("{} ", normalized),
+        (false, false) => normalized,
+    }
+}
+
+fn format_embed(
+    range: &std::ops::Range<usize>,
+    source: &str,
+    askama_nodes: &[askama::AskamaNode],
+    embed: &[usize],
+    transform: fn(&str) -> String,
+) -> String {
+    let mut result = String::new();
+    let mut pos = range.start;
+
+    for &idx in embed {
+        let node = &askama_nodes[idx];
+        if node.start() > pos {
+            result.push_str(&transform(&source[pos..node.start()]));
+        }
+        result.push_str(&askama::format_askama_node(node));
+        pos = node.end();
+    }
+
+    if pos < range.end {
+        result.push_str(&transform(&source[pos..range.end]));
+    }
+
+    result
 }

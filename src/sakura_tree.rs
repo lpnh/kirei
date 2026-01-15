@@ -124,7 +124,7 @@ impl SakuraTree {
         cfg: &Config,
         branches: &mut Vec<Branch>,
     ) {
-        let add = |branches: &mut Vec<Branch>, start, end, style| {
+        let grow = |branches: &mut Vec<Branch>, start, end, style| {
             branches.push(Branch { start, end, style });
         };
 
@@ -137,29 +137,26 @@ impl SakuraTree {
             } => {
                 let fits_inline = Self::fits(*start, *trailing, leaves, indent_map, cfg)
                     && inner.iter().all(|r| matches!(r, Ring::Phrasing { .. }));
-
                 if fits_inline {
-                    add(branches, *start, *end, Style::Inline);
+                    grow(branches, *start, *end, Style::Inline);
                 } else {
-                    add(branches, *start, *start, Style::Inline); // Open
-
+                    grow(branches, *start, *start, Style::Inline);
                     for child in inner {
                         Self::grow_branches_recursive(child, leaves, indent_map, cfg, branches);
                     }
-
                     if leaves[*end].ws_after && trailing > end {
-                        add(branches, *end, *end, Style::Inline);
-                        add(branches, *end + 1, *trailing, Style::Wrapped);
+                        grow(branches, *end, *end, Style::Inline);
+                        grow(branches, *end + 1, *trailing, Style::Wrapped);
                     } else {
-                        add(branches, *end, *trailing, Style::Inline);
+                        grow(branches, *end, *trailing, Style::Inline);
                     }
                 }
             }
-            Ring::Phrasing { start, end } => add(branches, *start, *end, Style::Wrapped),
-            Ring::MatchArm { start, end } => add(branches, *start, *end, Style::Inline),
-            Ring::Opaque(idx) => add(branches, *idx, *idx, Style::Opaque),
-            Ring::Comment(idx) => add(branches, *idx, *idx, Style::Comment),
-            Ring::Single(idx) => add(branches, *idx, *idx, Style::Inline),
+            Ring::Phrasing { start, end } => grow(branches, *start, *end, Style::Wrapped),
+            Ring::MatchArm { start, end } => grow(branches, *start, *end, Style::Inline),
+            Ring::Opaque(idx) => grow(branches, *idx, *idx, Style::Opaque),
+            Ring::Comment(idx) => grow(branches, *idx, *idx, Style::Comment),
+            Ring::Single(idx) => grow(branches, *idx, *idx, Style::Inline),
         }
     }
 
@@ -174,19 +171,18 @@ impl SakuraTree {
         let mut rings = Vec::new();
         while start < end {
             let leaf = &leaves[start];
+
             let (ring, last) = match leaf.root {
                 Root::Control {
                     tag: ControlTag::When | ControlTag::MatchElse,
                     ..
                 } => Self::match_arm(start, end, leaves, indent_map, cfg),
-
                 Root::Script | Root::Opaque => (Ring::Opaque(start), start),
                 Root::Comment => (Ring::Comment(start), start),
                 Root::CssText => (Ring::Single(start), start),
                 _ if !leaf.is_block() && (leaf.pair.is_none() || !leaf.ws_after) => {
                     Self::phrasing(start, end, leaves, indent_map, cfg)
                 }
-
                 _ => match leaf.pair {
                     Some(pair) => {
                         Self::block(start, pair, end, leaves, indent_map, cfg, phrasing_ctx)
@@ -198,6 +194,7 @@ impl SakuraTree {
             rings.push(ring);
             start = last + 1;
         }
+
         rings
     }
 

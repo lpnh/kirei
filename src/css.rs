@@ -72,7 +72,6 @@ pub fn extract_css(
     }
 
     let mut cursor = root.walk();
-
     for child in root.children(&mut cursor) {
         parse_css_recursive(&child, ranges, &mut css_nodes, session, src, path);
     }
@@ -95,7 +94,7 @@ fn parse_css_recursive(
 
     match node.kind() {
         "rule_set" => {
-            let selector_text = extract_selector(node, src.as_bytes(), ranges);
+            let selector = extract_selector(node, src.as_bytes(), ranges);
             let range = node.start_byte()..node.end_byte();
 
             let mut start = None;
@@ -126,7 +125,7 @@ fn parse_css_recursive(
             }
 
             css_nodes.push(CssNode::RuleSet {
-                content: format!("{} {{", selector_text),
+                content: format!("{} {{", selector),
                 range: range.start..start.unwrap_or(range.start),
                 end: Some(end.unwrap_or(range.end)),
             });
