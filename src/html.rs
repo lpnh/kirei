@@ -108,8 +108,8 @@ impl HtmlNode {
             Self::Void { name, attr, .. } | Self::SelfClosing { name, attr, .. } => {
                 format_self_closing_or_void(name, attr)
             }
-            Self::Text { text, .. } => text.clone(),
-            Self::Raw { text, .. }
+            Self::Text { text, .. }
+            | Self::Raw { text, .. }
             | Self::Entity { text, .. }
             | Self::Comment { text, .. }
             | Self::Doctype { text, .. } => text.clone(),
@@ -260,7 +260,7 @@ fn parse_recursive(
                 .find(|c| c.kind() == "erroneous_end_tag_name")
                 && let Some((name, open, _)) = stack.last()
             {
-                let found = extract_tag_name(node, src_bytes, "erroneous_end_tag_name").to_string();
+                let found = extract_tag_name(node, src_bytes, "erroneous_end_tag_name");
                 let err =
                     erroneous_end_tag(name, &found, err_end_node.range(), *open, source, path);
                 session.emit_error(&err);

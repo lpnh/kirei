@@ -6,7 +6,7 @@ use crate::{ErrorKind, extract_from_ranges, range_to_span, session::Session};
 #[derive(Debug, Clone)]
 pub enum CssNode {
     RuleSet {
-        selector: String,
+        content: String,
         range: std::ops::Range<usize>,
         end: Option<usize>,
     },
@@ -49,9 +49,10 @@ impl CssNode {
 
     pub fn content(&self) -> String {
         match self {
-            Self::RuleSet { selector, .. } => selector.clone(),
-            Self::Declaration { content, .. } | Self::AtRule { content, .. } => content.clone(),
-            Self::Comment { content, .. } => content.clone(),
+            Self::RuleSet { content, .. }
+            | Self::Declaration { content, .. }
+            | Self::AtRule { content, .. }
+            | Self::Comment { content, .. } => content.clone(),
             Self::End { .. } => String::from("}"),
         }
     }
@@ -125,7 +126,7 @@ fn parse_css_recursive(
             }
 
             css_nodes.push(CssNode::RuleSet {
-                selector: format!("{} {{", selector_text),
+                content: format!("{} {{", selector_text),
                 range: range.start..start.unwrap_or(range.start),
                 end: Some(end.unwrap_or(range.end)),
             });
