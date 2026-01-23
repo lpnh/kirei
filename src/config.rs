@@ -1,7 +1,7 @@
 #[derive(Debug, Clone)]
 pub struct Config {
-    pub(crate) indent_size: usize,
-    pub(crate) max_width: usize,
+    pub indent_size: usize,
+    pub max_width: usize,
 }
 
 impl Default for Config {

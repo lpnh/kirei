@@ -1,13 +1,12 @@
 use miette::NamedSource;
 use tree_sitter::{Node, Point, Range};
 
-use crate::{
-    ErrorKind,
+use super::{
     askama::{AskamaNode, ControlTag},
     html::HtmlNode,
-    range_to_span,
-    session::Session,
 };
+
+use crate::{ErrorKind, range_to_span, session::Session};
 
 pub fn syntax_error(
     root_node: &Node,

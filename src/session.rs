@@ -1,7 +1,7 @@
 use miette::{Diagnostic, GraphicalReportHandler};
 use std::{fs, path::PathBuf};
 
-use crate::{ErrorKind, config::Config, parse::SakuraParser, sakura_tree::SakuraTree};
+use crate::{ErrorKind, config::Config, parse::parser::SakuraParser, sakura::tree::grow};
 
 #[derive(Default)]
 pub struct Session {
@@ -26,7 +26,7 @@ impl Session {
     pub fn format(&mut self, source: &str, filepath: &str) -> Option<String> {
         SakuraParser::default()
             .parse(self, source, filepath)
-            .map(|seed| SakuraTree::grow(&seed, &self.config))
+            .map(|seed| grow(&seed, &self.config))
     }
 
     pub fn format_and_print(&mut self, mode: &SessionMode, path: impl Into<PathBuf>, source: &str) {

@@ -3,14 +3,10 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(unused_assignments)]
 
-mod askama;
-mod check;
 pub mod cli;
 mod config;
-mod css;
-mod html;
-mod parse;
-mod sakura_tree;
+pub mod parse;
+pub mod sakura;
 pub mod session;
 
 use miette::{Diagnostic, NamedSource, SourceSpan};
