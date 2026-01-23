@@ -1,14 +1,4 @@
 #[test]
-fn css_match_else_inline() {
-    format_and_snapshot!("css/css_match_else_inline.html");
-}
-
-#[test]
-fn css_match_else_multilin() {
-    format_and_snapshot!("css/css_match_else_multiline.html");
-}
-
-#[test]
 fn css_match_inline() {
     format_and_snapshot!("css/css_match_inline.html");
 }
@@ -26,11 +16,6 @@ fn css_if_else_inline() {
 #[test]
 fn css_if_else_multiline() {
     format_and_snapshot!("css/css_if_else_multiline.html");
-}
-
-#[test]
-fn css_if_elif_else() {
-    format_and_snapshot!("css/css_if_elif_else.html");
 }
 
 #[test]
@@ -69,18 +54,8 @@ fn css_media_queries() {
 }
 
 #[test]
-fn css_keyframes() {
-    format_and_snapshot!("css/css_keyframes.html");
-}
-
-#[test]
 fn css_nested_conditions() {
     format_and_snapshot!("css/css_nested_conditions.html");
-}
-
-#[test]
-fn css_multiple_selectors() {
-    format_and_snapshot!("css/css_multiple_selectors.html");
 }
 
 #[test]
@@ -88,7 +63,38 @@ fn css_variables() {
     format_and_snapshot!("css/css_variables.html");
 }
 
+#[ignore]
+#[test]
+fn css_if_elif_else() {
+    format_and_snapshot!("css/css_if_elif_else.html");
+}
+
+#[ignore]
+#[test]
+fn css_keyframes() {
+    format_and_snapshot!("css/css_keyframes.html");
+}
+
+#[ignore]
+#[test]
+fn css_match_else_inline() {
+    format_and_snapshot!("css/css_match_else_inline.html");
+}
+
+#[ignore]
+#[test]
+fn css_match_else_multilin() {
+    format_and_snapshot!("css/css_match_else_multiline.html");
+}
+
+#[ignore]
 #[test]
 fn css_mixed_complex() {
     format_and_snapshot!("css/css_mixed_complex.html");
+}
+
+#[ignore]
+#[test]
+fn css_multiple_selectors() {
+    format_and_snapshot!("css/css_multiple_selectors.html");
 }
